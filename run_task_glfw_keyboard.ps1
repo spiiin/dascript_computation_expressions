@@ -5,7 +5,8 @@ param(
     [switch]$SmokeTest
 )
 $ErrorActionPreference='Stop'
-if(-not $Daslang){$Daslang='C:/src/daslang-0.6.5-RC2/sdk/daslang_bundle/bin/daslang.exe'}
+. (Join-Path $PSScriptRoot 'sdk_paths.ps1')
+$Daslang = Resolve-CeDaslang $Daslang
 $previousGlfwTimeout=[Environment]::GetEnvironmentVariable('CE_GLFW_TIMEOUT_MS','Process')
 $previousGlfwSmoke=[Environment]::GetEnvironmentVariable('CE_GLFW_SMOKE','Process')
 $arguments=@((Join-Path $PSScriptRoot 'examples/task_glfw_keyboard_demo.das'),'-no-module-cache')

@@ -105,7 +105,7 @@ broadcast, сохранение первого события, повторна�
 
 Интерактивное ожидание клавиатуры с фоновой Task, отменой и таймаутом:
 [TASK_KEYBOARD.md](TASK_KEYBOARD.md). Запуск из корня checkout:
-`./computation_expressions/run_task_keyboard.ps1`.
+`./run_task_keyboard.ps1`.
 
 Вариант с окном dasGlfw без Python и нового нативного модуля:
 [TASK_GLFW_KEYBOARD.md](TASK_GLFW_KEYBOARD.md).

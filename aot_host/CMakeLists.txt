@@ -6,7 +6,9 @@ if(NOT SCRIPT_MANIFEST)
   message(FATAL_ERROR "Pass -DSCRIPT_MANIFEST=<file with absolute .das paths>")
 endif()
 file(STRINGS "${SCRIPT_MANIFEST}" scripts)
-file(GLOB ce_dependencies "${CMAKE_CURRENT_SOURCE_DIR}/../lib/*.das")
+file(GLOB_RECURSE ce_dependencies CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/../lib/*.das"
+  "${CMAKE_CURRENT_SOURCE_DIR}/../support/*.das")
 set(generated)
 set(async_benchmark_aot OFF)
 foreach(script IN LISTS scripts)

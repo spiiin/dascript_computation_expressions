@@ -10,7 +10,7 @@
 StateBuilder и WriterBuilder описаны в [STATE_WRITER.md](STATE_WRITER.md).
 
 ```powershell
-cd C:\src\dascript_macro_fsharp\computation_expressions
+cd C:\src\dascript_computation_expressions
 .\run_computation.ps1
 .\run_computation.ps1 -Test
 ```

@@ -326,7 +326,7 @@ content_type, headers, timeout_s, connect_timeout_s, follow_redirects.
   parallel_lifetime / jobque / jobque_lifetime / concurrency_edges включены в обычный interpreter
   runner, mode_tests (JIT/генерация AOT) и стандартный список исполнения AOT.
 
-Запуск из корня: `./computation_expressions/run_computation.ps1 -Test`.
+Запуск из корня: `./run_computation.ps1 -Test`.
 Новые примеры можно запускать напрямую через daslang.exe с -no-module-cache.
 
 ## Результаты проверки, 20 октября 2026

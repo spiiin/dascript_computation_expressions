@@ -6,8 +6,8 @@ param(
     [string[]]$Scripts=@()
 )
 $ErrorActionPreference='Stop'
-if(-not $Daslang){$Daslang='C:/src/daslang-0.6.5-RC2/sdk/daslang_bundle/bin/daslang.exe'}
-$Daslang=(Resolve-Path -LiteralPath $Daslang).Path
+. (Join-Path $PSScriptRoot 'sdk_paths.ps1')
+$Daslang = Resolve-CeDaslang $Daslang
 $sdk=Split-Path (Split-Path $Daslang -Parent) -Parent
 $dasPackage=Join-Path $sdk 'lib/cmake/DAS'
 if(-not(Test-Path -LiteralPath (Join-Path $dasPackage 'DASConfig.cmake'))){throw 'Selected compiler has no matching SDK CMake package'}

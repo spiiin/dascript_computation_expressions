@@ -1,0 +1,71 @@
+name: Computation expressions
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: ${{ matrix.suite }} / Daslang 0.6.5-RC2
+    runs-on: windows-2022
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [interpreter, modes, aot, integrations]
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install pinned SDK
+        run: |
+          $exe = & ./.github/scripts/install-daslang.ps1 -Destination (Join-Path $env:RUNNER_TEMP 'daslang-sdk')
+          "DASLANG_EXE=$exe" >> $env:GITHUB_ENV
+      - name: Run suite
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
+          New-Item -ItemType Directory -Path ci-results -Force | Out-Null
+          Start-Transcript -Path ci-results/${{ matrix.suite }}.log
+          try {
+            switch ('${{ matrix.suite }}') {
+              'interpreter' {
+                & ./tests/test_sdk_paths.ps1
+                & ./run_computation.ps1 -Test
+              }
+              'modes' {
+                & ./run_modes.ps1 -Mode Jit -OutputDirectory ci-results/jit
+                & ./run_modes.ps1 -Mode AotGenerate -OutputDirectory ci-results/aot-generation
+              }
+              'aot' {
+                & ./run_aot.ps1 -OutputDirectory ci-results/aot-runtime -BuildDirectory "$env:RUNNER_TEMP/ce-aot-build"
+              }
+              'integrations' {
+                & ./test_task_tcp.ps1 -Jit
+                & ./test_task_hv.ps1 -Jit
+                & ./test_task_hv.ps1 -AndBind -Jit
+                & ./test_task_http.ps1
+                & ./test_task_http.ps1 -Jit
+                & ./test_task_keyboard.ps1 -Jit
+                & ./test_task_glfw_keyboard.ps1 -Jit
+              }
+            }
+          } finally { Stop-Transcript }
+      - name: Upload logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ce-${{ matrix.suite }}
+          path: ci-results/
+          retention-days: 14

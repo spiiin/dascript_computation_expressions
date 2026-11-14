@@ -5,14 +5,14 @@
 Из корня checkout в обычном Windows Terminal / PowerShell, без перенаправления:
 
 ```powershell
-./computation_expressions/run_task_keyboard.ps1
+./run_task_keyboard.ps1
 ```
 
 Если выполнение `.ps1` запрещено текущей политикой, можно запустить отдельный
 процесс без изменения постоянных настроек:
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File ./computation_expressions/run_task_keyboard.ps1
+pwsh -NoProfile -ExecutionPolicy Bypass -File ./run_task_keyboard.ps1
 ```
 
 Требуются установленный Daslang 0.6.4 и Python 3 со стандартной библиотекой.
@@ -20,7 +20,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File ./computation_expressions/run_task
 `C:/src/daslang-0.6.4/daslang_bundle/bin/daslang.exe`.
 
 ```powershell
-./computation_expressions/run_task_keyboard.ps1 -TimeoutMs 30000 -Jit
+./run_task_keyboard.ps1 -TimeoutMs 30000 -Jit
 ```
 
 ## Что попробовать
@@ -99,8 +99,8 @@ stdout дочернего процесса отдельным потоком; о
 ## Проверки
 
 ```powershell
-./computation_expressions/test_task_keyboard.ps1
-./computation_expressions/test_task_keyboard.ps1 -Jit
+./test_task_keyboard.ps1
+./test_task_keyboard.ps1 -Jit
 ```
 
 Fixture запускает настоящий daScript с stdin-pipe: ввод строки, разбиение UTF-8

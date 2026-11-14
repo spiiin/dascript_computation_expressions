@@ -115,7 +115,7 @@ JSON. Только disposer снимает const в unsafe-блоке для в�
 Некорректный JSON проверяет неудачное приобретение без вызова disposer.
 
 ```powershell
-cd C:\src\dascript_macro_fsharp\computation_expressions
+cd C:\src\dascript_computation_expressions
 .\run_computation.ps1 -Test
 ```
 

@@ -3,7 +3,7 @@
 Из корня checkout:
 
 ```powershell
-./computation_expressions/run_task_glfw_keyboard.ps1
+./run_task_glfw_keyboard.ps1
 ```
 
 Нужен Daslang 0.6.4 с установленным SDK-модулем `glfw` (dasGlfw).
@@ -12,7 +12,7 @@ PowerShell-скрипт только запускает `.das`; сам ввод 
 daScript и существующими callbacks GLFW.
 
 ```powershell
-./computation_expressions/run_task_glfw_keyboard.ps1 -TimeoutMs 30000 -Jit
+./run_task_glfw_keyboard.ps1 -TimeoutMs 30000 -Jit
 ```
 
 Путь компилятора задаётся `-Daslang` или `DASLANG_EXE`, локальный fallback —
@@ -84,8 +84,8 @@ CancellationToken и TaskTimeout относятся только к вводу. 
 ## Проверки без Python
 
 ```powershell
-./computation_expressions/test_task_glfw_keyboard.ps1
-./computation_expressions/test_task_glfw_keyboard.ps1 -Jit
+./test_task_glfw_keyboard.ps1
+./test_task_glfw_keyboard.ps1 -Jit
 ```
 
 [tests/test_task_glfw_keyboard.das](tests/test_task_glfw_keyboard.das) создаёт
@@ -103,7 +103,7 @@ Runner также выполняет настоящий entrypoint пример�
 реальные часы, фоновая Task и автоматическое закрытие окна. Для отдельного запуска:
 
 ```powershell
-./computation_expressions/run_task_glfw_keyboard.ps1 -SmokeTest -TimeoutMs 1000
+./run_task_glfw_keyboard.ps1 -SmokeTest -TimeoutMs 1000
 ```
 
 Проверки требуют доступного windowing session: при ошибке glfwInit/CreateWindow

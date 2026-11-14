@@ -1,7 +1,8 @@
 param([string]$Daslang=$env:DASLANG_EXE)
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'source_paths.ps1')
-if(-not $Daslang){$Daslang='C:/src/daslang-0.6.5-RC2/sdk/daslang_bundle/bin/daslang.exe'}
+. (Join-Path $PSScriptRoot 'sdk_paths.ps1')
+$Daslang = Resolve-CeDaslang $Daslang
 $cases=@(
     @{File='test_and_bind_unsupported.das';Message='and_bind is unsupported for builder';Marker='and_bind';ExactErrors=1},
     @{File='test_task_and_bind_unsupported.das';Message='and_bind is unsupported for builder';Marker='and_bind';ExactErrors=1},

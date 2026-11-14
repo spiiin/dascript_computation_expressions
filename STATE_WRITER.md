@@ -11,7 +11,7 @@ require ./lib/computation.das
 Запуск всех builders и их тестов:
 
 ```powershell
-cd C:\src\dascript_macro_fsharp\computation_expressions
+cd C:\src\dascript_computation_expressions
 .\run_computation.ps1 -Test
 ```
 

@@ -1,4 +1,27 @@
-# Computation expressions
+# Computation expressions for Daslang
+
+Самостоятельная библиотека F#-подобных computation expressions: Result/Option,
+State/Writer, List/Sequence, Task/AsyncSequence и Parser/Search/Query.
+Макрос проверяет операции builder при компиляции; владение ресурсами,
+ошибки и отмена покрыты отдельными тестами.
+
+```das
+options gen2
+require ./lib/computation.das
+
+[export]
+def main() {
+    let result = computation(ResultBuilder()) {
+        let value = result_ok(21) |> bind
+        return value * 2
+    }
+    assert(result is ok && (result as ok) == 42)
+}
+```
+
+История выделена из [dascript_macro_fsharp](https://github.com/spiiin/dascript_macro_fsharp).
+Исходный проект подключает эту библиотеку как submodule.
+
 
 Task: [runtime, channel, select, progress, jobque-потоки, HTTP, semaphore, retry](TASK_CONCURRENCY.md);
 [иерархия отмены](TASK_CANCELLATION.md#иерархия-причина-и-read-only-view);
@@ -9,7 +32,7 @@ Task: [runtime, channel, select, progress, jobque-потоки, HTTP, semaphore,
 
 | Каталог | Содержимое |
 |---|---|
-| lib/ | 38 публичных модулей без тестовых builders |
+| lib/ | 40 публичных модулей без тестовых builders |
 | examples/ | Запускаемые примеры |
 | tests/ | Положительные и отрицательные проверки; tests/repro/ — известные сбои |
 | support/ | Демонстрационные builders и вспомогательные модули примеров/тестов |
@@ -25,14 +48,26 @@ Task: [runtime, channel, select, progress, jobque-потоки, HTTP, semaphore,
 State: [STATE_OPERATIONS.md](STATE_OPERATIONS.md). Ошибки: [DIAGNOSTICS.md](DIAGNOSTICS.md).
 
 ```powershell
-cd C:\src\dascript_macro_fsharp\computation_expressions
+git clone https://github.com/spiiin/dascript_computation_expressions.git
+cd dascript_computation_expressions
+$env:DASLANG_EXE = & ./.github/scripts/install-daslang.ps1 -Destination ./.work/sdk
 ./run_computation.ps1 -Test
 ./test_integration.ps1
 ./test_diagnostics.ps1
-daslang.exe examples/state_operations_demo.das -no-module-cache
+& $env:DASLANG_EXE examples/state_operations_demo.das -no-module-cache
 ./run_performance_metrics.ps1
 ./run_performance_metrics.ps1 -Jit -OutputDirectory performance-jit
 ```
+
+Для проверок нужны PowerShell 7 и Python 3; AOT дополнительно требует CMake
+и Visual Studio 2022 с C++ tools. CI использует SDK **0.6.5-RC2** с проверкой SHA-256.
+Путь к компилятору выбирается через `-Daslang`, `DASLANG_EXE` или `PATH`.
+Реальные TCP/HTTP/WebSocket проверки используют локальные серверы.
+
+Полная регрессия: `./run_computation.ps1 -Test`. JIT и генерация C++:
+`./run_modes.ps1 -Mode All`; сборка и исполнение строгого AOT-хоста: `./run_aot.ps1`.
+Четыре независимых задания CI проверяют интерпретатор, режимы JIT/AOT,
+исполнение AOT и адаптеры. Известные ограничения SDK описаны в RELIABILITY.md.
 
 Скрипты разрешают пути относительно своего каталога. Из корня приложения:
 `require ./lib/computation.das`, из examples/tests: `require ../lib/computation.das`.

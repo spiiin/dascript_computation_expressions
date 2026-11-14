@@ -142,7 +142,7 @@ move-возвраты и накопление элементов цикла. П�
 выбрать ту же стратегию; см. BUILDER_PROTOCOL.md.
 
 ```powershell
-cd C:\src\dascript_macro_fsharp\computation_expressions
+cd C:\src\dascript_computation_expressions
 .\run_computation.ps1 -Test
 ```
 

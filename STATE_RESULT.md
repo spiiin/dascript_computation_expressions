@@ -140,7 +140,7 @@ builder. Move-only состояния и payload не поддержаны.
 тип успешного payload. AST-преобразование менять не потребовалось.
 
 ```powershell
-cd C:\src\dascript_macro_fsharp\computation_expressions
+cd C:\src\dascript_computation_expressions
 .\run_computation.ps1 -Test
 ```
 

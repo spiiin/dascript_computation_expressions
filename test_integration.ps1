@@ -1,6 +1,7 @@
 param([string]$Daslang=$env:DASLANG_EXE,[string]$OutputDirectory=(Join-Path $PSScriptRoot '.work'))
 $ErrorActionPreference='Stop'
-if(-not $Daslang){$Daslang='C:/src/daslang-0.6.5-RC2/sdk/daslang_bundle/bin/daslang.exe'}
+. (Join-Path $PSScriptRoot 'sdk_paths.ps1')
+$Daslang = Resolve-CeDaslang $Daslang
 $destination=Join-Path ([IO.Path]::GetFullPath($OutputDirectory)) ('integration-'+[guid]::NewGuid().ToString('N'))
 & (Join-Path $PSScriptRoot 'export_library.ps1') -Destination $destination
 $expected=@(Get-Content (Join-Path $PSScriptRoot 'public_modules.json') -Raw|ConvertFrom-Json)

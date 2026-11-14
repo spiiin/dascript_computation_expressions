@@ -1,14 +1,8 @@
 param([string]$Daslang = $env:DASLANG_EXE, [switch]$Test)
 . (Join-Path $PSScriptRoot 'source_paths.ps1')
 $ErrorActionPreference = 'Stop'
-if (-not $Daslang) {
-    $command = Get-Command daslang.exe -ErrorAction SilentlyContinue
-    if ($command) { $Daslang = $command.Source }
-    elseif (Test-Path -LiteralPath 'C:\src\daslang-0.6.5-RC2\sdk\daslang_bundle\bin\daslang.exe') {
-        $Daslang = 'C:\src\daslang-0.6.5-RC2\sdk\daslang_bundle\bin\daslang.exe'
-    } else { throw 'Specify -Daslang or DASLANG_EXE.' }
-}
-$Daslang = (Resolve-Path -LiteralPath $Daslang).Path
+. (Join-Path $PSScriptRoot 'sdk_paths.ps1')
+$Daslang = Resolve-CeDaslang $Daslang
 function Check([string]$File, [bool]$Pass, [string]$Expected) {
     $lines = & $Daslang $File -no-module-cache 2>&1
     $code = $LASTEXITCODE

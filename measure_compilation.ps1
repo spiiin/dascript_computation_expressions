@@ -5,7 +5,8 @@ param(
     [string]$OutputDirectory=(Join-Path $PSScriptRoot 'compilation-metrics')
 )
 $ErrorActionPreference='Stop'
-if(-not $Daslang){$Daslang='C:/src/daslang-0.6.5-RC2/sdk/daslang_bundle/bin/daslang.exe'}
+. (Join-Path $PSScriptRoot 'sdk_paths.ps1')
+$Daslang = Resolve-CeDaslang $Daslang
 $Daslang=(Resolve-Path $Daslang).Path
 $OutputDirectory=[IO.Path]::GetFullPath($OutputDirectory)
 New-Item -ItemType Directory -Path $OutputDirectory -Force|Out-Null

@@ -107,7 +107,7 @@ Zero — успешный Unit и пустой журнал. Delay исполь�
 ## Запуск и проверки
 
 ```powershell
-cd C:\src\dascript_macro_fsharp\computation_expressions
+cd C:\src\dascript_computation_expressions
 .\run_computation.ps1 -Test
 ```
 
