@@ -2,10 +2,10 @@
 
 Проверенный SDK — Daslang v0.6.5-RC2 со стандартной daslib. SDK не включён в экспорт.
 Result и Option теперь являются стандартными `$Result<T;string>` / `$Option<T>`.
-Миграция и правила владения: [STANDARD_TYPES.md](STANDARD_TYPES.md).
+Миграция и правила владения: [семантика builders](CE_SEMANTICS.md).
 Необязательный `./lib/task_hv.das` требует установленный `dashv/dashv_boost`.
 API: `hv_websocket`, `ws_connect`, `ws_send_text`, `ws_receive_text`,
-`HvWebSocketConfig`, `hv_websocket_stats`; контракт и пример: [TASK_HV.md](TASK_HV.md).
+`HvWebSocketConfig`, `hv_websocket_stats`; контракт и пример: [семантика builders](CE_SEMANTICS.md).
 
 В поставке `lib/` содержит только библиотечные модули. Из корня приложения:
 
@@ -17,10 +17,10 @@ require ./lib/computation.das
 Дополнительные подключения: `./lib/reader_builder.das`, `./lib/reader_result_builder.das`,
 `./lib/validation_builder.das`, `./lib/state_writer_result_builder.das`,
 `./lib/deferred_computation.das`, `./lib/coroutine_builder.das`, `./lib/coroutine_scheduler.das`.
-Типизированные задачи: `./lib/task_builder.das`, см. [TASKS.md](TASKS.md).
-Планировщик и таймауты: `./lib/task_scheduler.das`, см. [TASK_SCHEDULER.md](TASK_SCHEDULER.md).
+Типизированные задачи: `./lib/task_builder.das`, см. [семантика builders](CE_SEMANTICS.md).
+Планировщик и таймауты: `./lib/task_scheduler.das`, см. [семантика builders](CE_SEMANTICS.md).
 Совместное ожидание: `./lib/task_combinators.das`, операции task_when_all,
-task_result_when_all, task_race и [and_bind для Task](TASK_AND_BIND.md); см. [TASK_COMPOSITION.md](TASK_COMPOSITION.md).
+task_result_when_all, task_race и [and_bind для Task](CE_SEMANTICS.md); см. [семантика builders](CE_SEMANTICS.md).
 Вложенные файлы приложения используют соответствующий относительный путь
 с расширением `.das`, например `require ../lib/computation.das`.
 
@@ -55,7 +55,7 @@ task_error, task_cancel, task_scope, task_from_poll, task_after_polls.
 или void-итераторы bool. `task_from_async(source, closeLambda)` также владеет
 внешним cleanup. Источник перемещается, Task возвращает последний res после
 полного завершения; void возвращает CeUnit. Ограничение native inscope в SDK
-0.6.4 и безопасный пример владения описаны в [TASKS.md](TASKS.md).
+0.6.4 и безопасный пример владения описаны в [семантика builders](CE_SEMANTICS.md).
 
 ## Прикладные операции
 
@@ -124,15 +124,15 @@ state, не внешние эффекты или объекты по указа�
 
 ## Task scheduler
 
-Модуль task_scheduler.das: task_scheduler(type<T>, TaskSchedulerConfig()), task_spawn, task_tick(scheduler, now_ms), task_configure, task_scheduler_config, task_scheduler_time, task_valid, task_status/value/error(scheduler,id), task_count, task_active_count, task_slot_count, task_cancel(scheduler,id), task_forget, task_prune, task_scheduler_close, task_scheduler_scope. Полный контракт и пример: [TASK_SCHEDULER.md](TASK_SCHEDULER.md).
+Модуль task_scheduler.das: task_scheduler(type<T>, TaskSchedulerConfig()), task_spawn, task_tick(scheduler, now_ms), task_configure, task_scheduler_config, task_scheduler_time, task_valid, task_status/value/error(scheduler,id), task_count, task_active_count, task_slot_count, task_cancel(scheduler,id), task_forget, task_prune, task_scheduler_close, task_scheduler_scope. Полный контракт и пример: [семантика builders](CE_SEMANTICS.md).
 
-Таймаут при регистрации: task_spawn(scheduler, source, TaskTimeout(after_ms=30)). task_timed_out(scheduler,id) отличает его от ручной отмены; deadline проверяется до poll независимо от его бюджета. См. [TASK_SCHEDULER.md](TASK_SCHEDULER.md#таймауты).
+Таймаут при регистрации: task_spawn(scheduler, source, TaskTimeout(after_ms=30)). task_timed_out(scheduler,id) отличает его от ручной отмены; deadline проверяется до poll независимо от его бюджета. См. [семантика builders](CE_SEMANTICS.md).
 
-Общий токен: cancellation_token(), cancellation_clone(token), cancellation_requested(token), cancellation_cancel(token). task_with_cancellation(task,token) потребляет Task и сохраняет свой handle токена. Clone и := также разделяют состояние. Cancelled проходит через bind и комбинаторы без исключения. Контракт: [TASK_CANCELLATION.md](TASK_CANCELLATION.md).
+Общий токен: cancellation_token(), cancellation_clone(token), cancellation_requested(token), cancellation_cancel(token). task_with_cancellation(task,token) потребляет Task и сохраняет свой handle токена. Clone и := также разделяют состояние. Cancelled проходит через bind и комбинаторы без исключения. Контракт: [семантика builders](CE_SEMANTICS.md).
 
-task_delay_ms(duration_ms) возвращает Task<CeUnit>, ожидающую now_ms текущего task_tick. Срок начинается при первом poll задержки; TaskResultBuilder также принимает Task<CeUnit> через bind. Модуль task_delay.das включён в task_scheduler.das. Контракт часов, отмена и пример: [TASK_DELAY.md](TASK_DELAY.md).
+task_delay_ms(duration_ms) возвращает Task<CeUnit>, ожидающую now_ms текущего task_tick. Срок начинается при первом poll задержки; TaskResultBuilder также принимает Task<CeUnit> через bind. Модуль task_delay.das включён в task_scheduler.das. Контракт часов, отмена и пример: [семантика builders](CE_SEMANTICS.md).
 
-task_when_all(tasks) потребляет массив Task с одинаковым копируемым T и возвращает владеющую задачу коллекции. Bind: var results & = task_when_all(make_jobs()) |> bind. task_value возвращает clone массива; прямая регистрация — task_scheduler(type<array<T>>). Поддержаны token, timeout и task_scope. Подробности: [TASK_ARRAY.md](TASK_ARRAY.md).
+task_when_all(tasks) потребляет массив Task с одинаковым копируемым T и возвращает владеющую задачу коллекции. Bind: var results & = task_when_all(make_jobs()) |> bind. task_value возвращает clone массива; прямая регистрация — task_scheduler(type<array<T>>). Поддержаны token, timeout и task_scope. Подробности: [семантика builders](CE_SEMANTICS.md).
 
 ## Полный Task API
 
@@ -144,7 +144,7 @@ none, отмена/таймаут next закрывают stream. Владель
 `task_take(nextTask)` для переноса, task_value для deep clone.
 `child_stream() |> yield_from` передаёт элементы дочернего AsyncSequence во внешний;
 дочерний stream переносится во владение делегирования, в том числе с move-only payload.
-Контракт: [ASYNC_SEQUENCE.md](ASYNC_SEQUENCE.md).
+Контракт: [семантика builders](CE_SEMANTICS.md).
 Внутри AsyncSequenceBuilder `for(value in child_stream())` автоматически ожидает
 элементы и владеет источником до завершения/закрытия цикла. Переменная заимствует
 элемент, включая move-only payload, на время итерации и вложенных bind.
@@ -157,7 +157,7 @@ Task Failed/Cancelled останавливает stream; Result.Error/Option.Non
 независимый stream и рабочий снимок, живущий до закрытия производителя;
 поддержаны move-only элементы и вариант без явных данных.
 
-[TASK_COMPLETION.md](TASK_COMPLETION.md): return_from, Unit, break/continue,
+[семантика builders](CE_SEMANTICS.md): return_from, Unit, break/continue,
 move-only payload, deferred и shared-await. Task используют task_value для
 копии/clone и task_take для передачи владения. Combinators: task_when_all и
 task_result_when_all (пара и массив), task_race и task_result_race.
@@ -167,12 +167,12 @@ task_result_when_all (пара и массив), task_race и task_result_race.
 
 `./lib/task_events.das`: task_event_source(type<T>), task_wait_event, task_event_emit,
 task_event_close, task_event_subscriber_count, task_event_stats. Broadcast по активным
-подпискам, копируемый T, Task<Result<T>>. Контракт: [TASK_EVENTS.md](TASK_EVENTS.md).
+подпискам, копируемый T, Task<Result<T>>. Контракт: [семантика builders](CE_SEMANTICS.md).
 
 ## Parser, Search и Query
 
 Отдельные модули: `./lib/parser_builder.das`, `./lib/search_builder.das`,
-`./lib/query_builder.das`. Протокол и примеры: [DOMAIN_BUILDERS.md](DOMAIN_BUILDERS.md).
+`./lib/query_builder.das`. Протокол и примеры: [семантика builders](CE_SEMANTICS.md).
 
 - `ParserBuilder(text=...)`: `parser_literal`, `parser_int`, `parser_spaces`,
   `parser_eof`, `parser_choice`, `parser_call(@@grammar)`; результат parsed/failure.
@@ -187,16 +187,16 @@ task_event_close, task_event_subscriber_count, task_event_stats. Broadcast по 
 Parser-комбинаторы: `parser_optional`, `parser_many`, `parser_many1`, `parser_sep_by`,
 `parser_attempt`, `parser_commit` (операция без аргумента и обёртка).
 Владеющие массивы связываются через `var items & = source |> bind`;
-`return <- items` передаёт владение. Контракт: [PARSER_COMBINATORS.md](PARSER_COMBINATORS.md).
+`return <- items` передаёт владение. Контракт: [семантика builders](CE_SEMANTICS.md).
 
 Search-комбинаторы: `source |> search_take(n)` ограничивает число решений и закрывает источник до последней выдачи;
 `left |> search_append(right)` последовательно объединяет альтернативы, владея обоими iterator.
-Контракт и пример: [SEARCH_COMBINATORS.md](SEARCH_COMBINATORS.md).
+Контракт и пример: [семантика builders](CE_SEMANTICS.md).
 
 Query-операции: `source |> query_order_by(key,descending=false)`, `source |> query_group_by(key)`,
 `source |> query_distinct()` / `query_distinct(key)`. Стабильный порядок, ключ вычисляется один раз на строку.
 Группы владеют вложенными массивами; внутри CE: `var group & = ... |> bind`.
-Контракт и пример: [QUERY_OPERATORS.md](QUERY_OPERATORS.md).
+Контракт и пример: [семантика builders](CE_SEMANTICS.md).
 
 Для блока в конце: `source |> query_order_by(descending) <| key`;
 это перегрузка `(source, descending, key)`, прежняя сигнатура сохранена.
@@ -205,7 +205,7 @@ Query-операции: `source |> query_order_by(key,descending=false)`, `sourc
 передаются через `source |> query_operation <| $(row:Row) {...}`; прежние вызовы со скобками также поддерживаются.
 
 
-Task concurrency: [TASK_CONCURRENCY.md](TASK_CONCURRENCY.md).
+Task concurrency: [семантика builders](CE_SEMANTICS.md).
 Публичные модули: task_runtime, task_channel, task_parallel, task_jobque;
 операции task_runtime, task_await, task_channel_send/receive, task_semaphore,
 task_with_semaphore, task_when_all_limited, task_result_when_all_limited,

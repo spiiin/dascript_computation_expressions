@@ -1,6 +1,6 @@
 # Протокол builders
 
-Поставка публичных модулей и минимальный внешний builder: [INTEGRATION.md](INTEGRATION.md). Специальные сообщения макросов: [DIAGNOSTICS.md](DIAGNOSTICS.md).
+Поставка публичных модулей и минимальный внешний builder: [INTEGRATION.md](INTEGRATION.md). Специальные сообщения макросов: [семантика builders](CE_SEMANTICS.md).
 
 Таблица возможностей builders и общий контракт: [CE_SEMANTICS.md](CE_SEMANTICS.md).
 
@@ -31,7 +31,7 @@ ReaderBuilder намеренно не включён в фасад: `reader_demo
 | Возвращаемый тип | Раскрытие |
 | --- | --- |
 | `CeValueProtocol` | Синхронное вычисление с копируемым результатом; Bind/Combine решают, выполнять ли продолжение |
-| `CeOwnedProtocol` | Перемещаемые результаты, consuming bind с временным заимствованием payload; см. [MOVE_CE.md](MOVE_CE.md) |
+| `CeOwnedProtocol` | Перемещаемые результаты, consuming bind с временным заимствованием payload; см. [семантика builders](CE_SEMANTICS.md) |
 | `CeCollectProtocol` | Накопление результатов, `yield`, `yield_from`, перемещение результата и `inscope` для промежуточных коллекций |
 | `ce_sequence_protocol(type<T>)` | Ленивый native generator элементов T; завершается вызовом `ce_sequence_run(builder, source)` |
 
@@ -157,7 +157,7 @@ Bind, yield и resource scopes здесь реализованы общим gene
 
 Ещё один независимый модуль — `validation_builder.das`: накопление ошибок
 через `validation_zip`, затем обычный bind. Использует только Value-протокол
-без изменений фасада или макроса. Пример и контракт: [VALIDATION.md](VALIDATION.md).
+без изменений фасада или макроса. Пример и контракт: [семантика builders](CE_SEMANTICS.md).
 
 ## Групповой bind
 
@@ -165,10 +165,10 @@ Bind, yield и resource scopes здесь реализованы общим gene
 `ce_merge_sources(builder, left, right)`. Поддержан стратегиями Value/Collect;
 перегрузки добавлены для Result, Option, Validation и List. Источники группы
 вычисляются слева направо ровно один раз, даже при неуспешном значении слева.
-Контракт, порядок и владение: [AND_BIND.md](AND_BIND.md).
+Контракт, порядок и владение: [семантика builders](CE_SEMANTICS.md).
 
 Для Resumable-протокола группы также проходят через `ce_merge_sources`.
-Task-перегрузки находятся в `task_combinators.das`: [TASK_AND_BIND.md](TASK_AND_BIND.md).
+Task-перегрузки находятся в `task_combinators.das`: [семантика builders](CE_SEMANTICS.md).
 Макрос сохраняет владение временными источниками при ошибке последующей фабрики.
 Bind2/Bind2Return для Task не используются.
 
@@ -177,62 +177,62 @@ Bind2/Bind2Return для Task не используются.
 Необязательный `ce_bind_return(builder, source, mapper)` объединяет Bind и
 Return. Макрос распознаёт соседнюю завершающую пару, сохраняя пайповый синтаксис.
 Без специализированной перегрузки остаётся исходное раскрытие; типовой fallback
-не исполняется. Контракт и ограничения: [BIND_RETURN.md](BIND_RETURN.md).
+не исполняется. Контракт и ограничения: [семантика builders](CE_SEMANTICS.md).
 
 ## Bind2Return
 
 Необязательная перегрузка `ce_bind2_return(builder, left, right, mapper)`
 оптимизирует внешнюю группу and_bind перед return. Mapper принимает одну
 пару first/second. При отсутствии перегрузки сохраняется прежнее раскрытие;
-типовой fallback не выполняется. Контракт: [BIND2_RETURN.md](BIND2_RETURN.md).
+типовой fallback не выполняется. Контракт: [семантика builders](CE_SEMANTICS.md).
 
 ## Bind2
 
 Группы and_bind с произвольным продолжением используют необязательный
 `ce_bind2` для Result, Option, Validation и List. Синтаксис прежний;
 старые builders сохраняют fallback через MergeSources и Bind.
-См. [контракт и ограничения](BIND2.md) и `bind2_demo.das`.
+См. [контракт и ограничения](CE_SEMANTICS.md) и `bind2_demo.das`.
 
 ## Общий Run и отчёты
 
 Необязательный `ce_run(builder, outcome)` завершает Value/Collect/Sequence CE
 и может менять публичный тип результата. Старые builders сохраняют прежний
 результат. Отдельный `report_builder.das` превращает Result в отчёт об операции;
-пример — `run_demo.das`. Контракт, владение, диагностика и проверки: [RUN.md](RUN.md).
+пример — `run_demo.das`. Контракт, владение, диагностика и проверки: [семантика builders](CE_SEMANTICS.md).
 
 ## Отложенное выполнение
 
 Отдельный модуль `deferred_computation` добавляет `deferred(builder, data) $(snapshot) { ... }` и `run_deferred(task)`. Снимки владеют данными, каждый
 запуск получает независимую копию builder/data. Обычный computation остаётся
-немедленным. Пример — `deferred_demo.das`; контракт и ограничения — [DEFERRED.md](DEFERRED.md).
+немедленным. Пример — `deferred_demo.das`; контракт и ограничения — [семантика builders](CE_SEMANTICS.md).
 
 ## Отложенный Sequence
 
 Каждый запуск deferred Sequence создаёт отдельный итератор, владеющий снимком
 до закрытия. Ресурсы тела закрываются перед удалением снимка. Пример —
-`deferred_sequence_demo.das`; контракт и обход с исключениями — [DEFERRED_SEQUENCE.md](DEFERRED_SEQUENCE.md).
+`deferred_sequence_demo.das`; контракт и обход с исключениями — [семантика builders](CE_SEMANTICS.md).
 
 ## Переопределение циклов
 
-Подробный контракт, владение источниками и границы: [LOOP_PROTOCOL.md](LOOP_PROTOCOL.md).
+Подробный контракт, владение источниками и границы: [семантика builders](CE_SEMANTICS.md).
 Пример отдельного модуля — `bounded_result_builder.das`. Если hook не определён,
 сохраняется прежний fallback через loop/collect append. Для нескольких источников
-есть отдельный `ce_for_zip`: [ZIP_FOR.md](ZIP_FOR.md). Генераторная стратегия
+есть отдельный `ce_for_zip`: [семантика builders](CE_SEMANTICS.md). Генераторная стратегия
 Sequence сохраняет native loops.
 
 Путь `ce_for_zip` использует явные курсоры и закрывает источники при native panic
 производителя или потребителя. Контракт операции не изменён; подробности и
-границы — [ZIP_CLEANUP.md](ZIP_CLEANUP.md).
+границы — [семантика builders](CE_SEMANTICS.md).
 
 Одиночный `For` Result/Option также закрывает iterator-источник при исключении
-производителя или тела: [SINGLE_FOR_CLEANUP.md](SINGLE_FOR_CLEANUP.md).
+производителя или тела: [семантика builders](CE_SEMANTICS.md).
 
 Стандартный eager For без hooks также закрывает источники при исключениях:
-[FALLBACK_CLEANUP.md](FALLBACK_CLEANUP.md). Пример: `fallback_cleanup_demo.das`.
+[семантика builders](CE_SEMANTICS.md). Пример: `fallback_cleanup_demo.das`.
 
 Общий необязательный `ce_source(builder,input)` адаптирует источники bind, For,
 return_from и yield_from до обычных операций и оптимизаций. Контракт:
-[SOURCE_PROTOCOL.md](SOURCE_PROTOCOL.md). Отдельный builder: `game_source_builder.das`;
+[семантика builders](CE_SEMANTICS.md). Отдельный builder: `game_source_builder.das`;
 пример: `source_demo.das`.
 
 ## Коллекции с владением
@@ -240,44 +240,44 @@ return_from и yield_from до обычных операций и оптимиз
 Move-only List применяет `CeOwnedProtocol`; mutable-reference bind copyable
 collection использует `ce_unwrap_borrow` и consuming `ce_bind`. Move-only
 Sequence выдаёт временную ссылку из owning-slot iterator. Подробности и
-ограничения: [MOVE_COLLECTIONS.md](MOVE_COLLECTIONS.md).
+ограничения: [семантика builders](CE_SEMANTICS.md).
 
 ## Перемещаемый ресурс
 
 Явное `var r & = source |> use_resource` вызывает `ce_using_move` для eager CE.
 Доступна общая реализация с временным mutable borrow и обязательным cleanup;
 Sequence удерживает ресурс в heap-ячейке до закрытия дочернего итератора.
-Контракт disposer и владения: [MOVE_RESOURCES.md](MOVE_RESOURCES.md).
+Контракт disposer и владения: [семантика builders](CE_SEMANTICS.md).
 
 ## ReaderResultBuilder
 
 `reader_result_builder.das` объединяет ReaderAsk и обычный Result через
 CeValueProtocol. Реализует базовые операции, MergeSources и BindReturn;
 For/While используют общий fallback. Изменения ядра или фасада не требуются.
-Контракт и пример: [READER_RESULT.md](READER_RESULT.md).
+Контракт и пример: [семантика builders](CE_SEMANTICS.md).
 
 ## StateWriterResultBuilder
 
 `state_writer_result_builder.das` объединяет состояние, строковый журнал и Result
 через CeValueProtocol. Откат относится к начальному состоянию всего CE; журнал
 не откатывается. Циклы и BindReturn используют общий fallback, ресурсные операции
-— общий протокол. Подробности: [STATE_WRITER_RESULT.md](STATE_WRITER_RESULT.md).
+— общий протокол. Подробности: [семантика builders](CE_SEMANTICS.md).
 
 ## CoroutineBuilder
 
 `coroutine_builder.das` использует CeSequenceProtocol с CoroutineWait.
 `ce_sequence_run` преобразует запросы ожидания в iterator<CoroutineFrame>,
 `ce_source` адаптирует дочерние корутины для yield_from. Основной макрос
-и фасад остаются прежними. Контракт: [COROUTINE.md](COROUTINE.md).
+и фасад остаются прежними. Контракт: [семантика builders](CE_SEMANTICS.md).
 
 ## Необязательное накопление List в одном массиве
 
 `ce_collect_sink(builder)` по умолчанию возвращает `CeCollectSinkFallback`.
 ListBuilder выбирает `ce_collect_sink_protocol(type<T>)`, разрешая оптимизацию
 линейных bind/return-цепочек. Дескриптор сам по себе не заменяет операции
-накопления и владения. Полный контракт и ограничения: [LIST_OPTIMIZATION.md](LIST_OPTIMIZATION.md).
+накопления и владения. Полный контракт и ограничения: [семантика builders](CE_SEMANTICS.md).
 
-Resumable builders используют ce_resumable_protocol(type<Event>) и hooks ожидания — см. [TASKS.md](TASKS.md). Этот путь не использует eager block-продолжения, которые не могут пережить возврат со стека.
+Resumable builders используют ce_resumable_protocol(type<Event>) и hooks ожидания — см. [семантика builders](CE_SEMANTICS.md). Этот путь не использует eager block-продолжения, которые не могут пережить возврат со стека.
 
 Для стандартного Task-адаптера в AsyncSequenceBuilder lowerer после определения
 типов выбирает `ce_await_input(builder, source)`. Он объединяет адаптацию ожидания

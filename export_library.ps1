@@ -24,20 +24,26 @@ foreach($name in @('main.das','identity_builder.das')){
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot "integration_example/$name") -Destination $Destination
 }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'INTEGRATION.md') -Destination (Join-Path $Destination 'README.md')
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'PUBLIC_API.md') -Destination $Destination
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'TASKS.md') -Destination $Destination
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'TASK_COMPOSITION.md') -Destination $Destination
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'TASK_SCHEDULER.md') -Destination $Destination
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'TASK_CANCELLATION.md') -Destination $Destination
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'TASK_DELAY.md') -Destination $Destination
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'TASK_ARRAY.md') -Destination $Destination
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'TASK_AND_BIND.md') -Destination $Destination
-foreach($name in @('STANDARD_TYPES.md','TASK_CONCURRENCY.md','TASK_COMPLETION.md','TASK_TCP.md','TASK_HV.md','TASK_EVENTS.md','TASK_KEYBOARD.md','TASK_GLFW_KEYBOARD.md','AOT_RUNTIME.md','ASYNC_SEQUENCE.md','DOMAIN_BUILDERS.md','QUERY_OPERATORS.md','SEARCH_COMBINATORS.md','PARSER_COMBINATORS.md')) {
+foreach($name in @('INTEGRATION.md','PUBLIC_API.md','COMPUTATION.md','CE_SEMANTICS.md','BUILDER_PROTOCOL.md','RELIABILITY.md')) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $Destination
 }
 New-Item -ItemType Directory -Path (Join-Path $Destination 'aot_host') -Force | Out-Null
 foreach($name in @('main.cpp','CMakeLists.txt','recover_064.h')) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot "aot_host/$name") -Destination (Join-Path $Destination "aot_host/$name")
+}
+# References to examples/tests remain useful in the compact distribution.
+foreach($document in Get-ChildItem -LiteralPath $Destination -Filter '*.md' -File) {
+    $content=[IO.File]::ReadAllText($document.FullName)
+    $content=[regex]::Replace($content,'\[([^\]]+)\]\(([^)]+)\)',{
+        param($match)
+        $target=$match.Groups[2].Value
+        $file=($target -split '#',2)[0]
+        if($file -and $target -notmatch '^[a-z]+:' -and -not(Test-Path -LiteralPath (Join-Path $Destination $file))) {
+            return '['+$match.Groups[1].Value+'](https://github.com/spiiin/dascript_computation_expressions/blob/main/'+$target+')'
+        }
+        return $match.Value
+    })
+    [IO.File]::WriteAllText($document.FullName,$content)
 }
 $modules | ForEach-Object {[pscustomobject]@{File="lib/$_";Sha256=(Get-FileHash -LiteralPath (Join-Path $Destination "lib/$_")).Hash}} |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Destination 'manifest.json')

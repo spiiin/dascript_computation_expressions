@@ -5,9 +5,9 @@
 Таблица возможностей builders и общий контракт: [CE_SEMANTICS.md](CE_SEMANTICS.md).
 
 Рабочий синхронный DSL на AST-макросах Daslang 0.6.5-RC2.
-Использует стандартные Result и Option: [переход и совместимость](STANDARD_TYPES.md).
+Использует стандартные Result и Option: [переход и совместимость](CE_SEMANTICS.md).
 `computation` общий для builders; связывание записывается пайпом.
-StateBuilder и WriterBuilder описаны в [STATE_WRITER.md](STATE_WRITER.md).
+StateBuilder и WriterBuilder описаны в [семантика builders](CE_SEMANTICS.md).
 
 ```powershell
 cd C:\src\dascript_computation_expressions
@@ -16,7 +16,7 @@ cd C:\src\dascript_computation_expressions
 ```
 
 Можно задать `-Daslang <путь к daslang.exe>` или `DASLANG_EXE`.
-Общий `../run.ps1 -Test` тоже запускает эти проверки.
+
 
 ## Result
 
@@ -109,7 +109,7 @@ Builder вычисляется один раз во внешнем блоке; �
 bind вычисляется один раз. Продолжения — синхронные daScript blocks, не
 сохраняемые heap-lambda. Обычные Value CE синхронны. Отложенный запуск даёт
 отдельный `deferred`, а кадровые корутины и планировщик — модули
-`coroutine_builder` и `coroutine_scheduler`. Добавлены cold TaskBuilder/TaskResultBuilder с неблокирующим poll-адаптером; см. [TASKS.md](TASKS.md).
+`coroutine_builder` и `coroutine_scheduler`. Добавлены cold TaskBuilder/TaskResultBuilder с неблокирующим poll-адаптером; см. [семантика builders](CE_SEMANTICS.md).
 Проверка тега Result/Option нужна на каждом bind; макрос не убирает стоимость
 проверки результата операции. Создание самих строк или значений может выделять
 память независимо от механизма продолжений.
@@ -180,8 +180,8 @@ let description = computation(OptionBuilder()) {
 Это немедленно выполняемые computation expressions: значение computation —
 готовый Result/Option. Delay здесь не создаёт хранимую задачу или ленивое
 вычисление для последующего повторного запуска. Для этого есть отдельный
-`deferred` ([DEFERRED.md](DEFERRED.md)). Завершающий hook `ce_run` также
-поддержан ([RUN.md](RUN.md)); типизированные задачи описаны в [TASKS.md](TASKS.md).
+`deferred` ([семантика builders](CE_SEMANTICS.md)). Завершающий hook `ce_run` также
+поддержан ([семантика builders](CE_SEMANTICS.md)); типизированные задачи описаны в [семантика builders](CE_SEMANTICS.md).
 
 Макрос рекурсивно преобразует ветки и тела циклов. Ветки и циклы,
 после которых есть код, объединяются с ним через Combine. Циклы остаются
@@ -191,8 +191,8 @@ let description = computation(OptionBuilder()) {
 проверяет Error/None. При сбое результат выходит из обёртки цикла и
 распространяется через Combine. Writer накапливает журнал, State переносит
 состояние. Это стандартное раскрытие синхронных циклов. Builder может
-переопределить For/While через общий протокол: [LOOP_PROTOCOL.md](LOOP_PROTOCOL.md).
-Одновременный обход нескольких источников описан в [ZIP_FOR.md](ZIP_FOR.md).
+переопределить For/While через общий протокол: [семантика builders](CE_SEMANTICS.md).
+Одновременный обход нескольких источников описан в [семантика builders](CE_SEMANTICS.md).
 
 ## Поддерживаемый поднабор и границы
 
@@ -202,7 +202,7 @@ let description = computation(OptionBuilder()) {
 - Пустые блоки и блоки без return: успешный Unit.
 - Финальный `return value` и `return source |> return_from` в своей области.
 - Вложенные computation expressions.
-- `let resource = acquire() |> use_resource` и `try_finally(body, cleanup)`; см. [RESOURCES.md](RESOURCES.md).
+- `let resource = acquire() |> use_resource` и `try_finally(body, cleanup)`; см. [семантика builders](CE_SEMANTICS.md).
 
 Тело цикла и промежуточная ветка перед последующим кодом должны вычислять
 Unit. Обычно для этого достаточно не писать return. Неявное отбрасывание
@@ -218,7 +218,7 @@ Unit. Обычно для этого достаточно не писать retu
 `try_finally`. Error остаётся значением, а не исключением языка.
 Обычные ResultBuilder/OptionBuilder требуют копируемого payload; move-only
 значения поддерживают отдельные MoveResultBuilder/MoveOptionBuilder
-([MOVE_CE.md](MOVE_CE.md)). TaskBuilder/TaskResultBuilder описаны в [TASKS.md](TASKS.md); это поднабор идеи F# CE,
+([семантика builders](CE_SEMANTICS.md)). TaskBuilder/TaskResultBuilder описаны в [семантика builders](CE_SEMANTICS.md); это поднабор идеи F# CE,
 а не полная совместимость синтаксиса и семантики F#. Перечень стратегий —
 [BUILDER_PROTOCOL.md](BUILDER_PROTOCOL.md).
 
@@ -255,16 +255,16 @@ Option fail_at=2: steps=1/1/0, return=0
 `state_demo.das`, `writer_demo.das`, `test_computation_effects.das`.
 
 
-WriterResultBuilder объединяет журнал и остановку при Error; см. [WRITER_RESULT.md](WRITER_RESULT.md).
+WriterResultBuilder объединяет журнал и остановку при Error; см. [семантика builders](CE_SEMANTICS.md).
 
 
-StateResultBuilder объединяет состояние и Error с откатом всего workflow; см. [STATE_RESULT.md](STATE_RESULT.md).
+StateResultBuilder объединяет состояние и Error с откатом всего workflow; см. [семантика builders](CE_SEMANTICS.md).
 
 
-Using/TryFinally и проверки cleanup на всех builders: [RESOURCES.md](RESOURCES.md).
+Using/TryFinally и проверки cleanup на всех builders: [семантика builders](CE_SEMANTICS.md).
 
 
-ListBuilder использует другое значение Zero/Combine и собирает элементы из циклов; см. [LIST.md](LIST.md). Массив результата передаётся через `<-`.
+ListBuilder использует другое значение Zero/Combine и собирает элементы из циклов; см. [семантика builders](CE_SEMANTICS.md). Массив результата передаётся через `<-`.
 
 
 ## Yield и SequenceBuilder
@@ -306,10 +306,10 @@ ListBuilder использует другое значение Zero/Combine и �
 
 Добавлен общий `left |> and_bind(right) |> bind` для Result, Option,
 Validation и List через `ce_merge_sources`. Примеры и правила:
-[AND_BIND.md](AND_BIND.md), `and_bind_demo.das`.
+[семантика builders](CE_SEMANTICS.md), `and_bind_demo.das`.
 
 ## Оптимизация bind → return
 
 Соседняя завершающая пара использует необязательный `ce_bind_return`; без
 перегрузки сохраняется обычный Bind/Return. Синтаксис не меняется.
-Подробности и проверки: [BIND_RETURN.md](BIND_RETURN.md), `bind_return_demo.das`.
+Подробности и проверки: [семантика builders](CE_SEMANTICS.md), `bind_return_demo.das`.

@@ -24,7 +24,7 @@ MoveList, MoveResult и MoveOption; state-repro после обхода прох
 task_from_async не исправляет стандартный макрос. Обход: владеть ресурсом через
 Task CE use_resource либо task_from_async(source, closeCallback), передавая в
 стандартную async-функцию устойчивый heap handle. Пример и границы владения —
-[TASKS.md](TASKS.md), [task_async_resources_demo.das](examples/task_async_resources_demo.das).
+[семантика builders](CE_SEMANTICS.md), [task_async_resources_demo.das](examples/task_async_resources_demo.das).
 
 ## Воспроизводимый сбой JIT
 
@@ -58,8 +58,8 @@ Task CE use_resource либо task_from_async(source, closeCallback), перед
 - `run_computation.ps1 -Test`: полный набор интерпретатора, включая ожидаемые
   ошибки компиляции и проверки раскрытия.
 - `run_modes.ps1 -Mode Jit`: явно перечисленное подмножество исполнения JIT.
-  Список задаётся в `mode_tests.json`: сейчас 49 файлов — пять базовых CE-наборов,
-  27 Task-наборов, восемь AsyncSequence и восемь Parser/Search/Query/deferred и полный пример Query. Проверяются также ошибки, отмена, таймауты, композиция,
+  Список задаётся в `mode_tests.json`: сейчас 69 тестов и примеров — базовые CE,
+  Task, AsyncSequence, Parser/Search/Query, стандартные Result/Option и move-only результаты. Проверяются также ошибки, отмена, таймауты, композиция,
   deferred, shared-await и владение результатами.
   Не означает успех всех тестов интерпретатора под JIT. Кеш JIT отключён.
 - `run_modes.ps1 -Mode AotGenerate`: генерация C++ через `daslang -aot`.

@@ -19,3 +19,13 @@ libhv.*.log
 
 __pycache__/
 *.pyc
+
+# Generated validation and benchmark artifacts
+validation/
+async-performance/
+async-bind-performance/
+*.log
+*_samples.csv
+*_summary.json
+*_before_*.das.txt
+*_expansion_*.txt

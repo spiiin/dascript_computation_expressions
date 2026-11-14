@@ -1,9 +1,9 @@
 # Computation expressions for Daslang
 
-Самостоятельная библиотека F#-подобных computation expressions: Result/Option,
+F#-подобные computation expressions на AST-макросах Daslang: Result/Option,
 State/Writer, List/Sequence, Task/AsyncSequence и Parser/Search/Query.
-Макрос проверяет операции builder при компиляции; владение ресурсами,
-ошибки и отмена покрыты отдельными тестами.
+Типы операций проверяются при компиляции; ресурсы, отмена и move-only значения
+поддерживаются протоколом builders.
 
 ```das
 options gen2
@@ -19,103 +19,70 @@ def main() {
 }
 ```
 
-История выделена из [dascript_macro_fsharp](https://github.com/spiiin/dascript_macro_fsharp).
-Исходный проект подключает эту библиотеку как submodule.
+## Начало работы
 
-
-Task: [runtime, channel, select, progress, jobque-потоки, HTTP, semaphore, retry](TASK_CONCURRENCY.md);
-[иерархия отмены](TASK_CANCELLATION.md#иерархия-причина-и-read-only-view);
-[дедлайн, бюджет и диагностика планировщика](TASK_SCHEDULER.md#ближайший-дедлайн-бюджет-времени-и-диагностика);
-[общий пример](examples/task_toolkit_demo.das).
-
-Текущий результат завершения State/API/диагностики/метрик: [COMPLETION_RESULTS.md](COMPLETION_RESULTS.md).
-
-| Каталог | Содержимое |
-|---|---|
-| lib/ | 40 публичных модулей без тестовых builders |
-| examples/ | Запускаемые примеры |
-| tests/ | Положительные и отрицательные проверки; tests/repro/ — известные сбои |
-| support/ | Демонстрационные builders и вспомогательные модули примеров/тестов |
-| benchmarks/ | Временные нагрузки; benchmarks/metrics/ — независимые пары CE/ручного кода |
-| integration_example/ | Шаблон приложения и минимальный собственный builder |
-
-Стандартные Result/Option и миграция: [STANDARD_TYPES.md](STANDARD_TYPES.md).
-
-Подключение: [INTEGRATION.md](INTEGRATION.md), [PUBLIC_API.md](PUBLIC_API.md).
-Что такое CE, объяснение для C++-программистов: [INTRO_FOR_CPP.md](INTRO_FOR_CPP.md).
-Когда CE, а когда обычный daslang: [WHEN_TO_USE.md](WHEN_TO_USE.md).
-Таблица builders: [CE_SEMANTICS.md](CE_SEMANTICS.md). Синтаксис: [COMPUTATION.md](COMPUTATION.md).
-State: [STATE_OPERATIONS.md](STATE_OPERATIONS.md). Ошибки: [DIAGNOSTICS.md](DIAGNOSTICS.md).
+Нужны PowerShell 7 и Python 3. CI использует Windows x64 и закреплённый SDK
+**0.6.5-RC2** с проверкой SHA-256. Для AOT нужны также CMake и Visual Studio 2022
+с C++ tools. SDK в библиотеку не входит.
 
 ```powershell
 git clone https://github.com/spiiin/dascript_computation_expressions.git
 cd dascript_computation_expressions
 $env:DASLANG_EXE = & ./.github/scripts/install-daslang.ps1 -Destination ./.work/sdk
 ./run_computation.ps1 -Test
-./test_integration.ps1
-./test_diagnostics.ps1
-& $env:DASLANG_EXE examples/state_operations_demo.das -no-module-cache
-./run_performance_metrics.ps1
-./run_performance_metrics.ps1 -Jit -OutputDirectory performance-jit
 ```
 
-Для проверок нужны PowerShell 7 и Python 3; AOT дополнительно требует CMake
-и Visual Studio 2022 с C++ tools. CI использует SDK **0.6.5-RC2** с проверкой SHA-256.
-Путь к компилятору выбирается через `-Daslang`, `DASLANG_EXE` или `PATH`.
-Реальные TCP/HTTP/WebSocket проверки используют локальные серверы.
+Существующий SDK можно выбрать через `-Daslang`, `DASLANG_EXE` или `PATH`.
+Скрипты находят исходники относительно своего каталога. В приложении используйте
+`require ./lib/computation.das`; из вложенного каталога — `require ../lib/computation.das`.
+Для поставки библиотеки и небольшого приложения: `./export_library.ps1 -Destination C:/my_project/ce`.
 
-Полная регрессия: `./run_computation.ps1 -Test`. JIT и генерация C++:
-`./run_modes.ps1 -Mode All`; сборка и исполнение строгого AOT-хоста: `./run_aot.ps1`.
-Четыре независимых задания CI проверяют интерпретатор, режимы JIT/AOT,
-исполнение AOT и адаптеры. Известные ограничения SDK описаны в RELIABILITY.md.
+## Документация и примеры
 
-Скрипты разрешают пути относительно своего каталога. Из корня приложения:
-`require ./lib/computation.das`, из examples/tests: `require ../lib/computation.das`.
-Расширение .das и префикс ./ или ../ задают явный файловый require.
-Старое плоское расположение модулей заменено на lib/.
+- [Подключение и экспорт](INTEGRATION.md)
+- [Синтаксис CE](COMPUTATION.md)
+- [Builders, владение и семантика](CE_SEMANTICS.md)
+- [Публичный API](PUBLIC_API.md)
+- [Создание собственного builder](BUILDER_PROTOCOL.md)
+- [Режимы выполнения и известные ограничения SDK](RELIABILITY.md)
 
-Режимы и ограничение JIT: [RELIABILITY.md](RELIABILITY.md). Метрики и границы
-оптимизаций: [PERFORMANCE_METRICS.md](PERFORMANCE_METRICS.md), [BENCHMARKS.md](BENCHMARKS.md).
-AsyncSequence: [счётчики выделений, ручные варианты и сравнение до/после](ASYNC_SEQUENCE_PERFORMANCE.md).
-Исторические дампы и метаданные сохранены без переписывания путей внутри них.
+| Задача | Запускаемый пример |
+|---|---|
+| Ошибки и отсутствующие значения | [Result/Option](examples/computation_demo.das) |
+| Состояние, журнал и откат | [State/Writer/Result](examples/state_writer_result_demo.das) |
+| Управление ресурсами | [use_resource и try_finally](examples/resources_demo.das) |
+| Ленивые последовательности | [Sequence](examples/sequence_demo.das) |
+| Асинхронные задачи, каналы и отмена | [Task toolkit](examples/task_toolkit_demo.das) |
+| Асинхронные последовательности | [AsyncSequence](examples/async_sequence_demo.das) |
+| Разбор текста | [Parser](examples/parser_demo.das) |
+| Перебор решений | [Search](examples/search_demo.das) |
+| Запросы к коллекциям | [Query](examples/query_full_demo.das) |
+| Собственный builder | [Минимальное приложение](integration_example/main.das) |
 
-Типизированные задачи TaskBuilder / TaskResultBuilder, ожидание внешних операций и отмена: [TASKS.md](TASKS.md).
-Асинхронное получение элементов через Task bind: [AsyncSequenceBuilder](ASYNC_SEQUENCE.md),
-[пример](examples/async_sequence_demo.das).
-Move-only элементы: `yield <-`, заимствующий bind и передача владения;
-[пример с массивами](examples/async_sequence_move_demo.das).
-Deferred AsyncSequence, независимые снимки и повторные запуски:
-[пример](examples/deferred_async_sequence_demo.das).
-Пайповый `left |> and_bind(right) |> bind` для Task через общий протокол:
-[TASK_AND_BIND.md](TASK_AND_BIND.md), [пример](examples/task_and_bind_demo.das).
+## Проверки
 
-Типизированный планировщик с лимитом опросов, круговым обходом, ID, отменой и историей: [TASK_SCHEDULER.md](TASK_SCHEDULER.md).
+```powershell
+./tests/test_sdk_paths.ps1
+./run_computation.ps1 -Test
+./run_modes.ps1 -Mode Jit
+./run_modes.ps1 -Mode AotGenerate
+./run_aot.ps1
+```
 
-Таймауты по now_ms, отмена вложенных ожиданий и освобождение ресурсов: [task_timeout_demo.das](examples/task_timeout_demo.das), [контракт](TASK_SCHEDULER.md#таймауты).
+Основной runner выполняет 289 проверок файлов, диагностику, экспорт и проверки
+раскрытия оптимизаций. Набор `mode_tests.json` содержит 69 тестов и примеров;
+строгий AOT-хост исполняет 64 из них. Генерация C++ отдельно не означает успех AOT runtime.
+Тесты TCP/HTTP/WebSocket используют локальные серверы; GLFW-тест создаёт скрытое окно.
 
-Групповая отмена CancellationToken и передача Cancelled через bind: [TASK_CANCELLATION.md](TASK_CANCELLATION.md), [пример](examples/task_cancellation_demo.das).
+[GitHub Actions](https://github.com/spiiin/dascript_computation_expressions/actions)
+проверяет интерпретатор, JIT/AOT, AOT runtime и интеграции отдельными заданиями.
+Логи сохраняются как CI artifacts; локальные результаты игнорируются Git.
 
-Ожидание времени task_delay_ms через now_ms планировщика: [TASK_DELAY.md](TASK_DELAY.md), [пример](examples/task_delay_demo.das).
+`lib/` содержит 40 публичных модулей; `tests/` — регрессию и отдельные известные
+repro SDK; `examples/` — примеры; `support/` — их builders и тестовые серверы.
+`benchmarks/` содержит исходники нагрузок, используемые также функциональными
+проверками; `aot_host/` — строгий C++ host; `integration_example/` — шаблон экспорта.
+Исторические логи, замеры и дампы доступны в Git-истории, а не в рабочем дереве.
 
-WhenAll для динамического массива задач, порядок результатов и владеющий массив: [TASK_ARRAY.md](TASK_ARRAY.md), [пример](examples/task_array_demo.das).
-
-Завершение текущего набора Task: [TASK_COMPLETION.md](TASK_COMPLETION.md).
-Реальный TCP: [TASK_TCP.md](TASK_TCP.md). Сборка и исполнение AOT: [AOT_RUNTIME.md](AOT_RUNTIME.md).
-WebSocket через dasHV: [TASK_HV.md](TASK_HV.md), пайповый bind и владение соединением.
-Два WebSocket через and_bind с отменой и таймаутом: [пример](examples/task_hv_and_bind_demo.das).
-
-Ожидание UI/игровых событий: [TASK_EVENTS.md](TASK_EVENTS.md), [пример](examples/task_events_demo.das).
-
-Реальный ввод с клавиатуры, отмена и таймаут без остановки фоновых задач: [TASK_KEYBOARD.md](TASK_KEYBOARD.md).
-
-Клавиатура окна dasGlfw без Python: [TASK_GLFW_KEYBOARD.md](TASK_GLFW_KEYBOARD.md).
-
-Parser, Search и Query: [DOMAIN_BUILDERS.md](DOMAIN_BUILDERS.md), примеры `parser_demo.das`, `search_demo.das`, `query_demo.das`.
-
-Parser: optional/many/many1/sep_by и управление backtracking — [PARSER_COMBINATORS.md](PARSER_COMBINATORS.md).
-
-Search: ограничение числа решений и последовательное объединение альтернатив — [SEARCH_COMBINATORS.md](SEARCH_COMBINATORS.md).
-
-Query: стабильная сортировка, группировка и distinct — [QUERY_OPERATORS.md](QUERY_OPERATORS.md).
-
-Полный пример Query с `<|` и проверкой памяти: [query_full_demo.das](examples/query_full_demo.das).
+История выделена из [dascript_macro_fsharp](https://github.com/spiiin/dascript_macro_fsharp),
+который подключает эту библиотеку как submodule.

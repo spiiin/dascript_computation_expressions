@@ -1,12 +1,12 @@
 # Возможности и семантика computation expressions
 
-Короткие операции State: [STATE_OPERATIONS.md](STATE_OPERATIONS.md). Раздельные проверки режимов и законы композиции: [RELIABILITY.md](RELIABILITY.md).
+Короткие операции State: [публичный API](PUBLIC_API.md). Раздельные проверки режимов и законы композиции: [RELIABILITY.md](RELIABILITY.md).
 
 Этот документ фиксирует контракт текущей реализации. Сигнатуры конкретного
 builder определяют допустимые источники; общая запись `|> bind` не делает
-произвольные контейнеры совместимыми. Parser, Search и Query описаны в [DOMAIN_BUILDERS.md](DOMAIN_BUILDERS.md).
+произвольные контейнеры совместимыми. Parser, Search и Query описаны в [публичный API](PUBLIC_API.md).
 TaskBuilder и TaskResultBuilder предоставляют cold single-shot задачи и ожидание
-внешних операций через poll-адаптер, см. [TASKS.md](TASKS.md).
+внешних операций через poll-адаптер, см. [публичный API](PUBLIC_API.md).
 
 ## Таблица основных builders
 
@@ -47,7 +47,7 @@ TaskBuilder и TaskResultBuilder предоставляют cold single-shot з�
 механизм и в CE с копируемым результатом. Сырые указатели сами по себе не
 становятся владельцами. Для List несколько consuming bind не означают
 декартово копирование одного move-only объекта: действуют правила переноса
-и области владения из [MOVE_COLLECTIONS.md](MOVE_COLLECTIONS.md).
+и области владения из [публичный API](PUBLIC_API.md).
 
 ## Демонстрационные builders
 
@@ -77,20 +77,20 @@ Task начинает тело при первом task_poll. Pending приос
 Result.error завершает TaskResult со статусом Succeeded; native panic даёт Failed,
 явная отмена — Cancelled. Области ресурсов закрываются и в этих путях.
 Task поддерживает break/continue, return_from, Unit/Zero, deferred, shared-await
-и move-only payload; контракт: [TASK_COMPLETION.md](TASK_COMPLETION.md).
+и move-only payload; контракт: [публичный API](PUBLIC_API.md).
 Нативные синхронные участки могут блокировать poll.
 AsyncSequence совмещает ожидание Task через bind и выдачу элементов через yield.
 Каждый next запрашивает только один элемент; отмена next закрывает stream целиком.
-Контракт владения и досрочного выхода: [ASYNC_SEQUENCE.md](ASYNC_SEQUENCE.md).
+Контракт владения и досрочного выхода: [публичный API](PUBLIC_API.md).
 `task_from_async` связывает стандартные [async]-источники с Task: ждёт полного
 завершения, возвращает последний res либо CeUnit для void. Промежуточный res
 не завершает Task; код и исключения после него сохраняются. Только wait-события
 добавляют приостановки адаптера. Для внешнего cleanup есть перегрузка с callback;
-ограничение native inscope в SDK 0.6.4 описано в [TASKS.md](TASKS.md).
+ограничение native inscope в SDK 0.6.4 описано в [публичный API](PUBLIC_API.md).
 Совместное ожидание двух владельцев задаётся task_when_all/task_result_when_all,
 гонка — task_race, из отдельного модуля task_combinators.das. Группа
-`and_bind` использует общий ce_merge_sources, см. [TASK_AND_BIND.md](TASK_AND_BIND.md). Порядок опроса, отмена оставшихся детей и обработка
-бросающих close-callbacks описаны в [TASK_COMPOSITION.md](TASK_COMPOSITION.md).
+`and_bind` использует общий ce_merge_sources, см. [публичный API](PUBLIC_API.md). Порядок опроса, отмена оставшихся детей и обработка
+бросающих close-callbacks описаны в [публичный API](PUBLIC_API.md).
 
 Обычный bind сначала вычисляет источник. После успешного связывания выполняется
 продолжение, которое может вычислить следующий источник. При Error/None/invalid
@@ -127,7 +127,7 @@ let result = computation(ResultBuilder()) {
 Оптимизации BindReturn/Bind2Return/Bind2 и накопителя List обязаны сохранять
 порядок наблюдаемых эффектов и владение. Они не обещают отсутствие временных
 значений для любой формы CE. Пользовательские финализаторы могут ограничивать
-выбор оптимизированного пути; см. [LIST_OPTIMIZATION.md](LIST_OPTIMIZATION.md).
+выбор оптимизированного пути; см. [публичный API](PUBLIC_API.md).
 
 ## Циклы и остановка
 
@@ -246,7 +246,7 @@ Value/Owned/Collect выполняются синхронно при каждо�
 предыдущего; сохранённое вычисление и возвращённый iterator — отдельные владельцы.
 Для move-only коллекций каждый запуск создаёт собственные элементы; ссылки
 на снимок не могут произвольно выходить наружу. Специальный iterator<T&>
-owning Sequence описан в [DEFERRED_SEQUENCE.md](DEFERRED_SEQUENCE.md).
+owning Sequence описан в [публичный API](PUBLIC_API.md).
 
 ## Подтверждение и границы проверок
 
@@ -272,19 +272,19 @@ Daslang v0.6.5-RC2, не подтверждение всех путей под J
 [RELIABILITY.md](RELIABILITY.md). Отдельный `test_recover_portability` включён
 в interpreter/JIT-набор и проверяет State и владеющие результаты.
 
-Подробные контракты: [AND_BIND.md](AND_BIND.md), [LOOP_PROTOCOL.md](LOOP_PROTOCOL.md),
-[ZIP_FOR.md](ZIP_FOR.md), [RESOURCES.md](RESOURCES.md), [TRY_WITH.md](TRY_WITH.md),
-[MOVE_CE.md](MOVE_CE.md), [MOVE_COLLECTIONS.md](MOVE_COLLECTIONS.md), [DEFERRED.md](DEFERRED.md).
+Подробные контракты: [публичный API](PUBLIC_API.md), [публичный API](PUBLIC_API.md),
+[публичный API](PUBLIC_API.md), [публичный API](PUBLIC_API.md), [публичный API](PUBLIC_API.md),
+[публичный API](PUBLIC_API.md), [публичный API](PUBLIC_API.md), [публичный API](PUBLIC_API.md).
 
-Типизированный планировщик с лимитом опросов, круговым обходом, ID, отменой и историей: [TASK_SCHEDULER.md](TASK_SCHEDULER.md).
+Типизированный планировщик с лимитом опросов, круговым обходом, ID, отменой и историей: [публичный API](PUBLIC_API.md).
 
-Task scheduler: TaskTimeout(after_ms=...) отменяет задачу до poll при достижении срока, независимо от бюджета опросов. TaskResult также получает Cancelled, а не Result.error; ошибка cleanup даёт Failed при сохранении task_timed_out=true. Контракт часов и владения: [TASK_SCHEDULER.md](TASK_SCHEDULER.md#таймауты).
+Task scheduler: TaskTimeout(after_ms=...) отменяет задачу до poll при достижении срока, независимо от бюджета опросов. TaskResult также получает Cancelled, а не Result.error; ошибка cleanup даёт Failed при сохранении task_timed_out=true. Контракт часов и владения: [публичный API](PUBLIC_API.md).
 
-Task bind и комбинаторы передают Cancelled ребёнка родителю без panic; try_with его не перехватывает. CancellationToken добавляет кооперативный групповой запрос, наблюдаемый при poll. Ресурсы закрываются; ошибка cleanup даёт Failed. См. [TASK_CANCELLATION.md](TASK_CANCELLATION.md).
+Task bind и комбинаторы передают Cancelled ребёнка родителю без panic; try_with его не перехватывает. CancellationToken добавляет кооперативный групповой запрос, наблюдаемый при poll. Ресурсы закрываются; ошибка cleanup даёт Failed. См. [публичный API](PUBLIC_API.md).
 
-task_delay_ms — холодная Task<CeUnit>, отсчёт от первого poll по now_ms scheduler. TaskResultBuilder допускает Task<CeUnit> без доменного Error; отмена/исключения передаются как обычно. Детали времени и владения: [TASK_DELAY.md](TASK_DELAY.md).
+task_delay_ms — холодная Task<CeUnit>, отсчёт от первого poll по now_ms scheduler. TaskResultBuilder допускает Task<CeUnit> без доменного Error; отмена/исключения передаются как обычно. Детали времени и владения: [публичный API](PUBLIC_API.md).
 
-task_when_all(array) сохраняет порядок входных индексов. Failed/Cancelled передаются вверх с закрытием остальных детей. Result.error внутри элементов остаётся данными. Владеющий массив заимствуется через var results & = ... |> bind и живёт через последующие ожидания продолжения. [TASK_ARRAY.md](TASK_ARRAY.md).
+task_when_all(array) сохраняет порядок входных индексов. Failed/Cancelled передаются вверх с закрытием остальных детей. Result.error внутри элементов остаётся данными. Владеющий массив заимствуется через var results & = ... |> bind и живёт через последующие ожидания продолжения. [публичный API](PUBLIC_API.md).
 # WebSocket Task
 
 Необязательный адаптер dasHV сохраняет тот же контракт TaskResultBuilder:
@@ -292,7 +292,7 @@ Error пропускает продолжение, Cancelled распростр�
 use_resource закрывает соединение при любом выходе. Таймаут действует через
 now_ms планировщика. Отмена активной операции закрывает весь сокет;
 отмена до первого опроса не начинает ввод-вывод. Ограничения DNS, очередей,
-одновременных операций и отправки: [TASK_HV.md](TASK_HV.md).
+одновременных операций и отправки: [публичный API](PUBLIC_API.md).
 
 ## Task и события
 
@@ -300,4 +300,4 @@ now_ms планировщика. Отмена активной операции 
 освобождает подписку до продолжения либо при отмене/таймауте/удалении Task.
 Emit делает broadcast только существующим подпискам, без replay и inline callbacks.
 Закрытый источник возвращает Error, отмена даёт Cancelled. Источник и emit
-работают в одном потоке. Полный контракт: [TASK_EVENTS.md](TASK_EVENTS.md).
+работают в одном потоке. Полный контракт: [публичный API](PUBLIC_API.md).
