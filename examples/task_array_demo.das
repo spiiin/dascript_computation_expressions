@@ -15,7 +15,7 @@ def load_asset(id,delay:int) {
     }
 }
 def asset_jobs() {
-    var tasks:array<$Task<int>>
+    var tasks:array<Task<int>>
     tasks |> emplace(load_asset(0,30))
     tasks |> emplace(load_asset(1,10))
     tasks |> emplace(load_asset(2,20))

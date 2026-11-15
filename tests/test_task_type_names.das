@@ -10,39 +10,39 @@ require ../lib/task_jobque.das
 // declared without typedecl(some_call()). A name is the same structural type
 // as the value a constructor returns.
 
-var pending : $Task<int>
-var inbox : $TaskChannel<string>
-var loading : $TaskProgress<int>
-var clicks : $TaskEventSource<int>
+var pending : Task<int>
+var inbox : TaskChannel<string>
+var loading : TaskProgress<int>
+var clicks : TaskEventSource<int>
 var workers : TaskJobQueue
 
 struct Level {
     title : string
-    load : $Task<$Result<int;string>>
+    load : Task<$Result<int;string>>
 }
 
-def doubled(value : int) : $Task<int> {
+def doubled(value : int) : Task<int> {
     return <- computation(TaskBuilder(type<int>)) {
         return value * 2
     }
 }
-def finish(var task : $Task<auto(T)>) : T {
+def finish(var task : Task<auto(T)>) : T {
     while (task_poll(task) == TaskStatus.Waiting) {}
     return task_value(task)
 }
-def total(var tasks : array<$Task<int>>) : int {
+def total(var tasks : array<Task<int>>) : int {
     var sum = 0
     for (task in tasks) { sum += finish(task) }
     return sum
 }
 // A task body owns what it captures, so it reads the handle from the global.
-def first_message() : $Task<$Result<string;string>> {
+def first_message() : Task<$Result<string;string>> {
     return <- computation(TaskResultBuilder(type<string>)) {
         let message = task_channel_receive(inbox) |> bind
         return message ?? "closed"
     }
 }
-def waiting(channel : $TaskChannel<string>) : int {
+def waiting(channel : TaskChannel<string>) : int {
     return task_channel_count(channel)
 }
 
@@ -52,7 +52,7 @@ def main() {
     verify(finish(pending) == 42)
     delete pending
 
-    var batch : array<$Task<int>>
+    var batch : array<Task<int>>
     batch |> emplace(doubled(1))
     batch |> emplace(doubled(2))
     verify(total(batch) == 6)

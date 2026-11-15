@@ -27,7 +27,7 @@ def main() {
         var inscope caption <- task_spawn(runtime,task_retry(@(attempt:int) {
             return <- task_after_polls(0,attempt<3 ? result_error("offline",type<string>) : result_ok("ready"))
         },3,10l))
-        var candidates:array<$Task<$Result<int;string>>>
+        var candidates:array<Task<$Result<int;string>>>
         candidates |> emplace(task_after_polls(0,result_error("mirror unavailable",type<int>)))
         candidates |> emplace(task_after_polls(2,result_ok(7)))
         var inscope mirror <- task_spawn(runtime,task_first_success(candidates))

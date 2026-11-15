@@ -141,16 +141,16 @@ task_when_all(tasks) потребляет массив Task с одинаков�
 
 | Имя | Что возвращает такое значение |
 | --- | --- |
-| `$Task<T>` | `computation(TaskBuilder(type<T>))`; для TaskResultBuilder это `$Task<$Result<T;string>>` |
-| `$TaskEvent<T>` | Один шаг задачи |
-| `$TaskChannel<T>` | `task_channel(type<T>, capacity)` |
-| `$TaskProgress<T>` | `task_progress(type<T>)` |
-| `$TaskEventSource<T>` | `task_event_source(type<T>)` |
+| `Task<T>` | `computation(TaskBuilder(type<T>))`; для TaskResultBuilder это `Task<$Result<T;string>>` |
+| `TaskEvent<T>` | Один шаг задачи |
+| `TaskChannel<T>` | `task_channel(type<T>, capacity)` |
+| `TaskProgress<T>` | `task_progress(type<T>)` |
+| `TaskEventSource<T>` | `task_event_source(type<T>)` |
 | `TaskJobQueue` | `task_job_queue()` |
 
 ```das
-var inbox : $TaskChannel<string>
-def total(var tasks : array<$Task<int>>) : int { ... }
+var inbox : TaskChannel<string>
+def total(var tasks : array<Task<int>>) : int { ... }
 ```
 
 Имя — тот же структурный тип, что и значение конструктора, поэтому старый код

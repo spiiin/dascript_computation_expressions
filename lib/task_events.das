@@ -6,7 +6,7 @@ require daslib/templates_boost
 require daslib/typemacro_boost
 
 struct TaskEventSourceTag {_ce_marker:uint8}
-// `$TaskEventSource<T>` names the handle that task_event_source(type<T>)
+// `TaskEventSource<T>` names the handle that task_event_source(type<T>)
 // returns. The state layout is repeated in task_event_source; its declared
 // result type keeps the two in step.
 [template_tuple(T)]
@@ -52,7 +52,7 @@ def private ce_event_state(source:tuple<tag:TaskEventSourceTag;owner:iterator<au
     }
 }
 
-def task_event_source(unused:type<auto(T)>) : $TaskEventSource<T -const -&> {
+def task_event_source(unused:type<auto(T)>) : TaskEventSource<T -const -&> {
     static_assert(typeinfo ce_resumable_payload(default<T -const -&>))
     concept_assert(typeinfo can_copy(type<T -const -&>),"task events: broadcast payload must be copyable")
     unsafe {

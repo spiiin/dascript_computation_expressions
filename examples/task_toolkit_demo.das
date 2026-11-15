@@ -8,10 +8,10 @@ require daslib/fio
 
 // Application-level services: owning handles live outside CE generators.
 var queue:TaskJobQueue
-var loading:$TaskProgress<int>
+var loading:TaskProgress<int>
 var decoded:typedecl(task_jobque_stream(task_job_queue(),type<int>,0,@@decode_chunks))
-var input:$TaskChannel<string>
-var network:$TaskChannel<string>
+var input:TaskChannel<string>
+var network:TaskChannel<string>
 
 // Runs on a jobque worker: publishes decoded chunks, stops early when cancelled.
 def decode_chunks(count:int;sink:TaskJobSink) {

@@ -20,8 +20,8 @@ enum TaskStatus {
 struct TaskTag {_ce_marker:uint8}
 struct TaskEventTag {_ce_marker:uint8}
 
-// Names for the task types: `$Task<T>` is the cold single-shot task that
-// computation(TaskBuilder(type<T>)) returns, `$TaskEvent<T>` one step of it.
+// Names for the task types: `Task<T>` is the cold single-shot task that
+// computation(TaskBuilder(type<T>)) returns, `TaskEvent<T>` one step of it.
 // Both are named tuples, so a value built field by field has the same type.
 [template_tuple(T)]
 struct template TaskEvent {
