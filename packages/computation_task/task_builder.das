@@ -1,10 +1,10 @@
 options gen2
 module task_builder public
-require ./computation_builders.das public
-require ./sequence_runtime.das public
-require ./resumable_lowering.das public
+require ../computation/computation_builders.das public
+require ../computation/sequence_runtime.das public
+require ../computation/resumable_lowering.das public
 require ./cancellation_token.das public
-require ./move_builders.das public
+require ../computation/move_builders.das public
 require ./task_function.das public
 require daslib/rtti
 require daslib/templates

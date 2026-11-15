@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 
 def checked_number(value : int) : Result<int;string> {
     if (value < 0) { return result_error("negative number", type<int>) }

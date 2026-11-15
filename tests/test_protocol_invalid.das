@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation_macro.das
+require ../packages/computation/computation_macro.das
 struct InvalidBuilder {}
 def ce_protocol(builder : InvalidBuilder) { return 123 }
 [export]

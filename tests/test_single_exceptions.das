@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation.das
-require ../lib/deferred_computation.das
+require ../packages/computation/computation.das
+require ../packages/computation/deferred_computation.das
 require daslib/rtti
 require daslib/strings_boost
 var opened=fixed_array(0,0,0)

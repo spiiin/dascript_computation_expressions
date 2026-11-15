@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 require ../support/report_builder.das
 var events=""
 var runs=0

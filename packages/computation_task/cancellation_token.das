@@ -1,6 +1,6 @@
 options gen2
 module cancellation_token public
-require ./sequence_runtime.das public
+require ../computation/sequence_runtime.das public
 require daslib/rtti
 
 // parent is a counted lease: a child keeps its ancestors alive and observes them.

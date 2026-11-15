@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation.das
-require ../lib/task_runtime.das
+require ../packages/computation/computation.das
+require ../packages/computation_task/task_runtime.das
 
 // [task] and [task_result] turn a function body into a task: the declared
 // result is the value the task produces.

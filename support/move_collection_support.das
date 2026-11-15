@@ -1,6 +1,6 @@
 options gen2
 module move_collection_support public
-require ../lib/computation.das public
+require ../packages/computation/computation.das public
 struct Loot {items:array<int>}
 def loot(n:int) {
     var inscope value:Loot

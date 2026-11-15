@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation.das
-require ../lib/task_runtime.das
+require ../packages/computation/computation.das
+require ../packages/computation_task/task_runtime.das
 
 // A value of the wrong type is reported where the task returns it, not at
 // the library code that wraps the return.

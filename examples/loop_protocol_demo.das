@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation_macro.das
+require ../packages/computation/computation_macro.das
 require ../support/bounded_result_builder.das
 
 // No registration or changes to computation.das are needed.

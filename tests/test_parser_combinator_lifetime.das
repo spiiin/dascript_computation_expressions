@@ -1,8 +1,8 @@
 options gen2
 options stack = 1048576
-require ../lib/computation_macro.das
-require ../lib/parser_builder.das
-require ../lib/deferred_computation.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation/parser_builder.das
+require ../packages/computation/deferred_computation.das
 require daslib/rtti
 var calls=0
 var closed=0

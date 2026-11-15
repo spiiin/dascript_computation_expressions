@@ -3,27 +3,29 @@
 Проверенный SDK — Daslang v0.6.5-RC2 со стандартной daslib. SDK не включён в экспорт.
 Result и Option теперь являются стандартными `Result<T;string>` / `Option<T>`.
 Миграция и правила владения: [семантика builders](CE_SEMANTICS.md).
-Необязательный `./lib/task_hv.das` требует установленный `dashv/dashv_boost`.
+Необязательный `computation_task/task_hv` требует установленный `dashv/dashv_boost`.
 API: `hv_websocket`, `ws_connect`, `ws_send_text`, `ws_receive_text`,
 `HvWebSocketConfig`, `hv_websocket_stats`; контракт и пример: [семантика builders](CE_SEMANTICS.md).
 
-В поставке `lib/` содержит только библиотечные модули. Из корня приложения:
+Библиотека — два пакета: `computation` (ядро) и `computation_task` (Task-рантайм,
+нужен только для задач). В приложении они лежат в `modules/`, см.
+[подключение](INTEGRATION.md):
 
 ```das
 options gen2
-require ./lib/computation.das
+require computation/computation
 ```
 
-Дополнительные подключения: `./lib/validation_builder.das`,
-`./lib/deferred_computation.das`, `./lib/coroutine_builder.das`, `./lib/coroutine_scheduler.das`.
+Дополнительные подключения: `computation/validation_builder`,
+`computation/deferred_computation`, `computation/coroutine_builder`, `computation/coroutine_scheduler`.
 State, Writer, Reader и Query в библиотеку не входят: это примеры builders поверх
 публичного протокола, см. [examples/builders](examples/builders/README.md).
-Типизированные задачи: `./lib/task_builder.das`, см. [семантика builders](CE_SEMANTICS.md).
-Планировщик и таймауты: `./lib/task_scheduler.das`, см. [семантика builders](CE_SEMANTICS.md).
-Совместное ожидание: `./lib/task_combinators.das`, операции task_when_all,
+Типизированные задачи: `computation_task/task_builder`, см. [семантика builders](CE_SEMANTICS.md).
+Планировщик и таймауты: `computation_task/task_scheduler`, см. [семантика builders](CE_SEMANTICS.md).
+Совместное ожидание: `computation_task/task_combinators`, операции task_when_all,
 task_result_when_all, task_race и [and_bind для Task](CE_SEMANTICS.md); см. [семантика builders](CE_SEMANTICS.md).
-Вложенные файлы приложения используют соответствующий относительный путь
-с расширением `.das`, например `require ../lib/computation.das`.
+Модуль подключается по имени пакета, без расширения. Тесты и примеры этого
+репозитория подключают пакеты из `packages/` относительным путём с `.das`.
 
 ## Builders и результаты
 
@@ -150,7 +152,7 @@ def load_level(id : int) : Task<int> {
 | `[task_result]` | `TaskResultBuilder(type<T>)` | `Task<Result<T;string>>` |
 | `[task_result]`, результат `Result<T;E>` | `TaskResultBuilder(type<T>, type<E>)` | `Task<Result<T;E>>` |
 
-Аннотации приходят вместе с `./lib/task_builder.das`. Тип результата объявляется
+Аннотации приходят вместе с `computation_task/task_builder`. Тип результата объявляется
 явно; `void` и нативный `finally` не поддерживаются — для очистки есть
 `try_finally(body, cleanup)`.
 
@@ -170,7 +172,7 @@ def load(id : int) : Result<string;LoadError> {
 Ошибка связанной задачи завершает и внешнюю, поэтому их типы ошибок должны
 совпадать. Молча ошибка не преобразуется: bind задачи с другим типом ошибки
 отклоняется при компиляции одним сообщением, в котором названы оба типа.
-`task_map_error(task, @@convert)` из `./lib/task_combinators.das` меняет тип
+`task_map_error(task, @@convert)` из `computation_task/task_combinators` меняет тип
 ошибки задачи — так в такой функции связываются источники библиотеки, которые
 ошибаются строкой:
 
@@ -224,9 +226,9 @@ def evens(limit : int) : int {
 }
 ```
 
-`[sequence]` и `[coroutine]` приходят вместе с `./lib/sequence_builder.das` и
-`./lib/coroutine_builder.das`, `[async_sequence]` — с
-`./lib/async_sequence_builder.das`. Аргументы `var` перемещаются так же, как у
+`[sequence]` и `[coroutine]` приходят вместе с `computation/sequence_builder` и
+`computation/coroutine_builder`, `[async_sequence]` — с
+`computation_task/async_sequence_builder`. Аргументы `var` перемещаются так же, как у
 `[task]`.
 
 ## Имена типов Task
@@ -267,7 +269,7 @@ def first_reading(var readings : AsyncSequence<int>) : Task<Option<int>> { ... }
 
 ## Полный Task API
 
-`./lib/async_sequence_builder.das`: AsyncSequenceBuilder, async_sequence_next,
+`computation_task/async_sequence_builder`: AsyncSequenceBuilder, async_sequence_next,
 async_sequence_close. Получение элементов через bind в TaskBuilder; завершение —
 none, отмена/таймаут next закрывают stream. Владельцы: use_resource или inscope.
 Копируемые и move-only элементы, один активный next. Для owning значений:
@@ -296,13 +298,13 @@ task_result_when_all (пара и массив), task_race и task_result_race.
 
 ## Ожидание событий
 
-`./lib/task_events.das`: task_event_source(type<T>), task_wait_event, task_event_emit,
+`computation_task/task_events`: task_event_source(type<T>), task_wait_event, task_event_emit,
 task_event_close, task_event_subscriber_count, task_event_stats. Broadcast по активным
 подпискам, копируемый T, Task<Result<T>>. Контракт: [семантика builders](CE_SEMANTICS.md).
 
 ## Parser и Search
 
-Отдельные модули: `./lib/parser_builder.das`, `./lib/search_builder.das`.
+Отдельные модули: `computation/parser_builder`, `computation/search_builder`.
 Протокол и примеры: [семантика builders](CE_SEMANTICS.md).
 
 - `ParserBuilder(text=...)`: `parser_literal`, `parser_int`, `parser_spaces`,

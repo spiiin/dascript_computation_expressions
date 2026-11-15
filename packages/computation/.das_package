@@ -1,0 +1,9 @@
+options gen2
+require daslib/daspkg
+
+[export]
+def package() {
+    package_name("computation")
+    package_description("F#-style computation expressions: the macro and the Result, Option, Validation, List, Sequence, Coroutine, Parser and Search builders")
+    package_source("github.com/spiiin/dascript_computation_expressions")
+}

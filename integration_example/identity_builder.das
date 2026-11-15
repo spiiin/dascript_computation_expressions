@@ -1,6 +1,6 @@
 options gen2
 module identity_builder public
-require ./lib/builder_protocol.das public
+require computation/builder_protocol public
 struct IdentityBuilder {}
 def ce_protocol(builder:IdentityBuilder) {return CeValueProtocol()}
 def ce_unwrap(builder:IdentityBuilder; source:tuple<value:auto(T)>) : T {return source.value}

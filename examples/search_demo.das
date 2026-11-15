@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/search_builder.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation/search_builder.das
 def solutions() {
     return <- computation(SearchBuilder(type<string>)) {
         let sword=fixed_array(2,4,6) |> bind

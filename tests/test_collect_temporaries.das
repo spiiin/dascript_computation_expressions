@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 var cleanups=0
 struct Resource {}
 def ce_dispose(var resource:Resource) { cleanups++ }

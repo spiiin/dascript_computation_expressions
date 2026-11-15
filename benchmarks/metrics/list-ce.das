@@ -1,5 +1,5 @@
 options gen2
-require ../../lib/computation.das
+require ../../packages/computation/computation.das
 
 def work(seed:int) : int64 {
     var inscope values <- computation(ListBuilder()) {

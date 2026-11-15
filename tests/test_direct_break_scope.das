@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 
 // A break with no loop around it is rejected by the macro.
 [export]

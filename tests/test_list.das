@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 require daslib/rtti
 require strings
 struct Counters { builder : int; source : int; next_source : int; finish : int }

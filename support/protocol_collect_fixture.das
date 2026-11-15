@@ -1,6 +1,6 @@
 options gen2
 module protocol_collect_fixture public
-require ../lib/builder_protocol.das public
+require ../packages/computation/builder_protocol.das public
 require daslib/rtti
 
 struct ExternalCollectionContext {}

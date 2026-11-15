@@ -7,7 +7,8 @@ if(NOT SCRIPT_MANIFEST)
 endif()
 file(STRINGS "${SCRIPT_MANIFEST}" scripts)
 file(GLOB_RECURSE ce_dependencies CONFIGURE_DEPENDS
-  "${CMAKE_CURRENT_SOURCE_DIR}/../lib/*.das"
+  "${CMAKE_CURRENT_SOURCE_DIR}/../packages/computation/*.das"
+  "${CMAKE_CURRENT_SOURCE_DIR}/../packages/computation_task/*.das"
   "${CMAKE_CURRENT_SOURCE_DIR}/../examples/builders/*.das"
   "${CMAKE_CURRENT_SOURCE_DIR}/../support/*.das")
 set(generated)
@@ -34,13 +35,33 @@ if(async_benchmark_aot)
     DEPENDS "${script}" ${ce_dependencies} VERBATIM)
   list(APPEND generated "${cpp}")
 endif()
-foreach(module IN ITEMS builder_protocol computation_resources sequence_runtime zip_runtime cancellation_token task_builder task_delay task_combinators task_scheduler task_runtime task_channel task_parallel task_jobque task_events deferred_runtime async_sequence_builder computation_builders move_builders list_builder sequence_builder parser_builder search_builder examples/builders/query_builder)
-  if(module MATCHES "/")
-    set(script "${CMAKE_CURRENT_SOURCE_DIR}/../${module}.das")
-    get_filename_component(module "${module}" NAME)
-  else()
-    set(script "${CMAKE_CURRENT_SOURCE_DIR}/../lib/${module}.das")
-  endif()
+# Paths are relative to the repository root, without the extension.
+foreach(module_path IN ITEMS
+    packages/computation/builder_protocol
+    packages/computation/computation_resources
+    packages/computation/sequence_runtime
+    packages/computation/zip_runtime
+    packages/computation_task/cancellation_token
+    packages/computation_task/task_builder
+    packages/computation_task/task_delay
+    packages/computation_task/task_combinators
+    packages/computation_task/task_scheduler
+    packages/computation_task/task_runtime
+    packages/computation_task/task_channel
+    packages/computation_task/task_parallel
+    packages/computation_task/task_jobque
+    packages/computation_task/task_events
+    packages/computation/deferred_runtime
+    packages/computation_task/async_sequence_builder
+    packages/computation/computation_builders
+    packages/computation/move_builders
+    packages/computation/list_builder
+    packages/computation/sequence_builder
+    packages/computation/parser_builder
+    packages/computation/search_builder
+    examples/builders/query_builder)
+  set(script "${CMAKE_CURRENT_SOURCE_DIR}/../${module_path}.das")
+  get_filename_component(module "${module_path}" NAME)
   set(cpp "${CMAKE_CURRENT_BINARY_DIR}/generated/lib_${module}.cpp")
   add_custom_command(OUTPUT "${cpp}"
     COMMAND $<TARGET_FILE:DAS::daslang> -aotlib "${script}" "${cpp}"

@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 require ./builders/writer_result_builder.das
 require ./builders/state_result_builder.das
 

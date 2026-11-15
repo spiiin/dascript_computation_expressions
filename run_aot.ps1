@@ -20,7 +20,8 @@ $manifest=Join-Path $OutputDirectory 'scripts.txt'
 [IO.File]::WriteAllLines($manifest,$files)
 # Reject a build whose sources changed while CMake generated/compiled the stubs.
 function Get-AotSourceStamp {
-    $sources=@(Get-ChildItem (Join-Path $PSScriptRoot 'lib') -Filter '*.das' -File)
+    $sources=@(Get-ChildItem (Join-Path $PSScriptRoot 'packages') -Filter '*.das' -File -Recurse)
+    $sources+=@(Get-ChildItem (Join-Path $PSScriptRoot 'examples/builders') -Filter '*.das' -File)
     $sources+=@(Get-ChildItem (Join-Path $PSScriptRoot 'support') -Filter '*.das' -File -Recurse)
     $sources+=@($files | ForEach-Object {Get-Item -LiteralPath $_})
     return (($sources | Sort-Object FullName -Unique | ForEach-Object {

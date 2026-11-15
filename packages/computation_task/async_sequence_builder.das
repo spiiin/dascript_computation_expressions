@@ -1,7 +1,7 @@
 options gen2
 module async_sequence_builder public
 require ./task_combinators.das public
-require ./sequence_function.das public
+require ../computation/sequence_function.das public
 require daslib/rtti
 require daslib/typemacro_boost
 

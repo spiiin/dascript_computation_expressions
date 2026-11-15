@@ -1,7 +1,7 @@
 options gen2
-require ../lib/computation.das
-require ../lib/task_runtime.das
-require ../lib/task_jobque.das
+require ../packages/computation/computation.das
+require ../packages/computation_task/task_runtime.das
+require ../packages/computation_task/task_jobque.das
 require daslib/rtti
 require daslib/fio
 require strings

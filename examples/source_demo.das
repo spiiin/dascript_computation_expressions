@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation_macro.das
+require ../packages/computation/computation_macro.das
 require ../support/game_source_builder.das
 [export]
 def main() {

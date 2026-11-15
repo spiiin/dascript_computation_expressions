@@ -1,7 +1,7 @@
 options gen2
 options max_infer_passes=512
-require ../lib/computation_macro.das
-require ../lib/async_sequence_builder.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation_task/async_sequence_builder.das
 require daslib/rtti
 var allocated=0
 var freed=0

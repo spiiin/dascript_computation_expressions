@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation_macro.das
+require ../packages/computation/computation_macro.das
 require ./builders/query_builder.das
 struct Player {name:string; team:int; score:int}
 struct Team {id:int; title:string}

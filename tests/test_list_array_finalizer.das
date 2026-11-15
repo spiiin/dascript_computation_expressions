@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 require daslib/rtti
 var frees=0
 def finalize(var value:array<int>) {frees++; __builtin_array_free(value,typeinfo sizeof(type<int>))}

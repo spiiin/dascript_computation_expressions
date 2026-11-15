@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation.das
-require ../lib/validation_builder.das
+require ../packages/computation/computation.das
+require ../packages/computation/validation_builder.das
 
 def price(name:string) { return name=="Sword" ? result_ok(30) : result_error("Unknown item",type<int>) }
 [export]

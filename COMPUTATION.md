@@ -22,7 +22,7 @@ cd C:\src\dascript_computation_expressions
 ## Result
 
 ```das
-require ./lib/computation.das
+require computation/computation
 
 let outcome = computation(ResultBuilder()) {
     let health = checked_number(100) |> bind
@@ -189,8 +189,8 @@ let description = computation(OptionBuilder()) {
 продолжается внутри выбранной ветки, затем переходит к общему хвосту:
 
 ```das
-require ./lib/computation.das
-require ./lib/task_builder.das
+require computation/computation
+require computation_task/task_builder
 require daslib/match
 
 [task]

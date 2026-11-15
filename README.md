@@ -8,7 +8,7 @@ Reader и Query — примеры собственных builders в [examples/
 
 ```das
 options gen2
-require ./lib/computation.das
+require computation/computation
 
 [export]
 def main() {
@@ -34,8 +34,10 @@ $env:DASLANG_EXE = & ./.github/scripts/install-daslang.ps1 -Destination ./.work/
 ```
 
 Существующий SDK можно выбрать через `-Daslang`, `DASLANG_EXE` или `PATH`.
-Скрипты находят исходники относительно своего каталога. В приложении используйте
-`require ./lib/computation.das`; из вложенного каталога — `require ../lib/computation.das`.
+Скрипты находят исходники относительно своего каталога. В приложении пакеты
+лежат в `modules/` и подключаются по имени: `require computation/computation`,
+`require computation_task/task_runtime`. Тесты и примеры этого репозитория
+подключают их относительным путём, например `require ../packages/computation/computation.das`.
 Для поставки библиотеки и небольшого приложения: `./export_library.ps1 -Destination C:/my_project/ce`.
 
 ## Документация и примеры
@@ -79,8 +81,11 @@ $env:DASLANG_EXE = & ./.github/scripts/install-daslang.ps1 -Destination ./.work/
 проверяет интерпретатор, JIT/AOT, AOT runtime и интеграции отдельными заданиями.
 Логи сохраняются как CI artifacts; локальные результаты игнорируются Git.
 
-`lib/` содержит 40 публичных модулей; `tests/` — регрессию и отдельные известные
-repro SDK; `examples/` — примеры; `support/` — их builders и тестовые серверы.
+`packages/computation` — ядро (20 модулей): макрос и builders Result/Option,
+Validation, List, Sequence, Coroutine, Parser и Search. `packages/computation_task` —
+Task-рантайм (16 модулей), отдельный пакет поверх ядра. `tests/` — регрессия и
+отдельные известные repro SDK; `examples/` — примеры, в `examples/builders` —
+примеры собственных builders; `support/` — builders примеров и тестовые серверы.
 `benchmarks/` содержит исходники нагрузок, используемые также функциональными
 проверками; `aot_host/` — строгий C++ host; `integration_example/` — шаблон экспорта.
 Исторические логи, замеры и дампы доступны в Git-истории, а не в рабочем дереве.

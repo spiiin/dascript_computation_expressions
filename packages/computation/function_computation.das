@@ -1,34 +1,22 @@
 options gen2
-module task_function public
+module function_computation public
 require ./computation_macro.das public
 require daslib/ast
 require daslib/ast_boost
 require daslib/templates_boost
 
-// Function-level sugar for the Task builders, after daslib's [async].
+// What the function annotations share: [sequence] and [coroutine] here, and
+// [task], [task_result] and [async_sequence] in the task package. Each turns
 //
-//     [task]
-//     def load_level(id : int) : int {
-//         let chunk = read_chunk(id) |> bind
-//         return chunk * 2
-//     }
+//     [sequence]
+//     def evens(limit : int) : int { ... }
 //
-// is the same function as
-//
-//     def load_level(id : int) : Task<int> {
-//         return <- computation(TaskBuilder(type<int>)) {
-//             let chunk = read_chunk(id) |> bind
-//             return chunk * 2
-//         }
-//     }
-//
-// The declared result is the value the task produces, not the task itself.
-// [task_result] uses TaskResultBuilder, so `: int` there declares a function
-// that returns Task<Result<int;string>>.
+// into the function that returns `computation(SequenceBuilder(type<int>)) { ... }`.
 //
 // The body is rewritten when the function is parsed, before any type is known.
-// The names Task, Result and the builders are therefore looked up later, in the
-// module that declares the function; task_builder.das brings them along.
+// The names of the result type and of the builder are therefore looked up
+// later, in the module that declares the function; the builder's own module
+// brings them along.
 
 [macro_interface]
 class CeLastLine : AstVisitor {
@@ -60,7 +48,7 @@ enum CeFunctionKind {
 }
 
 // Turn the body of `func` into `return <- computation(builder(...)) { body }`.
-// sequence_function.das uses it for the builders that produce a stream.
+// The annotation modules call it with their builder's name.
 def ce_function_computation(var func : FunctionPtr; annotation, builder : string; kind : CeFunctionKind;
                             var errors : das_string) : bool {
     let task = kind == CeFunctionKind.Task || kind == CeFunctionKind.TaskResult
@@ -195,18 +183,4 @@ def ce_function_computation(var func : FunctionPtr; annotation, builder : string
     }
     func.result = ce_template_type("Task", at, produced)
     return true
-}
-
-[function_macro(name="task")]
-class TaskFunctionMacro : AstFunctionAnnotation {
-    [unused_argument(group, args)] def override apply(var func : FunctionPtr; var group : ModuleGroup; var args : AnnotationArgumentList; var errors : das_string) : bool {
-        return ce_function_computation(func, "task", "TaskBuilder", CeFunctionKind.Task, errors)
-    }
-}
-
-[function_macro(name="task_result")]
-class TaskResultFunctionMacro : AstFunctionAnnotation {
-    [unused_argument(group, args)] def override apply(var func : FunctionPtr; var group : ModuleGroup; var args : AnnotationArgumentList; var errors : das_string) : bool {
-        return ce_function_computation(func, "task_result", "TaskResultBuilder", CeFunctionKind.TaskResult, errors)
-    }
 }

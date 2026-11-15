@@ -1,7 +1,7 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 require ../support/bounded_result_builder.das
-require ../lib/deferred_computation.das
+require ../packages/computation/deferred_computation.das
 require daslib/rtti
 
 var sources=0

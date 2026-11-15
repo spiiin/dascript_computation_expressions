@@ -1,6 +1,6 @@
 options gen2
 module reader_builder public
-require ../../lib/builder_protocol.das public
+require ../../packages/computation/builder_protocol.das public
 
 struct ReaderContext {_ce_marker:uint8}
 struct ReaderAsk {_ce_marker:uint8}

@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation_macro.das
+require ../packages/computation/computation_macro.das
 require ../support/protocol_test_builders.das
 require ../support/protocol_collect_fixture.das
 

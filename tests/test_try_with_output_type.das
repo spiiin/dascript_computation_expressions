@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 [export]
 def main() {
  let result=computation(ResultBuilder()) {try_with($ {return 1}, $(message:string) {return "wrong"})}

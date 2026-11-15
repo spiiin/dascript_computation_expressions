@@ -1,8 +1,8 @@
 options gen2
 module task_glfw_keyboard public
-require ../lib/computation_macro.das
-require ../lib/task_scheduler.das public
-require ../lib/task_events.das public
+require ../packages/computation/computation_macro.das
+require ../packages/computation_task/task_scheduler.das public
+require ../packages/computation_task/task_events.das public
 require glfw public
 require daslib/rtti
 require strings

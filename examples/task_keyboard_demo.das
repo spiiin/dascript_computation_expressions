@@ -1,7 +1,7 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/task_scheduler.das
-require ../lib/task_events.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation_task/task_scheduler.das
+require ../packages/computation_task/task_events.das
 require daslib/fio
 require daslib/rtti
 require daslib/jobque_boost

@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation_macro.das
+require ../packages/computation/computation_macro.das
 struct IncompleteBuilder {}
 def ce_protocol(builder : IncompleteBuilder) { return CeValueProtocol() }
 [export]

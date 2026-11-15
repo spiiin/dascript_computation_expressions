@@ -1,9 +1,9 @@
 options gen2
-require ../lib/computation.das
-require ../lib/task_runtime.das
-require ../lib/task_channel.das
-require ../lib/task_progress.das
-require ../lib/task_jobque.das
+require ../packages/computation/computation.das
+require ../packages/computation_task/task_runtime.das
+require ../packages/computation_task/task_channel.das
+require ../packages/computation_task/task_progress.das
+require ../packages/computation_task/task_jobque.das
 require daslib/fio
 
 // Application-level services: owning handles live outside CE generators.

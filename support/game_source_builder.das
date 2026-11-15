@@ -1,6 +1,6 @@
 options gen2
 module game_source_builder public
-require ../lib/computation_builders.das public
+require ../packages/computation/computation_builders.das public
 
 struct GameSourceBuilder { minimumHealth:int=1 }
 def ce_protocol(builder:GameSourceBuilder) { return CeValueProtocol() }

@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation.das
-require ../lib/task_runtime.das
+require ../packages/computation/computation.das
+require ../packages/computation_task/task_runtime.das
 
 // A mistake in a task body is the first error, on its own line.
 [task]

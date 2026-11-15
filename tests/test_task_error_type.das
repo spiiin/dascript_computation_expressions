@@ -1,7 +1,7 @@
 options gen2
-require ../lib/computation.das
-require ../lib/task_runtime.das
-require ../lib/deferred_computation.das
+require ../packages/computation/computation.das
+require ../packages/computation_task/task_runtime.das
+require ../packages/computation/deferred_computation.das
 
 // TaskResultBuilder(type<T>, type<E>) is a task that fails with any copyable
 // error type; [task_result] names that type in the declared result.

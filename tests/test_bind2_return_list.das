@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 
 var fastBytes=0ul
 var slowBytes=0ul

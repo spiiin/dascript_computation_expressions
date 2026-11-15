@@ -65,7 +65,7 @@ $result=[ordered]@{Mode=$(if($Jit){'jit'}else{'interpreter'});Samples=$Samples;C
     CompileScope='fresh process, no AST cache; startup + compile + simulate; JIT cache disabled; no workload execution in timed samples';
     ExpansionScope='entry-program textual compiler log, not machine code or complete imported-module AST';
     Comparison=@($comparison);Expansions=@($expansions.ToArray());Checksums=$checksums;
-    SourceHashes=@(Get-ChildItem (Join-Path $PSScriptRoot 'lib') -Filter '*.das';Get-ChildItem (Join-Path $PSScriptRoot 'benchmarks/metrics') -Filter '*.das')|
+    SourceHashes=@(Get-ChildItem (Join-Path $PSScriptRoot 'packages') -Filter '*.das' -Recurse;Get-ChildItem (Join-Path $PSScriptRoot 'benchmarks/metrics') -Filter '*.das')|
         ForEach-Object {[pscustomobject]@{File=[IO.Path]::GetRelativePath($PSScriptRoot,$_.FullName).Replace('\','/');Sha256=(Get-FileHash $_.FullName).Hash}}}
 $result|ConvertTo-Json -Depth 7|Set-Content (Join-Path $OutputDirectory 'compilation.json')
 $comparison|Format-Table -AutoSize

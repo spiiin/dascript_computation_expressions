@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/validation_builder.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation/validation_builder.das
 
 struct Character { name:string; level:int }
 def check_name(name:string) {

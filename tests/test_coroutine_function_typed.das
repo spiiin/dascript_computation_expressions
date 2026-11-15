@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation.das
-require ../lib/coroutine_builder.das
+require ../packages/computation/computation.das
+require ../packages/computation/coroutine_builder.das
 
 // A coroutine produces no values, so [coroutine] rejects a declared result
 // instead of ignoring it.

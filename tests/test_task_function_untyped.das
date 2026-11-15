@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation.das
-require ../lib/task_runtime.das
+require ../packages/computation/computation.das
+require ../packages/computation_task/task_runtime.das
 
 // The builder needs the value type before the body is known, so [task]
 // rejects a function that leaves its result to inference.

@@ -1,7 +1,7 @@
 options gen2
-require ../lib/computation.das
-require ../lib/task_runtime.das
-require ../lib/task_parallel.das
+require ../packages/computation/computation.das
+require ../packages/computation_task/task_runtime.das
+require ../packages/computation_task/task_parallel.das
 require daslib/rtti
 var opened=0;var closed=0;var active=0;var peak=0;var attempts=0
 var order=""

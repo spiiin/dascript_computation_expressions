@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/task_builder.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation_task/task_builder.das
 var ready=false
 var closed=0
 var continued=0

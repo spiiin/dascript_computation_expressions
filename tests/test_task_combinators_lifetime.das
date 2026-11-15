@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/task_combinators.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation_task/task_combinators.das
 require daslib/rtti
 require daslib/strings_boost
 var opened=fixed_array(0,0)

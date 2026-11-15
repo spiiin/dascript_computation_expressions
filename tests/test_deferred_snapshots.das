@@ -1,7 +1,7 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 require ../examples/builders/computation_effects.das
-require ../lib/deferred_computation.das
+require ../packages/computation/deferred_computation.das
 struct Config {
     name:string
     amounts:array<int>

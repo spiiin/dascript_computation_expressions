@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation_macro.das
+require ../packages/computation/computation_macro.das
 struct InvalidLoop {}
 def ce_protocol(builder:InvalidLoop) {return CeValueProtocol()}
 def ce_zero(builder:InvalidLoop) {return 0}

@@ -1,6 +1,6 @@
 options gen2
-require ../lib/deferred_computation.das
-require ../lib/task_builder.das
+require ../packages/computation/deferred_computation.das
+require ../packages/computation_task/task_builder.das
 require daslib/rtti
 require strings
 var cleaned=0

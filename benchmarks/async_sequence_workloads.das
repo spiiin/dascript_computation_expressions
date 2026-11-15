@@ -1,8 +1,8 @@
 options gen2
 options max_infer_passes=512
 module async_sequence_workloads public
-require ../lib/computation_macro.das
-require ../lib/async_sequence_builder.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation_task/async_sequence_builder.das
 
 def async_bench_mix(seed,work:int) : int {
     var value=uint(seed)

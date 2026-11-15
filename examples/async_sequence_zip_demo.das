@@ -1,8 +1,8 @@
 options gen2
 options max_infer_passes=512
-require ../lib/deferred_computation.das
-require ../lib/async_sequence_builder.das
-require ../lib/task_scheduler.das
+require ../packages/computation/deferred_computation.das
+require ../packages/computation_task/async_sequence_builder.das
+require ../packages/computation_task/task_scheduler.das
 
 [async_sequence]
 def pages(first:int) : array<int> {

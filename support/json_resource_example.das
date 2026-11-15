@@ -1,6 +1,6 @@
 options gen2
 module json_resource_example public
-require ../lib/computation.das public
+require ../packages/computation/computation.das public
 require ../examples/builders/writer_result_builder.das public
 require daslib/json_boost public
 

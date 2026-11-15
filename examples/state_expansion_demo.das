@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 require ./builders/computation_effects.das
 [export]
 def main() {

@@ -1,0 +1,17 @@
+options gen2
+require daslib/fio
+
+// Makes `require computation/<module>` resolve when this folder sits in a project's modules/.
+[export]
+def initialize(project_path : string) {
+    let computation_modules = [
+        "builder_protocol", "computation", "computation_builders", "computation_macro",
+        "computation_resources", "coroutine_builder", "coroutine_scheduler", "deferred_computation",
+        "deferred_runtime", "function_computation", "list_builder", "move_builders", "parser_builder",
+        "resumable_lowering", "search_builder", "sequence_builder", "sequence_function",
+        "sequence_runtime", "validation_builder", "zip_runtime"
+    ]
+    for (name in computation_modules) {
+        register_native_path("computation", name, "{project_path}/{name}.das")
+    }
+}

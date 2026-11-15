@@ -1,6 +1,6 @@
 options gen2
 module bounded_result_builder public
-require ../lib/computation_builders.das public
+require ../packages/computation/computation_builders.das public
 
 // A separate module: the macro knows neither this type nor its loop policy.
 // The budget applies independently to each loop, including nested loops.

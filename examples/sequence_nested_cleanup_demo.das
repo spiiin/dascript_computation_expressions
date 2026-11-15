@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 var active=0
 struct EnemyFeed {}
 def open_feed() {active++;return EnemyFeed()}

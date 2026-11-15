@@ -4,9 +4,23 @@ $ErrorActionPreference='Stop'
 $Daslang = Resolve-CeDaslang $Daslang
 $destination=Join-Path ([IO.Path]::GetFullPath($OutputDirectory)) ('integration-'+[guid]::NewGuid().ToString('N'))
 & (Join-Path $PSScriptRoot 'export_library.ps1') -Destination $destination
-$expected=@((Get-Content (Join-Path $PSScriptRoot 'public_modules.json') -Raw|ConvertFrom-Json) | ForEach-Object {$_})
-$actual=@(Get-ChildItem (Join-Path $destination 'lib') -Filter '*.das'|Select-Object -ExpandProperty Name)
-if(@(Compare-Object $expected $actual).Count){throw 'Export has unexpected modules'}
+# Each package arrives whole, with its descriptor and manifest, and nothing else does.
+foreach($package in @('computation','computation_task')) {
+    $expected=@(Get-ChildItem (Join-Path $PSScriptRoot "packages/$package") -Filter '*.das'|Select-Object -ExpandProperty Name)
+    $actual=@(Get-ChildItem (Join-Path $destination "modules/$package") -Filter '*.das'|Select-Object -ExpandProperty Name)
+    if(@(Compare-Object $expected $actual).Count){throw "Export has unexpected modules in $package"}
+    foreach($file in @('.das_module','.das_package')){
+        if(-not(Test-Path -LiteralPath (Join-Path $destination "modules/$package/$file"))){throw "Incomplete export: $package/$file"}
+    }
+}
+# The repository's own descriptor, used when the whole repository is installed
+# as one package, names the same modules as the two package descriptors.
+$rootDescriptor=[IO.File]::ReadAllText((Join-Path $PSScriptRoot '.das_module'))
+foreach($package in @('computation','computation_task')) {
+    $own=[regex]::Match([IO.File]::ReadAllText((Join-Path $PSScriptRoot "packages/$package/.das_module")),'(?s)_modules = \[(.*?)\]').Groups[1].Value -replace '\s',''
+    $shared=[regex]::Match($rootDescriptor,"(?s)${package}_modules = \[(.*?)\]").Groups[1].Value -replace '\s',''
+    if(-not $own -or $own -cne $shared){throw "Root .das_module disagrees with packages/$package/.das_module"}
+}
 foreach($file in @('README.md','INTEGRATION.md','PUBLIC_API.md','COMPUTATION.md','CE_SEMANTICS.md','BUILDER_PROTOCOL.md','RELIABILITY.md','aot_host/main.cpp','aot_host/CMakeLists.txt','aot_host/recover_064.h','main.das','identity_builder.das','manifest.json')){
     if(-not(Test-Path -LiteralPath (Join-Path $destination $file))){throw "Incomplete export: $file"}
 }
@@ -21,18 +35,24 @@ foreach($document in Get-ChildItem -LiteralPath $destination -Filter '*.md' -Fil
 }
 & $Daslang (Join-Path $destination 'main.das') -no-module-cache
 if($LASTEXITCODE -ne 0){throw 'Minimal external builder failed'}
+# The core package alone is a complete export: nothing in it needs the Task runtime.
+$coreOnly=Join-Path ([IO.Path]::GetFullPath($OutputDirectory)) ('integration-core-'+[guid]::NewGuid().ToString('N'))
+& (Join-Path $PSScriptRoot 'export_library.ps1') -Destination $coreOnly -Packages computation
+if(Test-Path -LiteralPath (Join-Path $coreOnly 'modules/computation_task')){throw 'Core export contains the Task package'}
+& $Daslang (Join-Path $coreOnly 'main.das') -no-module-cache
+if($LASTEXITCODE -ne 0){throw 'Core-only export failed'}
 $smoke=@'
 options gen2
-require ./lib/computation.das
-require ./lib/validation_builder.das
-require ./lib/deferred_computation.das
-require ./lib/task_builder.das
-require ./lib/task_combinators.das
-require ./lib/task_scheduler.das
-require ./lib/task_events.das
-require ./lib/async_sequence_builder.das
-require ./lib/parser_builder.das
-require ./lib/search_builder.das
+require computation/computation
+require computation/validation_builder
+require computation/deferred_computation
+require computation_task/task_builder
+require computation_task/task_combinators
+require computation_task/task_scheduler
+require computation_task/task_events
+require computation_task/async_sequence_builder
+require computation/parser_builder
+require computation/search_builder
 require daslib/async_boost
 [async]
 def standard_value() : int {await_next_frame();yield 12}
@@ -161,7 +181,7 @@ Write-Host "Standalone export verified: $destination"
 # Optional adapter is checked from the exported package, not the checkout.
 $hvSmoke=@'
 options gen2
-require ./lib/task_hv.das
+require computation_task/task_hv
 [export]
 def main() {
     var inscope socket <- hv_websocket()

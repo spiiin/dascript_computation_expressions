@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/list_builder.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation/list_builder.das
 require daslib/rtti
 var calls=0
 var lastArity=0

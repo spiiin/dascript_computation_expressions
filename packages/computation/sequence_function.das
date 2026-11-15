@@ -1,6 +1,6 @@
 options gen2
 module sequence_function public
-require ./task_function.das public
+require ./function_computation.das public
 require daslib/ast
 require daslib/ast_boost
 
@@ -30,13 +30,6 @@ require daslib/ast_boost
 class SequenceFunctionMacro : AstFunctionAnnotation {
     [unused_argument(group, args)] def override apply(var func : FunctionPtr; var group : ModuleGroup; var args : AnnotationArgumentList; var errors : das_string) : bool {
         return ce_function_computation(func, "sequence", "SequenceBuilder", CeFunctionKind.Sequence, errors)
-    }
-}
-
-[function_macro(name="async_sequence")]
-class AsyncSequenceFunctionMacro : AstFunctionAnnotation {
-    [unused_argument(group, args)] def override apply(var func : FunctionPtr; var group : ModuleGroup; var args : AnnotationArgumentList; var errors : das_string) : bool {
-        return ce_function_computation(func, "async_sequence", "AsyncSequenceBuilder", CeFunctionKind.AsyncSequence, errors)
     }
 }
 

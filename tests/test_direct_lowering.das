@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation.das
-require ../lib/validation_builder.das
+require ../packages/computation/computation.das
+require ../packages/computation/validation_builder.das
 
 // Result, Option and Validation only short-circuit, so their scopes are lowered
 // without continuations: a branch may return early, and a long chain of binds

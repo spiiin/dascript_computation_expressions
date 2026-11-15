@@ -1,6 +1,6 @@
 options gen2
 module benchmark_workloads public
-require ../lib/computation.das public
+require ../packages/computation/computation.das public
 require ../examples/builders/computation_effects.das public
 
 def private checked(value:int) {

@@ -1,6 +1,6 @@
 options gen2
 module computation_effects public
-require ../../lib/computation_builders.das public
+require ../../packages/computation/computation_builders.das public
 
 // Eager, scoped state: the macro copies the initial state into a mutable local.
 struct StateContext {_ce_marker:uint8}

@@ -1,9 +1,9 @@
 options gen2
 // Stress nested producer/consumer/resource macros beyond the default 50 passes.
 options max_infer_passes=128
-require ../lib/computation_macro.das
-require ../lib/async_sequence_builder.das
-require ../lib/task_scheduler.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation_task/async_sequence_builder.das
+require ../packages/computation_task/task_scheduler.das
 require daslib/strings_boost
 require daslib/rtti
 

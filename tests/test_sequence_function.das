@@ -1,8 +1,8 @@
 options gen2
-require ../lib/computation.das
-require ../lib/coroutine_builder.das
-require ../lib/async_sequence_builder.das
-require ../lib/task_runtime.das
+require ../packages/computation/computation.das
+require ../packages/computation/coroutine_builder.das
+require ../packages/computation_task/async_sequence_builder.das
+require ../packages/computation_task/task_runtime.das
 
 // [sequence], [async_sequence] and [coroutine] turn a function body into a
 // stream, as [task] turns one into a task. The declared result of a sequence

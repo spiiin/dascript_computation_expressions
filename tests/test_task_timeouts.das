@@ -1,5 +1,5 @@
 options gen2
-require ../lib/task_scheduler.das
+require ../packages/computation_task/task_scheduler.das
 require daslib/strings_boost
 require daslib/rtti
 var events=""

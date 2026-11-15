@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 
 def borrowed(var values:array<int>) : array<int>& { unsafe { return values } }
 struct Holder { values:array<int> }

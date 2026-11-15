@@ -8,7 +8,7 @@
 или регистрировать имя типа в макросе не нужно.
 
 ```das
-require ./lib/computation_macro.das
+require ./packages/computation/computation_macro.das
 require ./examples/builders/reader_builder.das
 
 let answer = computation(ReaderBuilder(7)) {
@@ -57,7 +57,7 @@ ReaderBuilder в библиотеку не входит: это пример и�
 
 Ниже `B` — тип builder, `M<T>` — условное обозначение результата с полезным
 значением T, а не буквальный синтаксис daScript. Реальные сигнатуры показаны
-в `examples/builders/reader_builder.das` и `lib/list_builder.das`.
+в `examples/builders/reader_builder.das` и `packages/computation/list_builder.das`.
 
 | Операция | Назначение |
 | --- | --- |

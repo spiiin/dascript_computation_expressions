@@ -1,7 +1,7 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/coroutine_builder.das
-require ../lib/deferred_computation.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation/coroutine_builder.das
+require ../packages/computation/deferred_computation.das
 require daslib/rtti
 require daslib/strings_boost
 var trace=""
