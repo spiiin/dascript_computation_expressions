@@ -58,21 +58,19 @@ def pump_keyboard(token:CancellationToken) {
     }
 }
 
-def read_user_input() {
-    return <- computation(TaskResultBuilder(type<string>)) {
-        let text=task_wait_event(input_lines) |> bind
-        return text
-    }
+[task_result]
+def read_user_input() : string {
+    let text=task_wait_event(input_lines) |> bind
+    return text
 }
-def background_work(interval_ms:int) {
-    return <- computation(TaskResultBuilder(type<string>)) {
-        while(!stop_background) {
-            task_delay_ms(interval_ms) |> bind
-            background_ticks++
-            log_line("HEARTBEAT={background_ticks}")
-        }
-        return "background finished"
+[task_result]
+def background_work(interval_ms:int) : string {
+    while(!stop_background) {
+        task_delay_ms(interval_ms) |> bind
+        background_ticks++
+        log_line("HEARTBEAT={background_ticks}")
     }
+    return "background finished"
 }
 def active(status:TaskStatus) {return status==TaskStatus.Created || status==TaskStatus.Waiting}
 

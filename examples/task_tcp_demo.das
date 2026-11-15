@@ -7,11 +7,10 @@ require daslib/strings_convert
 require daslib/rtti
 require daslib/jobque_boost
 var port=0
-def read_line(command:string) {
-    return <- computation(TaskResultBuilder(type<string>)) {
-        let value=task_tcp_request_line("127.0.0.1",port,command) |> bind
-        return "Reply: {value}"
-    }
+[task_result]
+def read_line(command:string) : string {
+    let value=task_tcp_request_line("127.0.0.1",port,command) |> bind
+    return "Reply: {value}"
 }
 def drive(var scheduler:auto;id:TaskId;started:int64) {
     while(task_status(scheduler,id)==TaskStatus.Created || task_status(scheduler,id)==TaskStatus.Waiting) {

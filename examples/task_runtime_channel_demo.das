@@ -6,24 +6,22 @@ require ../lib/task_channel.das
 var channel:TaskChannel<int>
 
 // Channel capacity 2 applies backpressure; each item has one consumer.
-def produce() {
-    return <- computation(TaskResultBuilder(type<CeUnit>)) {
-        for(n in range(1,6)) {task_channel_send(channel,n) |> bind}
-        task_channel_close(channel)
-        return CeUnit()
-    }
+[task_result]
+def produce() : CeUnit {
+    for(n in range(1,6)) {task_channel_send(channel,n) |> bind}
+    task_channel_close(channel)
+    return CeUnit()
 }
-def consume() {
-    return <- computation(TaskResultBuilder(type<int>)) {
-        var sum=0
-        while(true) {
-            let item=task_channel_receive(channel) |> bind
-            if(item is none) {break}
-            sum+=item as some
-            task_delay_ms(2) |> bind
-        }
-        return sum
+[task_result]
+def consume() : int {
+    var sum=0
+    while(true) {
+        let item=task_channel_receive(channel) |> bind
+        if(item is none) {break}
+        sum+=item as some
+        task_delay_ms(2) |> bind
     }
+    return sum
 }
 [export]
 def main() {

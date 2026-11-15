@@ -7,14 +7,13 @@ require daslib/strings_convert
 require daslib/rtti
 require daslib/jobque_boost
 
-def echo(url:string) {
-    return <- computation(TaskResultBuilder(type<string>)) {
-        var socket & = hv_websocket() |> use_resource
-        ws_connect(socket,url) |> bind
-        ws_send_text(socket,"hello") |> bind
-        let reply=ws_receive_text(socket) |> bind
-        return "Reply: {reply}"
-    }
+[task_result]
+def echo(url:string) : string {
+    var socket & = hv_websocket() |> use_resource
+    ws_connect(socket,url) |> bind
+    ws_send_text(socket,"hello") |> bind
+    let reply=ws_receive_text(socket) |> bind
+    return "Reply: {reply}"
 }
 [export]
 def main() {

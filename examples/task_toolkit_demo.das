@@ -21,42 +21,39 @@ def decode_chunks(count:int;sink:TaskJobSink) {
         if(!task_job_emit(sink,checksum)) {return}
     }
 }
-def load_level() {
-    return <- computation(TaskResultBuilder(type<int>)) {
-        var chunks=0
-        while(true) {
-            let chunk=task_jobque_next(decoded) |> bind
-            if(chunk is none) {break}
-            chunks++
-            task_progress_report(loading,chunks*25)
-        }
-        task_progress_close(loading)
-        return chunks
+[task_result]
+def load_level() : int {
+    var chunks=0
+    while(true) {
+        let chunk=task_jobque_next(decoded) |> bind
+        if(chunk is none) {break}
+        chunks++
+        task_progress_report(loading,chunks*25)
     }
+    task_progress_close(loading)
+    return chunks
 }
-def loading_screen() {
-    return <- computation(TaskResultBuilder(type<int>)) {
-        var shown=0
-        while(true) {
-            let percent=task_progress_wait(loading) |> bind
-            if(percent is none) {break}
-            shown=percent as some
-        }
-        return shown
+[task_result]
+def loading_screen() : int {
+    var shown=0
+    while(true) {
+        let percent=task_progress_wait(loading) |> bind
+        if(percent is none) {break}
+        shown=percent as some
     }
+    return shown
 }
 // Merges two event sources until both are closed.
-def router() {
-    return <- computation(TaskResultBuilder(type<string>)) {
-        var log=""
-        var open=2
-        while(open>0) {
-            let pick=task_channel_select(input,network) |> bind
-            if(pick.value is none) {open--;continue}
-            log+="{pick.index==0 ? "input" : "net"}={pick.value as some} "
-        }
-        return log
+[task_result]
+def router() : string {
+    var log=""
+    var open=2
+    while(open>0) {
+        let pick=task_channel_select(input,network) |> bind
+        if(pick.value is none) {open--;continue}
+        log+="{pick.index==0 ? "input" : "net"}={pick.value as some} "
     }
+    return log
 }
 def idle() {return <- task_from_poll(@(){return task_pending(type<int>)},@(){})}
 

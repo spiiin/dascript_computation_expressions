@@ -3,12 +3,11 @@ require ../lib/computation_macro.das
 require ../lib/task_builder.das
 
 // The host can keep rendering/processing events between task_poll calls.
-def load_player(accepted:bool) {
-    return <- computation(TaskResultBuilder(type<string>)) {
-        let name=task_after_polls(2,result_ok("Alice")) |> bind
-        let health=task_after_polls(1,accepted ? result_ok(85) : result_error("access denied",type<int>)) |> bind
-        return "{name}: health={health}"
-    }
+[task_result]
+def load_player(accepted:bool) : string {
+    let name=task_after_polls(2,result_ok("Alice")) |> bind
+    let health=task_after_polls(1,accepted ? result_ok(85) : result_error("access denied",type<int>)) |> bind
+    return "{name}: health={health}"
 }
 [export]
 def main() {

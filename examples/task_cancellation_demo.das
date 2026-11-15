@@ -6,13 +6,12 @@ var applied=0
 struct LevelData {items:array<int>}
 def load_data() {var data:LevelData;data.items <- [1,2,3];return <- data}
 def ce_dispose(var data:LevelData) {released++;delete data}
-def prepare_player() {
-    return <- computation(TaskBuilder(type<int>)) {
-        var data & = load_data() |> use_resource
-        let bonus=task_after_polls(10,5) |> bind
-        applied++
-        return length(data.items)+bonus
-    }
+[task]
+def prepare_player() : int {
+    var data & = load_data() |> use_resource
+    let bonus=task_after_polls(10,5) |> bind
+    applied++
+    return length(data.items)+bonus
 }
 [export]
 def main() {

@@ -7,20 +7,18 @@ require daslib/jobque_boost
 require daslib/fio
 require daslib/strings_convert
 
-def exchange(url:string;text:string) {
-    return <- computation(TaskResultBuilder(type<string>)) {
-        var socket & = hv_websocket() |> use_resource
-        ws_connect(socket,url) |> bind
-        ws_send_text(socket,text) |> bind
-        let reply=ws_receive_text(socket) |> bind
-        return reply
-    }
+[task_result]
+def exchange(url:string;text:string) : string {
+    var socket & = hv_websocket() |> use_resource
+    ws_connect(socket,url) |> bind
+    ws_send_text(socket,text) |> bind
+    let reply=ws_receive_text(socket) |> bind
+    return reply
 }
-def two_requests(urlA:string;urlB:string) {
-    return <- computation(TaskResultBuilder(type<string>)) {
-        let pair=exchange(urlA,"one") |> and_bind(exchange(urlB,"two")) |> bind
-        return "A={pair.first}; B={pair.second}"
-    }
+[task_result]
+def two_requests(urlA:string;urlB:string) : string {
+    let pair=exchange(urlA,"one") |> and_bind(exchange(urlB,"two")) |> bind
+    return "A={pair.first}; B={pair.second}"
 }
 def run_demo(urlA:string;urlB:string;cancel_after_ms:int=-1;timeout_ms:int=5000) {
     var inscope token <- cancellation_token()

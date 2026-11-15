@@ -6,13 +6,12 @@ var applied=0
 struct LevelData {items:array<int>}
 def load_data() {var data:LevelData;data.items <- [1,2,3];return <- data}
 def ce_dispose(var data:LevelData) {released++;delete data}
-def cooldown(duration:int) {
-    return <- computation(TaskBuilder(type<int>)) {
-        var data & = load_data() |> use_resource
-        task_delay_ms(duration) |> bind
-        applied++
-        return length(data.items)
-    }
+[task]
+def cooldown(duration:int) : int {
+    var data & = load_data() |> use_resource
+    task_delay_ms(duration) |> bind
+    applied++
+    return length(data.items)
 }
 [export]
 def main() {

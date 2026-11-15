@@ -23,6 +23,7 @@
   "resumable_lowering.das",
   "cancellation_token.das",
   "task_builder.das",
+  "task_function.das",
   "task_delay.das",
   "task_combinators.das",
   "task_scheduler.das",

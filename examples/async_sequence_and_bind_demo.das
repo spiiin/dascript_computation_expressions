@@ -4,11 +4,10 @@ require ../lib/computation_macro.das
 require ../lib/async_sequence_builder.das
 require ../lib/task_scheduler.das
 
-def fetch_value(value:int;delay:int) {
-    return <- computation(TaskBuilder(type<int>)) {
-        task_delay_ms(delay) |> bind
-        return value
-    }
+[task]
+def fetch_value(value:int;delay:int) : int {
+    task_delay_ms(delay) |> bind
+    return value
 }
 
 def updates() {
