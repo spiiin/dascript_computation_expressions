@@ -6,6 +6,16 @@ require daslib/rtti
 require daslib/fio
 require strings
 
+// Workers finish in wall-clock time, so every wait is bounded by a deadline and
+// pauses between attempts. A fixed number of polls is not a time bound: compiled
+// code (JIT, AOT) runs through it before the worker thread has done its part.
+// Callers verify the awaited condition afterwards, so a timeout fails the test.
+let WORKER_WAIT_USEC=30000000
+def wait_for(done:block<():bool>) {
+    let started=ref_time_ticks()
+    while(!invoke(done) && get_time_usec(started)<WORKER_WAIT_USEC) {sleep(1u)}
+}
+
 // Endless unless cancelled: proves cooperative cancellation reaches the worker.
 def spin(limit:int;sink:TaskJobSink) : int {
     var n=0
@@ -41,9 +51,9 @@ def drain_ints(var runtime:auto;stream:auto;var out:array<int>;var now:int&) : s
     var error=""
     while(true) {
         var inscope next <- task_spawn(runtime,task_jobque_next(stream))
-        for(i in range(200000)) {
+        wait_for() {
             task_tick(runtime,now);now++
-            if(task_status(next)!=TaskStatus.Waiting && task_status(next)!=TaskStatus.Created) {break}
+            return task_status(next)!=TaskStatus.Waiting && task_status(next)!=TaskStatus.Created
         }
         verify(task_status(next)==TaskStatus.Succeeded)
         let value=task_value(next)
@@ -62,7 +72,7 @@ def checks() {
         {
             // Cancellable single job: finishes normally when not cancelled.
             var inscope done <- task_spawn(runtime,task_jobque_cancellable(queue,5,@@spin))
-            for(i in range(200000)) {task_tick(runtime,now);now++;if(task_status(done)==TaskStatus.Succeeded) {break}}
+            wait_for() {task_tick(runtime,now);now++;return task_status(done)==TaskStatus.Succeeded}
             verify(task_value(done) is ok && task_value(done) as ok==5)
         }
         {
@@ -71,7 +81,7 @@ def checks() {
             for(i in range(20)) {task_tick(runtime,now);now++}
             verify(task_timed_out(runtime,endless_job))
             // The worker exits on its own; collect eventually removes its channel.
-            for(i in range(200000)) {task_jobque_collect(queue);if(task_jobque_channels()==0) {break};sleep(1u)}
+            wait_for() {task_jobque_collect(queue);return task_jobque_channels()==0}
             verify(task_jobque_channels()==0)
         }
         {
@@ -87,7 +97,7 @@ def checks() {
             var total=0
             while(true) {
                 var inscope next <- task_jobque_next(stream)
-                for(i in range(200000)) {if(task_poll(next)!=TaskStatus.Waiting) {break}}
+                wait_for() {return task_poll(next)!=TaskStatus.Waiting}
                 var inscope value <- task_take(next)
                 if(value as ok is none) {break}
                 total+=length((value as ok) as some)
@@ -107,7 +117,7 @@ def checks() {
             // cancellation lets it exit, and next returns none afterwards.
             var inscope stream <- task_jobque_stream(queue,type<int>,0,@@endless,4)
             var inscope first <- task_jobque_next(stream)
-            for(i in range(200000)) {if(task_poll(first)!=TaskStatus.Waiting) {break}}
+            wait_for() {return task_poll(first)!=TaskStatus.Waiting}
             verify((first.value as ok) as some==0)
             task_jobque_stream_cancel(stream)
             var inscope after <- task_jobque_next(stream)
@@ -117,9 +127,10 @@ def checks() {
             // Dropping a stream handle without reading also stops its worker.
             var inscope stream <- task_jobque_stream(queue,type<int>,0,@@endless,4)
             var inscope first <- task_jobque_next(stream)
-            for(i in range(200000)) {if(task_poll(first)!=TaskStatus.Waiting) {break}}
+            wait_for() {return task_poll(first)!=TaskStatus.Waiting}
+            verify(task_status(first)==TaskStatus.Succeeded)
         }
-        for(i in range(200000)) {task_jobque_collect(queue);if(task_jobque_channels()==0) {break};sleep(1u)}
+        wait_for() {task_jobque_collect(queue);return task_jobque_channels()==0}
         verify(task_jobque_channels()==0)
     }
     verify(task_jobque_channels()==0)
