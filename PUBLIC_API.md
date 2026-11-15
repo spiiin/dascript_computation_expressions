@@ -134,6 +134,29 @@ task_delay_ms(duration_ms) возвращает Task<CeUnit>, ожидающую
 
 task_when_all(tasks) потребляет массив Task с одинаковым копируемым T и возвращает владеющую задачу коллекции. Bind: var results & = task_when_all(make_jobs()) |> bind. task_value возвращает clone массива; прямая регистрация — task_scheduler(type<array<T>>). Поддержаны token, timeout и task_scope. Подробности: [семантика builders](CE_SEMANTICS.md).
 
+## Имена типов Task
+
+Задачи и их handles — именованные кортежи, и у основных есть имена, чтобы
+объявить глобальную переменную, поле или параметр без `typedecl(вызов())`:
+
+| Имя | Что возвращает такое значение |
+| --- | --- |
+| `Task<T>` | `computation(TaskBuilder(type<T>))`; для TaskResultBuilder это `Task<$Result<T;string>>` |
+| `TaskEvent<T>` | Один шаг задачи |
+| `TaskChannel<T>` | `task_channel(type<T>, capacity)` |
+| `TaskProgress<T>` | `task_progress(type<T>)` |
+| `TaskEventSource<T>` | `task_event_source(type<T>)` |
+| `TaskJobQueue` | `task_job_queue()` |
+
+```das
+var inbox : TaskChannel<string>
+def total(var tasks : array<Task<int>>) : int { ... }
+```
+
+Имя — тот же структурный тип, что и значение конструктора, поэтому старый код
+с `typedecl(...)` остаётся совместимым. У scheduler, runtime, потока jobque и
+AsyncSequence имён пока нет: там по-прежнему нужен `typedecl`.
+
 ## Полный Task API
 
 `./lib/async_sequence_builder.das`: AsyncSequenceBuilder, async_sequence_next,

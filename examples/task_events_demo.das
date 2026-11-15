@@ -4,7 +4,7 @@ require ../lib/task_scheduler.das
 require ../lib/task_events.das
 
 // A UI event bus lives outside the suspended computation.
-var actions:typedecl(task_event_source(type<string>))
+var actions:TaskEventSource<string>
 
 def on_confirm_clicked() {task_event_emit(actions,"confirm")}
 // A business choice completes normally; closing the UI cancels its Task below.

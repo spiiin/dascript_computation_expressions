@@ -5,7 +5,7 @@ require ../lib/task_parallel.das
 require ../lib/task_jobque.das
 require daslib/fio
 
-var queue:typedecl(task_job_queue())
+var queue:TaskJobQueue
 
 // Runs in a cloned jobque context; input and output cross through SDK channels.
 def decode_asset(asset:int) {var checksum=0;for(i in range(asset*1000)) {checksum+=i%17};return checksum}
@@ -27,7 +27,7 @@ def main() {
         var inscope caption <- task_spawn(runtime,task_retry(@(attempt:int) {
             return <- task_after_polls(0,attempt<3 ? result_error("offline",type<string>) : result_ok("ready"))
         },3,10l))
-        var candidates:array<typedecl(task_after_polls(0,result_ok(1)))>
+        var candidates:array<Task<$Result<int;string>>>
         candidates |> emplace(task_after_polls(0,result_error("mirror unavailable",type<int>)))
         candidates |> emplace(task_after_polls(2,result_ok(7)))
         var inscope mirror <- task_spawn(runtime,task_first_success(candidates))

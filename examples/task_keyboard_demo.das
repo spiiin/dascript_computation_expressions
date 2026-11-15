@@ -9,7 +9,7 @@ require daslib/strings_convert
 require strings
 require math
 
-var input_lines:typedecl(task_event_source(type<string>))
+var input_lines:TaskEventSource<string>
 var input_buffer=""
 var input_eof=false
 var quit_requested=false

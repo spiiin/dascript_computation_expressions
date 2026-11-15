@@ -6,6 +6,9 @@ require daslib/rtti
 require daslib/fio
 
 struct TaskJobQueueTag {_ce_marker:uint8}
+// The handle that task_job_queue() returns, by name. The state layout is
+// repeated in task_job_queue; its declared result type keeps the two in step.
+typedef TaskJobQueue = tuple<tag:TaskJobQueueTag;owner:iterator<tuple<references:uint64;closed:bool;records:array<tuple<channel:Channel?;waiting:bool;cancel:Atomic32?;pending:Atomic32?>>>?>>
 struct TaskJobStreamTag {_ce_marker:uint8}
 // Worker-side view of a cancellable job or stream. Valid only inside the job.
 struct TaskJobSink {
@@ -51,7 +54,7 @@ def private ce_jobque_state(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(
         return state
     }
 }
-def task_job_queue() {
+def task_job_queue() : TaskJobQueue {
     unsafe {
         var state=new tuple<references:uint64;closed:bool;records:array<tuple<channel:Channel?;waiting:bool;cancel:Atomic32?;pending:Atomic32?>>>(references=uint64(1))
         return <- (tag=TaskJobQueueTag(),owner <- ce_jobque_lease(state,true))

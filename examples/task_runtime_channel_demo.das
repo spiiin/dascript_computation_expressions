@@ -3,7 +3,7 @@ require ../lib/computation.das
 require ../lib/task_runtime.das
 require ../lib/task_channel.das
 
-var channel:typedecl(task_channel(type<int>,2))
+var channel:TaskChannel<int>
 
 // Channel capacity 2 applies backpressure; each item has one consumer.
 def produce() {

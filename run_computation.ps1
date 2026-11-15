@@ -26,6 +26,7 @@ try {
     Check 'tests/test_task_progress.das' $true 'Task progress checks OK'
     Check 'tests/test_task_channel_select.das' $true 'Task channel select checks OK'
     Check 'tests/test_task_scheduler_insight.das' $true 'Task scheduler insight checks OK'
+    Check 'tests/test_task_type_names.das' $true 'Task type name checks OK'
     Check 'tests/test_task_jobque_stream.das' $true 'Task jobque stream checks OK'
     Check 'examples/task_toolkit_demo.das' $true 'Task toolkit demo OK'
     Check 'examples/task_runtime_channel_demo.das' $true 'Task runtime channel demo OK'
