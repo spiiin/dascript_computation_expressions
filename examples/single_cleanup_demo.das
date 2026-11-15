@@ -3,13 +3,12 @@ require ../lib/computation.das
 var closed=0
 struct Feed {}
 def ce_dispose(var feed:Feed) {closed++}
-def damage_feed() {
-    return <- computation(SequenceBuilder()) {
-        let feed=Feed() |> use_resource
-        yield 10
-        yield 20
-        panic("damage feed disconnected")
-    }
+[sequence]
+def damage_feed() : int {
+    let feed=Feed() |> use_resource
+    yield 10
+    yield 20
+    panic("damage feed disconnected")
 }
 [export]
 def main() {

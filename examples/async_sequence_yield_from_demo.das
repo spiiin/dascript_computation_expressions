@@ -4,12 +4,11 @@ require ../lib/deferred_computation.das
 require ../lib/async_sequence_builder.das
 require ../lib/task_scheduler.das
 
-def page(first:int) {
-    return <- computation(AsyncSequenceBuilder(type<array<int>>)) {
-        task_delay_ms(5) |> bind
-        var row <- [first,first+1]
-        yield <- row
-    }
+[async_sequence]
+def page(first:int) : array<int> {
+    task_delay_ms(5) |> bind
+    var row <- [first,first+1]
+    yield <- row
 }
 
 def pages() {

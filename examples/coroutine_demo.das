@@ -3,14 +3,13 @@ require ../lib/computation_macro.das
 require ../lib/coroutine_builder.das
 var position=0
 var journal=""
+[coroutine]
 def patrol() {
-    return <- computation(CoroutineBuilder()) {
-        let waypoint=fixed_array(10,20) |> bind
-        position=waypoint
-        journal+="arrive {waypoint}; "
-        yield wait_frames(2)
-        journal+="leave {waypoint}; "
-    }
+    let waypoint=fixed_array(10,20) |> bind
+    position=waypoint
+    journal+="arrive {waypoint}; "
+    yield wait_frames(2)
+    journal+="leave {waypoint}; "
 }
 [export]
 def main() {

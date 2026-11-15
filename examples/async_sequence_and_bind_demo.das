@@ -10,12 +10,11 @@ def fetch_value(value:int;delay:int) : int {
     return value
 }
 
-def updates() {
-    return <- computation(AsyncSequenceBuilder(type<string>)) {
-        for(turn in range(2)) {
-            let pair=fetch_value(100+turn,3) |> and_bind(fetch_value(50+turn,5)) |> bind
-            yield "health={pair.first}, mana={pair.second}"
-        }
+[async_sequence]
+def updates() : string {
+    for(turn in range(2)) {
+        let pair=fetch_value(100+turn,3) |> and_bind(fetch_value(50+turn,5)) |> bind
+        yield "health={pair.first}, mana={pair.second}"
     }
 }
 

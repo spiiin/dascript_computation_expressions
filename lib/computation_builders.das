@@ -7,11 +7,17 @@ require ./zip_runtime.das public
 struct ResultBuilder {_ce_marker:uint8}
 struct OptionBuilder {_ce_marker:uint8}
 
-// Used in typedecl by the macro; it is not executed to obtain a bound value.
-def ce_unwrap(builder : ResultBuilder; value : Result<auto(T);string>) : T {
+// [inline] splices a body into its call, so a bind costs a test and a read, as
+// hand-written code does. The operations a direct bind runs are marked: these,
+// ce_direct_failed and ce_return. Their source parameter is the variant spelled
+// out: an instance of a generic over Result<auto(T);string> holds a type alias,
+// and the splicer refuses a body with one.
+[inline]
+def ce_unwrap(builder : ResultBuilder; value : variant<err:string;ok:auto(T)>) : T {
     return value as ok
 }
-def ce_unwrap(builder : OptionBuilder; value : Option<auto(T)>) : T {
+[inline]
+def ce_unwrap(builder : OptionBuilder; value : variant<none:void;some:auto(T)>) : T {
     return value as some
 }
 
@@ -22,9 +28,11 @@ def result_error(message : string; unused : type<auto(T)>) : Result<T -const -&;
     return <- result::err(message,type<T>)
 }
 
+[inline]
 def ce_return(builder : ResultBuilder; value : auto(T)) {
     return result_ok(value)
 }
+[inline]
 def ce_return(builder : OptionBuilder; value : auto(T)) {
     return some(value)
 }
@@ -87,10 +95,12 @@ def ce_protocol(builder : ResultBuilder) { return CeDirectProtocol() }
 def ce_protocol(builder : OptionBuilder) { return CeDirectProtocol() }
 
 // Direct lowering: a failed source leaves the scope as the scope's own type.
-def ce_direct_failed(builder : ResultBuilder; source : Result<auto(T);string>) : bool {
+[inline]
+def ce_direct_failed(builder : ResultBuilder; source : variant<err:string;ok:auto(T)>) : bool {
     return source is err
 }
-def ce_direct_failed(builder : OptionBuilder; source : Option<auto(T)>) : bool {
+[inline]
+def ce_direct_failed(builder : OptionBuilder; source : variant<none:void;some:auto(T)>) : bool {
     return source is none
 }
 def ce_direct_failure(builder : ResultBuilder; source : Result<auto(T);string>; witness : auto(R)?) : R {
@@ -167,7 +177,8 @@ def ResultBuilder(unused : type<auto(E)>) {
     return (kind=ResultErrorContext(), error=marker)
 }
 def ce_protocol(builder : tuple<kind:ResultErrorContext;error:auto(E)?>) { return CeDirectProtocol() }
-def ce_unwrap(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; value : Result<auto(T);E>) : T {
+[inline]
+def ce_unwrap(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; value : variant<err:E;ok:auto(T)>) : T {
     return value as ok
 }
 def ce_return(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; value : auto(T)) {
@@ -179,7 +190,8 @@ def ce_return_from(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; valu
 def ce_zero(builder : tuple<kind:ResultErrorContext;error:auto(E)?>) {
     return variant type<Result<CeUnit;E>>(ok=CeUnit())
 }
-def ce_direct_failed(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; source : Result<auto(T);E>) : bool {
+[inline]
+def ce_direct_failed(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; source : variant<err:E;ok:auto(T)>) : bool {
     return source is err
 }
 def ce_direct_failure(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; source : Result<auto(T);E>;

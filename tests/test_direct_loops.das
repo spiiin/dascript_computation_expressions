@@ -225,6 +225,77 @@ def test_scopes_inside_a_loop() {
     assert(guarded is ok && (guarded as ok) == 1)
 }
 
+// try_with, try_finally and the scope after use_resource are blocks handed to
+// the builder. A break or continue inside them still reaches the loop, and
+// the resource is released and the cleanup runs on the way out.
+def test_leaving_from_scopes() {
+    reset()
+    var seen : array<int>
+    let scoped = computation(ResultBuilder()) {
+        for (i in range(3)) {
+            let resource = acquire(i) |> use_resource
+            if (i == 0) { continue }
+            seen |> push(i)
+            if (i == 1) { break }
+        }
+        return length(seen)
+    }
+    assert(scoped is ok && (scoped as ok) == 1 && seen[0] == 1)
+    assert(opened[0] == 1 && closed[0] == 1 && opened[1] == 1 && closed[1] == 1 && opened[2] == 0)
+    delete seen
+    // Through two scopes: a resource inside a try_finally.
+    reset()
+    var cleanups = 0
+    var bodies = 0
+    let nested = computation(OptionBuilder()) {
+        for (i in range(3)) {
+            try_finally($ {
+                let resource = acquire(i) |> use_resource
+                if (i == 1) { break }
+                bodies++
+            }, $ {
+                cleanups++
+            })
+            bodies += 10
+        }
+        return bodies
+    }
+    // i == 0 runs both parts of the body; i == 1 leaves before either.
+    assert(nested is some && (nested as some) == 11 && cleanups == 2)
+    assert(opened[0] == 1 && closed[0] == 1 && opened[1] == 1 && closed[1] == 1 && opened[2] == 0)
+    var total = 0
+    var count = 0
+    let guarded = computation(ResultBuilder()) {
+        while (true) {
+            count++
+            try_with($ {
+                if (count == 2) { continue }
+                if (count == 4) { break }
+                total += count
+            }, $(message : string) {
+                total = -1
+            })
+        }
+        return total
+    }
+    assert(guarded is ok && (guarded as ok) == 4 && count == 4)
+    // Only the loop that holds the scope is left.
+    var inner = 0
+    var outer = 0
+    let layered = computation(ResultBuilder()) {
+        for (row in range(2)) {
+            outer++
+            for (column in range(5)) {
+                let resource = acquire(row) |> use_resource
+                if (column == 1) { break }
+                inner++
+            }
+        }
+        return inner
+    }
+    assert(layered is ok && (layered as ok) == 2 && outer == 2)
+}
+
 enum Fault {
     TooBig
 }
@@ -264,6 +335,7 @@ def main() {
     test_zip_and_mutation()
     test_sources_close()
     test_scopes_inside_a_loop()
+    test_leaving_from_scopes()
     test_other_direct_builders()
     print("direct loop checks OK\n")
 }

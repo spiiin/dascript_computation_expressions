@@ -2,14 +2,13 @@ options gen2
 require ../lib/computation.das
 var steps = 0
 
-def enemy_levels(first : int) {
-    return <- computation(SequenceBuilder()) {
-        var level = first
-        while (true) {
-            steps++
-            yield level
-            level++
-        }
+[sequence]
+def enemy_levels(first : int) : int {
+    var level = first
+    while (true) {
+        steps++
+        yield level
+        level++
     }
 }
 [export]

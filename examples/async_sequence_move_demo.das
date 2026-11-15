@@ -4,13 +4,12 @@ require ../lib/computation_macro.das
 require ../lib/async_sequence_builder.das
 require ../lib/task_scheduler.das
 
-def batches() {
-    return <- computation(AsyncSequenceBuilder(type<array<int>>)) {
-        for(i in range(3)) {
-            var batch <- [i,i+10]
-            task_delay_ms(5) |> bind
-            yield <- batch
-        }
+[async_sequence]
+def batches() : array<int> {
+    for(i in range(3)) {
+        var batch <- [i,i+10]
+        task_delay_ms(5) |> bind
+        yield <- batch
     }
 }
 [task]
