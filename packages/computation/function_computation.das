@@ -4,6 +4,7 @@ require ./computation_macro.das public
 require daslib/ast
 require daslib/ast_boost
 require daslib/templates_boost
+require math
 
 // What the function annotations share: [sequence] and [coroutine] here, and
 // [task], [task_result] and [async_sequence] in the task package. Each turns
@@ -22,8 +23,7 @@ require daslib/templates_boost
 class CeLastLine : AstVisitor {
     line : uint = 0u
     def override preVisitExpression(expr : ExpressionPtr) : void {
-        let ending = expr.at.last_line > expr.at.line ? expr.at.last_line : expr.at.line
-        if (ending > line) { line = ending }
+        line = max(line, max(expr.at.last_line, expr.at.line))
     }
 }
 
@@ -49,7 +49,7 @@ enum CeFunctionKind {
 
 // Turn the body of `func` into `return <- computation(builder(...)) { body }`.
 // The annotation modules call it with their builder's name.
-def ce_function_computation(var func : FunctionPtr; annotation, builder : string; kind : CeFunctionKind;
+def ce_function_computation(var func : FunctionPtr; annotation, builder : string; kind : CeFunctionKind;   // nolint:STYLE037,STYLE038 - one linear rewrite; its steps share the parts of the function
                             var errors : das_string) : bool {
     let task = kind == CeFunctionKind.Task || kind == CeFunctionKind.TaskResult
     let owner = task ? "task" : (kind == CeFunctionKind.Coroutine ? "coroutine" : "sequence")
@@ -79,10 +79,7 @@ def ce_function_computation(var func : FunctionPtr; annotation, builder : string
         return false
     }
     let at = func.at
-    var statements : array<ExpressionPtr>
-    for (statement in body.list) {
-        statements |> push <| statement
-    }
+    var statements <- [for (statement in body.list); statement]
     // A `var` argument is the computation's to keep: the generator captures it
     // by move. A task's body also starts by taking it into a local of the same
     // name. As a local it lives in the task's own storage, which every scope
@@ -104,14 +101,14 @@ def ce_function_computation(var func : FunctionPtr; annotation, builder : string
         }
     }
     var taken : array<ExpressionPtr>
+    taken |> reserve(length(owned) + length(statements))
     if (task) {
         for (name in owned) { taken |> push <| qmacro_expr() { var $i(name) <- $i(name) } }
     }
-    for (statement in statements) { taken |> push <| statement }
+    taken |> push_from(statements)
     // [task_result] def f() : Result<T;E> names the error type as well: the
     // task is built by TaskResultBuilder(type<T>, type<E>).
-    var fallible : TypeDeclPtr
-    var failure : TypeDeclPtr
+    var fallible, failure : TypeDeclPtr
     if (kind == CeFunctionKind.TaskResult && func.result.baseType == Type.typeMacro && length(func.result.typeMacroExpr) == 3
             && func.result.typeMacroExpr[0] is ExprConstString
             && (func.result.typeMacroExpr[0] as ExprConstString).value == "Result"
@@ -157,6 +154,9 @@ def ce_function_computation(var func : FunctionPtr; annotation, builder : string
     }
     // Generated nodes point at the function; the user's statements keep their lines.
     ce_restamp(lowered, at)
+    // The return is the annotation's, not the author's. Marked as generated, it
+    // is not read as a one-line body that a linter would ask to shorten.
+    (lowered as ExprBlock).list[0].genFlags.generated = true
     func.body = lowered
     if (kind == CeFunctionKind.AsyncSequence) {
         var element = clone_type(func.result)

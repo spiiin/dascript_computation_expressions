@@ -8,6 +8,7 @@ require ./resumable_lowering.das
 require daslib/ast
 require daslib/ast_boost
 require daslib/templates_boost
+require math
 
 // Preserve expression reference-ness; standard is_ref includes all ref types.
 [typeinfo_macro(name="ce_source_is_borrowed")]
@@ -78,7 +79,7 @@ def ce_normalize_for(builder:string; statement:ExpressionPtr) : ExpressionPtr {
 var private ce_merge_locations : table<string;ExpressionPtr>
 [typeinfo_macro(name="ce_checked_merge")]
 class CeCheckedMerge : AstTypeInfoMacro {
-    def override getAstChange(expr:ExprTypeInfo?; var errors:das_string) : ExpressionPtr {
+    def override getAstChange(expr:ExprTypeInfo?; var errors:das_string) : ExpressionPtr {   // nolint:STYLE037 - one arm per shape of an unsupported and_bind group
         if(expr.subexpr==null || expr.subexpr._type==null) {errors:="computation: and_bind source types must be inferred";return null}
         let envelope=expr.subexpr as ExprCall
         let merged=envelope.arguments[0]
@@ -186,9 +187,8 @@ def ce_resumable_merge_source(node:ExpressionPtr; builder:string; var error:stri
 // a try_with handler of the wrong type, it is the innermost one that fails,
 // and that is the error shown.
 var private ce_scope_tail = LineInfo()
-def private ce_scope_end(at : LineInfo) : LineInfo {
-    return ce_scope_tail.fileInfo != null && ce_scope_tail.fileInfo == at.fileInfo ? ce_scope_tail : at
-}
+def private ce_scope_end(at : LineInfo) : LineInfo =>
+    ce_scope_tail.fileInfo != null && ce_scope_tail.fileInfo == at.fileInfo ? ce_scope_tail : at
 def private ce_scope_carrier(expr : ExpressionPtr) : bool {
     if (expr is ExprCall) {
         let call = expr as ExprCall
@@ -211,7 +211,7 @@ class CeRestamp : AstVisitor {
     def inward() : LineInfo {
         var position = tail
         let column = int(tail.column) - (outer ? 0 : 1 + length(carriers))
-        position.column = uint(column < 1 ? 1 : column)
+        position.column = uint(max(column, 1))
         position.last_column = position.column
         return position
     }
@@ -224,11 +224,11 @@ class CeRestamp : AstVisitor {
     def override preVisitExpression(var expr : ExpressionPtr) : void {
         if (ended && expr is ExprCallMacro && (expr as ExprCallMacro).name == "__ce_stage") {
             // What this stage emits later lies inside the carriers around it.
-            (expr as ExprCallMacro).arguments[1].at = self->inward()
+            (expr as ExprCallMacro).arguments[1].at = inward()
         }
         if (expr.at.fileInfo == at.fileInfo) { return }
         if (ended && ce_scope_carrier(expr)) {
-            expr.at = self->inward()
+            expr.at = inward()
             carriers |> push(expr)
         } else {
             expr.at = at
@@ -341,30 +341,23 @@ def ce_stage(op : string; at : LineInfo; probes : array<ExpressionPtr>; payload 
 
 // qmacro restamps the node it substitutes with the template position; the
 // arguments below it keep the position of the statement being lowered.
-def private ce_stage_at(expr : ExprCallMacro?) : LineInfo {
-    return expr.arguments[0].at
-}
-def private ce_stage_probe_slots(expr : ExprCallMacro?) : int {
-    return (expr.arguments[1] as ExprConstInt).value
-}
-def private ce_stage_payload(var expr : ExprCallMacro?; index : int) : ExpressionPtr {
-    return expr.arguments[2 + ce_stage_probe_slots(expr) + index]
-}
-def private ce_stage_flag(var expr : ExprCallMacro?; index : int) : bool {
-    return (ce_stage_payload(expr, index) as ExprConstBool).value
-}
-def private ce_stage_text(var expr : ExprCallMacro?; index : int) : string {
-    return string((ce_stage_payload(expr, index) as ExprConstString).value)
-}
+def private ce_stage_at(expr : ExprCallMacro?) : LineInfo => expr.arguments[0].at
+def private ce_stage_probe_slots(expr : ExprCallMacro?) : int =>
+    (expr.arguments[1] as ExprConstInt).value
+def private ce_stage_payload(var expr : ExprCallMacro?; index : int) : ExpressionPtr =>
+    expr.arguments[2 + ce_stage_probe_slots(expr) + index]
+def private ce_stage_flag(var expr : ExprCallMacro?; index : int) : bool =>
+    (ce_stage_payload(expr, index) as ExprConstBool).value
+def private ce_stage_text(var expr : ExprCallMacro?; index : int) : string =>
+    string((ce_stage_payload(expr, index) as ExprConstString).value)
 def private ce_stage_ready(expr : ExprCallMacro?) : bool {
     // An unsupported and_bind group is reported at once: its hook probes
     // cannot be typed, because there is no merged value to unwrap.
     if ((expr.arguments[0] as ExprConstString).value == "bind2") {
         let merged = expr.arguments[2]
-        if (merged._type != null && ce_is_protocol(merged._type, "CeMergeSourcesFallback")) { return true }
         // Not having a Zero is an answer too; the hook probe that needs it never types.
-        if (merged._type != null && !merged._type.isAutoOrAlias
-                && ce_stage_unresolved_call(expr.arguments[8])) { return true }
+        if (merged._type != null && (ce_is_protocol(merged._type, "CeMergeSourcesFallback")
+                || (!merged._type.isAutoOrAlias && ce_stage_unresolved_call(expr.arguments[8])))) { return true }
     }
     // A bind's last probe unwraps what the ce_source hook returns. It is a call
     // on a call and is typed a pass late, so it is awaited only when the builder
@@ -393,9 +386,8 @@ def private ce_stage_probe(var expr : ExprCallMacro?; index : int; var error : s
     return ce_is_protocol(hook._type, "CeSourceFallback") ? raw : hook
 }
 // Same rule as typeinfo ce_source_is_borrowed, applied to an inferred probe.
-def private ce_stage_borrowed(source : ExpressionPtr) : bool {
-    return source._type.flags.ref || (source is ExprVar)
-}
+def private ce_stage_borrowed(source : ExpressionPtr) : bool =>
+    source._type.flags.ref || (source is ExprVar)
 // What `name : typedecl(source)` resolves to, without keeping the source
 // expression inside the type: a clone of it there doubles every nested scope.
 def private ce_stage_retype_argument(var next : ExpressionPtr; source : TypeDeclPtr) {
@@ -414,12 +406,9 @@ def private ce_stage_retype_argument(var next : ExpressionPtr; source : TypeDecl
 // `retype` is false when the continuation's argument is not typedecl(source).
 def ce_source_apply(source, next : ExpressionPtr; collect : bool; move_result:bool=true; retype:bool=true) : ExpressionPtr {
     if (!collect) { return qmacro(invoke($e(next), $e(source))) }
-    var probes : array<ExpressionPtr>
-    probes |> push <| clone_expression(source)
-    var payload : array<ExpressionPtr>
-    payload |> push <| clone_expression(next)
-    payload |> push <| new ExprConstBool(at=source.at, value=move_result)
-    payload |> push <| new ExprConstBool(at=source.at, value=retype)
+    var probes <- array<ExpressionPtr>(clone_expression(source))
+    let payload <- array<ExpressionPtr>(clone_expression(next), new ExprConstBool(at=source.at, value=move_result),
+        new ExprConstBool(at=source.at, value=retype))
     return ce_stage("apply", source.at, probes, payload)
 }
 // Copyable and borrowed sources go straight to the continuation; an owned
@@ -447,11 +436,8 @@ def private ce_stage_apply(var expr : ExprCallMacro?; var error : string&) : Exp
     if (ce_stage_flag(expr, 2)) { ce_stage_retype_argument(next, source._type) }
     return ce_stage_apply_emit(source, next, ce_stage_flag(expr, 1), ce_stage_at(expr))
 }
-def private ce_stage_statements(blk : ExpressionPtr) : array<ExpressionPtr> {
-    var list : array<ExpressionPtr>
-    for (entry in ((blk as ExprMakeBlock)._block as ExprBlock).list) { list |> push <| clone_expression(entry) }
-    return <- list
-}
+def private ce_stage_statements(blk : ExpressionPtr) : array<ExpressionPtr> =>
+    <- [for (entry in ((blk as ExprMakeBlock)._block as ExprBlock).list); clone_expression(entry)]
 // Payload of a bind: 0 rest of the scope, 1 the fused `bind; return` body or
 // false, 2 argument name, 3 builder name, 4 collect, 5 owned, 6 borrowing bind.
 def private ce_bind_continuation(builder, argument : string; source : ExpressionPtr;
@@ -464,9 +450,8 @@ def private ce_bind_continuation(builder, argument : string; source : Expression
     }
     return qmacro($($i(argument) : typedecl(ce_unwrap($i(builder), $e(source)))) { $b(rest); })
 }
-def private ce_bind_mapper(builder, argument : string; source : ExpressionPtr; var mapped : array<ExpressionPtr>) : ExpressionPtr {
-    return qmacro($($i(argument) : typedecl(ce_unwrap($i(builder), $e(source)))) { $b(mapped); })
-}
+def private ce_bind_mapper(builder, argument : string; source : ExpressionPtr; var mapped : array<ExpressionPtr>) : ExpressionPtr =>
+    qmacro($($i(argument) : typedecl(ce_unwrap($i(builder), $e(source)))) { $b(mapped); })
 // Bind an inferred source to its continuation. Every use of the source is a
 // clone of the probe, so the bound variable is typed in the following pass.
 def private ce_bind_emit(builder : string; source, mapper, ordinary : ExpressionPtr;
@@ -539,8 +524,7 @@ def private ce_bind2_stage(builder, leftName, rightName : string; pieces : array
     let owned = (pieces[5] as ExprConstBool).value
     let borrow_bind = (pieces[6] as ExprConstBool).value
     let merged = qmacro(ce_merge_sources($i(builder), $i(leftName), $i(rightName)))
-    var payload : array<ExpressionPtr>
-    for (piece in pieces) { payload |> push <| clone_expression(piece) }
+    var payload <- [for (piece in pieces); clone_expression(piece)]
     payload |> push <| new ExprConstString(at=at, value:=leftName)
     payload |> push <| new ExprConstString(at=at, value:=rightName)
     var probes : array<ExpressionPtr>
@@ -764,10 +748,7 @@ def private ce_loop_for_fallback(original : ExprFor?; sources : array<Expression
                                  builder : string; collect_mode, owned : bool; at : LineInfo) : ExpressionPtr {
     let step = ce_unique_name("__ce_iteration", at)
     let accumulated = ce_unique_name("__ce_accumulated", at)
-    var names : array<string>
-    for (index in range(length(sources))) {
-        names |> push(ce_unique_name("__ce_fallback_source_{index}", at))
-    }
+    let names <- [for (index in range(length(sources))); ce_unique_name("__ce_fallback_source_{index}", at)]
     var consume = ce_loop_step(builder, step, accumulated, body, collect_mode, owned, true)
     var loop = ce_zip_traversal(original, names, null, "", consume)
     loop = ce_loop_source_scopes(sources, loop, names, at)
@@ -811,13 +792,9 @@ def ce_loop_stage(stmt, body : ExpressionPtr; builder : string; collect_mode, ow
     var skeleton = clone_expression(stmt)
     if (skeleton is ExprFor) { (skeleton as ExprFor).body = qmacro_block() {} }
     else { (skeleton as ExprWhile).body = qmacro_block() {} }
-    var payload : array<ExpressionPtr>
-    payload |> push <| qmacro($ { $e(skeleton); })
-    payload |> push <| qmacro($ { $e(body); })
-    payload |> push <| new ExprConstString(at=stmt.at, value:=builder)
-    payload |> push <| new ExprConstBool(at=stmt.at, value=collect_mode)
-    payload |> push <| new ExprConstBool(at=stmt.at, value=owned)
-    payload |> push <| new ExprConstBool(at=stmt.at, value=inlined)
+    let payload <- array<ExpressionPtr>(qmacro($ { $e(skeleton); }), qmacro($ { $e(body); }),
+        new ExprConstString(at=stmt.at, value:=builder), new ExprConstBool(at=stmt.at, value=collect_mode),
+        new ExprConstBool(at=stmt.at, value=owned), new ExprConstBool(at=stmt.at, value=inlined))
     var probes : array<ExpressionPtr>
     if (stmt is ExprWhile) {
         let iteration = ce_loop_iteration(builder, ce_loop_zero_body(builder, collect_mode), collect_mode)
@@ -834,9 +811,8 @@ def ce_loop_stage(stmt, body : ExpressionPtr; builder : string; collect_mode, ow
     }
     return ce_stage("for", stmt.at, probes, payload)
 }
-def private ce_stage_statement(var expr : ExprCallMacro?; index : int) : ExpressionPtr {
-    return clone_expression(((ce_stage_payload(expr, index) as ExprMakeBlock)._block as ExprBlock).list[0])
-}
+def private ce_stage_statement(var expr : ExprCallMacro?; index : int) : ExpressionPtr =>
+    clone_expression(((ce_stage_payload(expr, index) as ExprMakeBlock)._block as ExprBlock).list[0])
 def private ce_stage_while(var expr : ExprCallMacro?; var error : string&) : ExpressionPtr {
     let hook = ce_loop_hook(ce_stage_probe(expr, 0, error), error)
     if (!empty(error)) { return null }
@@ -858,6 +834,7 @@ def private ce_stage_for(var expr : ExprCallMacro?; var error : string&) : Expre
     var original = skeleton as ExprFor
     let arity = length(original.sources)
     var sources : array<ExpressionPtr>
+    sources |> reserve(arity)
     for (index in range(arity)) {
         var source = ce_stage_probe(expr, index, error)
         if (source == null) { return null }
@@ -884,10 +861,7 @@ def private ce_stage_for(var expr : ExprCallMacro?; var error : string&) : Expre
         }
         // The traversal itself is the loop: its cursors close when it ends,
         // and the body runs in the enclosing scope.
-        var names : array<string>
-        for (index in range(arity)) {
-            names |> push(ce_unique_name("__ce_loop_source_{index}", ce_stage_at(expr)))
-        }
+        let names <- [for (index in range(arity)); ce_unique_name("__ce_loop_source_{index}", ce_stage_at(expr))]
         var loop = ce_zip_traversal(original, names, null, "", ce_stage_statement(expr, 1))
         return ce_loop_source_scopes(sources, loop, names, ce_stage_at(expr))
     }
@@ -899,11 +873,9 @@ def private ce_stage_for(var expr : ExprCallMacro?; var error : string&) : Expre
             || (t.baseType==Type.tIterator && t.firstType.flags.ref && !t.firstType.flags.constant))
         let callback = ce_loop_callback(builder, sources[0], string(original.iterators[0]),
             ce_loop_zero_body(builder, collect_mode), mutable_source, collect_mode)
-        var probes : array<ExpressionPtr>
-        probes |> push <| clone_expression(sources[0])
-        probes |> push <| qmacro(ce_for($i(builder), $e(sources[0]), $e(callback)))
-        var payload : array<ExpressionPtr>
-        for (index in range(5)) { payload |> push <| clone_expression(ce_stage_payload(expr, index)) }
+        var probes <- array<ExpressionPtr>(clone_expression(sources[0]),
+            qmacro(ce_for($i(builder), $e(sources[0]), $e(callback))))
+        var payload <- [for (index in range(5)); clone_expression(ce_stage_payload(expr, index))]
         payload |> push <| new ExprConstBool(at=ce_stage_at(expr), value=mutable_source)
         return ce_stage("for1", ce_stage_at(expr), probes, payload)
     }
@@ -916,10 +888,7 @@ def private ce_stage_for(var expr : ExprCallMacro?; var error : string&) : Expre
     // Preserve native zip ordering with explicitly owned cursors, closed
     // when the traversal ends.
     let visitor = ce_unique_name("__ce_zip_visit", ce_stage_at(expr))
-    var sourceNames : array<string>
-    for (index in range(arity)) {
-        sourceNames |> push(ce_unique_name("__ce_zip_source_{index}", ce_stage_at(expr)))
-    }
+    let sourceNames <- [for (index in range(arity)); ce_unique_name("__ce_zip_source_{index}", ce_stage_at(expr))]
     var traversal = ce_zip_traversal(original, sourceNames, ce_loop_iteration(builder, body, collect_mode), visitor, null)
     traversal = ce_loop_source_scopes(sources, traversal, sourceNames, ce_stage_at(expr))
     var driver = qmacro($($i(visitor):block<(body:block<():typedecl(ce_zero($i(builder)))>):bool>) {
@@ -985,9 +954,8 @@ def private ce_stage_visit(var expr : ExprCallMacro?; var error : string&) : Exp
     return null
 }
 
-def private ce_is_group(node : ExpressionPtr) : bool {
-    return node is ExprCall && (node as ExprCall).name == "and_bind"
-}
+def private ce_is_group(node : ExpressionPtr) : bool =>
+    node is ExprCall && (node as ExprCall).name == "and_bind"
 // The two sources of a group, left first; each is scoped like a single source.
 def private ce_stage_apply2(var expr : ExprCallMacro?; var error : string&) : ExpressionPtr {
     let left = ce_stage_probe(expr, 0, error)
@@ -1039,18 +1007,13 @@ def ce_merge_apply(node : ExpressionPtr; builder : string; next : ExpressionPtr;
         }
         if (!ce_is_group(call.arguments[0]) && !ce_is_group(call.arguments[1])) {
             // Neither source depends on the other's name, so one stage types both.
-            var probes : array<ExpressionPtr>
-            probes |> push <| leftType
-            probes |> push <| rightType
-            var payload : array<ExpressionPtr>
-            payload |> push <| mergeBody
-            payload |> push <| new ExprConstString(at=node.at, value:=leftName)
-            payload |> push <| new ExprConstString(at=node.at, value:=rightName)
-            payload |> push <| new ExprConstBool(at=node.at, value=collect)
-            payload |> push <| new ExprConstBool(at=node.at, value=owned)
+            var probes <- array<ExpressionPtr>(leftType, rightType)
+            let payload <- array<ExpressionPtr>(mergeBody, new ExprConstString(at=node.at, value:=leftName),
+                new ExprConstString(at=node.at, value:=rightName), new ExprConstBool(at=node.at, value=collect),
+                new ExprConstBool(at=node.at, value=owned))
             return ce_stage("apply2", node.at, probes, payload)
         }
-        var inner : array<ExpressionPtr>
+        let inner : array<ExpressionPtr>
         var rightNext = qmacro($($i(rightName):typedecl($e(rightType))) { return $e(mergeBody) })
         if (collect) { rightNext = qmacro($($i(rightName):typedecl($e(rightType))) { return <- $e(mergeBody) }) }
         if (owned) {((rightNext as ExprMakeBlock)._block as ExprBlock).arguments[0]._type.flags.constant=false}
@@ -1120,14 +1083,16 @@ class CeZipValue : AstTypeInfoMacro {
 
 // Explicit cursor storage: the traversal closes each cursor when it ends.
 def ce_zip_traversal(original:ExprFor?; names:array<string>; iteration:ExpressionPtr; visitor:string; directBody:ExpressionPtr) : ExpressionPtr {
-    var declarations:array<ExpressionPtr>
-    var initialize:array<ExpressionPtr>
-    var advance:array<ExpressionPtr>
-    var aliases:array<ExpressionPtr>
-    var cleanup:array<ExpressionPtr>
+    var declarations, initialize, advance, aliases, cleanup:array<ExpressionPtr>
     let first=ce_unique_name("__ce_zip_first",original.at)
     let more=ce_unique_name("__ce_zip_more",original.at)
-    for (index in range(length(names))) {
+    let arity=length(names)
+    declarations |> reserve(arity)
+    initialize |> reserve(arity)
+    advance |> reserve(arity)
+    aliases |> reserve(arity)
+    cleanup |> reserve(arity)
+    for (index in range(arity)) {
         let source=names[index]
         let cursor=ce_unique_name("__ce_zip_cursor_{index}",original.at)
         let item=string(original.iterators[index])
@@ -1176,8 +1141,8 @@ def ce_zip_traversal(original:ExprFor?; names:array<string>; iteration:Expressio
 // Removing moved-from temporary slots is observable for user finalizers.
 // Keep the old path for such element types, including nested fields/containers.
 def ce_sink_safe_element(t:TypeDeclPtr; depth:int=0) : bool {
-    if(t==null || depth>32) {return false}
-    if(t.baseType==Type.tHandle || t.baseType==Type.tPointer || t.baseType==Type.tIterator || t.baseType==Type.tLambda) {return false}
+    if(t==null || depth>32 || t.baseType==Type.tHandle || t.baseType==Type.tPointer
+        || t.baseType==Type.tIterator || t.baseType==Type.tLambda) {return false}
     if(t.baseType==Type.tStructure) {
         if(t.structType.flags.isClass) {return false}
         var userFinalizer=false
@@ -1192,8 +1157,8 @@ def ce_sink_safe_element(t:TypeDeclPtr; depth:int=0) : bool {
         if(userFinalizer) {return false}
         for(field in t.structType.fields) {if(!ce_sink_safe_element(field._type,depth+1)) {return false}}
     }
-    if(t.firstType!=null && !ce_sink_safe_element(t.firstType,depth+1)) {return false}
-    if(t.secondType!=null && !ce_sink_safe_element(t.secondType,depth+1)) {return false}
+    if((t.firstType!=null && !ce_sink_safe_element(t.firstType,depth+1))
+        || (t.secondType!=null && !ce_sink_safe_element(t.secondType,depth+1))) {return false}
     for(arg in t.argTypes) {if(!ce_sink_safe_element(arg,depth+1)) {return false}}
     return true
 }
@@ -1224,8 +1189,8 @@ def ce_can_collect_fuse(blk:ExprBlock?; start:int; owned:bool) : bool {
     let count=length(blk.list)-start-1
     if(count<1 || !(blk.list[length(blk.list)-1] is ExprReturn)) {return false}
     let ret=blk.list[length(blk.list)-1] as ExprReturn
-    if(ret.subexpr==null || ret.returnFlags.returnReference || (owned && !ret.returnFlags.moveSemantics)) {return false}
-    if(ret.subexpr is ExprCall && (ret.subexpr as ExprCall).name=="return_from") {return false}
+    if(ret.subexpr==null || ret.returnFlags.returnReference || (owned && !ret.returnFlags.moveSemantics)
+        || (ret.subexpr is ExprCall && (ret.subexpr as ExprCall).name=="return_from")) {return false}
     var consuming=owned
     for(i in range(start,length(blk.list)-1)) {
         let stmt=blk.list[i]
@@ -1238,8 +1203,8 @@ def ce_can_collect_fuse(blk:ExprBlock?; start:int; owned:bool) : bool {
         } elif(stmt is ExprCall) {binding=clone_expression(stmt)}
         if(binding==null || !(binding is ExprCall)) {return false}
         let call=binding as ExprCall
-        if(call.name!="bind" || length(call.arguments)!=1) {return false}
-        if(call.arguments[0] is ExprCall && (call.arguments[0] as ExprCall).name=="and_bind") {return false}
+        if(call.name!="bind" || length(call.arguments)!=1
+            || (call.arguments[0] is ExprCall && (call.arguments[0] as ExprCall).name=="and_bind")) {return false}
     }
     // Keep consuming scope boundaries (including destruction order). A single
     // consuming map still eliminates every singleton result allocation.
@@ -1297,8 +1262,7 @@ def private ce_lower_try_finally(call : ExprCall?; builder : string; collect_mod
         return null
     }
     var protected_body = ce_scope(source, builder, collect_mode, error, owned, direct, escape)
-    var cleanup = clone_expression(call.arguments[1])
-    return qmacro(ce_try_finally($i(builder), $ { $e(protected_body); }, $e(cleanup)))
+    return qmacro(ce_try_finally($i(builder), $ { $e(protected_body); }, $e(call.arguments[1])))
 }
 def private ce_validate_use_resource(stmt : ExpressionPtr; call : ExprCall?; var error : string&) : bool {
     if (!(stmt is ExprLet) || length(call.arguments) != 1) {
@@ -1454,7 +1418,7 @@ def private ce_direct_replica_declaration(stmt : ExpressionPtr; builder : string
     output |> push <| declaration
 }
 // Statements whose block has the result type of the scope starting at `start`.
-def private ce_direct_replica(blk : ExprBlock?; start : int; builder : string) : array<ExpressionPtr> {
+def private ce_direct_replica(blk : ExprBlock?; start : int; builder : string) : array<ExpressionPtr> {   // nolint:STYLE037 - the conditions are type tests on AST nodes, one per statement shape
     var output : array<ExpressionPtr>
     let count = length(blk.list)
     var terminal : ExpressionPtr
@@ -1464,8 +1428,7 @@ def private ce_direct_replica(blk : ExprBlock?; start : int; builder : string) :
             let value = (last as ExprReturn).subexpr
             if (value is ExprCall && (value as ExprCall).name == "return_from" && length((value as ExprCall).arguments) == 1) {
                 var forwarded : array<ExpressionPtr>
-                var ignored : string
-                var raw : string
+                var ignored, raw : string
                 let source = ce_direct_evaluate((value as ExprCall).arguments[0], builder, last.at, true, forwarded, raw, ignored)
                 forwarded |> push <| qmacro_expr() { return ce_return_from($i(builder), $i(source)) }
                 terminal = qmacro_block() { $b(forwarded); }
@@ -1509,7 +1472,7 @@ struct private CeDirectState {
 // them. It says which way to go in this variable of the loop's scope, 1 to
 // continue and 2 to break, and ends its own scope with Unit. Every scope on
 // the way out ends the same way, and the loop body acts on it.
-def private ce_direct_escape(witness : string) : string { return "{witness}_escape" }
+def private ce_direct_escape(witness : string) : string => "{witness}_escape"
 def private ce_direct_escaped(builder, witness, inherited : string; looped : bool;
                               var output : array<ExpressionPtr>; var state : CeDirectState&) {
     if (looped) {
@@ -1521,8 +1484,8 @@ def private ce_direct_escaped(builder, witness, inherited : string; looped : boo
         output |> push <| qmacro_expr() { if ($i(inherited) != 0) { return ce_zero($i(builder)) } }
     }
 }
-def private ce_direct_outcome(witness : string) : string { return "{witness}_outcome" }
-def private ce_direct_left(witness : string) : string { return "{witness}_left" }
+def private ce_direct_outcome(witness : string) : string => "{witness}_outcome"
+def private ce_direct_left(witness : string) : string => "{witness}_left"
 // Leave the scope with `value`: return it, or inside a loop park it and break.
 def private ce_direct_leave(var value : ExpressionPtr; witness : string; looped : bool) : ExpressionPtr {
     if (!looped) { return qmacro_expr() { return $e(value) } }
@@ -1569,7 +1532,7 @@ def private ce_direct_declaration(stmt : ExpressionPtr; builder, source, raw : s
 // fall out; `tail` is true while the last statement is also the block's last.
 // One statement of a direct scope. True when it ends the scope: it returned,
 // the rest became a resource's continuation, or an error was reported.
-def private ce_direct_statement(blk : ExprBlock?; index : int; builder, witness, inherited : string; tail, looped : bool;
+def private ce_direct_statement(blk : ExprBlock?; index : int; builder, witness, inherited : string; tail, looped : bool;   // nolint:STYLE037,STYLE038 - one arm per statement kind of a direct scope
                                 var output : array<ExpressionPtr>; var state : CeDirectState&; var error : string&) : bool {
     // What a scope nested at this statement says to break or continue.
     let nested = looped ? ce_direct_escape(witness) : inherited
@@ -1675,8 +1638,7 @@ def private ce_direct_statement(blk : ExprBlock?; index : int; builder, witness,
     }
     if (stmt is ExprBlock) {
         output |> push <| ce_direct_inline(stmt, builder, witness, inherited, tail && last, looped, state, error)
-        if (!empty(error)) { return true }
-        return false
+        return !empty(error)
     }
     // A loop runs its body in this scope. Control goes on after it, so nothing
     // in the body is the block's tail.
@@ -1822,7 +1784,7 @@ def ce_lower(blk : ExprBlock?; start : int; builder : string; collect_mode : boo
 }
 // One statement of a continuation-passing scope. True when it ends the scope:
 // the rest was lowered into its continuation, or an error was reported.
-def private ce_lower_statement(blk : ExprBlock?; index : int; builder : string; collect_mode : bool;
+def private ce_lower_statement(blk : ExprBlock?; index : int; builder : string; collect_mode : bool;   // nolint:STYLE037,STYLE038 - one arm per statement kind of a continuation scope
                                var output : array<ExpressionPtr>; var error : string&; owned : bool) : bool {
     var stmt = clone_expression(blk.list[index])
     if (stmt is ExprFor) {stmt=ce_normalize_for(builder,stmt)}
@@ -2098,8 +2060,8 @@ class ComputationMacro : AstCallMacro {
         if (expr.name=="__ce_stage") { return index < 2 + (expr.arguments[1] as ExprConstInt).value }
         return index == 0 || (index == 1 && expr.name=="__ce_lower_protocol")
     }
-    def override canFoldReturnResult(expr : ExprCallMacro?) : bool { return false }
-    def override visit(prog : ProgramPtr; mod : Module?; var expr : ExprCallMacro?) : ExpressionPtr {
+    def override canFoldReturnResult(expr : ExprCallMacro?) : bool => false
+    def override visit(prog : ProgramPtr; mod : Module?; var expr : ExprCallMacro?) : ExpressionPtr {   // nolint:STYLE037,STYLE038 - the macro's entry: validation, then one arm per builder protocol
         let nowhere = LineInfo()
         ce_scope_tail = nowhere
         if (expr.name=="__ce_stage") {
@@ -2300,7 +2262,7 @@ def ce_sequence_protect_loop(loop:ExpressionPtr) : ExpressionPtr {
     return result
 }
 
-def ce_sequence_scope(node : ExpressionPtr; start : int; element : TypeDeclPtr; share : bool; var error : string&; builder:string) : ExpressionPtr {
+def ce_sequence_scope(node : ExpressionPtr; start : int; element : TypeDeclPtr; share : bool; var error : string&; builder:string) : ExpressionPtr {   // nolint:STYLE037,STYLE038 - one arm per statement kind of a sequence scope
     var blk = (qmacro_block() {}) as ExprBlock
     if (node == null) { return blk }
     if (node is ExprBlock) { blk = clone_expression(node) as ExprBlock }
@@ -2315,6 +2277,7 @@ def ce_sequence_scope(node : ExpressionPtr; start : int; element : TypeDeclPtr; 
         var binding : ExpressionPtr
         if (share && stmt is ExprLet && length((stmt as ExprLet).variables)>1) {
             var expanded : array<ExpressionPtr>
+            expanded |> reserve(length((stmt as ExprLet).variables))
             for (i in range(length((stmt as ExprLet).variables))) {
                 var declaration = clone_expression(stmt) as ExprLet
                 var variable = declaration.variables[i]
@@ -2322,10 +2285,10 @@ def ce_sequence_scope(node : ExpressionPtr; start : int; element : TypeDeclPtr; 
                 declaration.variables[0] = variable
                 expanded |> push <| declaration
             }
-            for (i in range(index+1, length(blk.list))) { expanded |> push <| clone_expression(blk.list[i]) }
+            ce_append_clones(expanded, blk, index+1)
             var scope = qmacro_block() { $b(expanded); }
             var lowered = ce_sequence_scope(scope, 0, element, share, error, builder)
-            for (entry in (lowered as ExprBlock).list) { output |> push <| clone_expression(entry) }
+            ce_append_clones(output, lowered as ExprBlock)
             return qmacro_block() { $b(output); }
         }
         if (stmt is ExprLet && length((stmt as ExprLet).variables)==1) {
@@ -2360,16 +2323,16 @@ def ce_sequence_scope(node : ExpressionPtr; start : int; element : TypeDeclPtr; 
                 cell_declaration.at = stmt.at
                 // Native generator loop labels use source coordinates. Keep
                 // the synthetic cell loop distinct from its enclosing bind.
-                cell_declaration.at.column += 1
-                for (i in range(index+1, length(blk.list))) { tail |> push <| clone_expression(blk.list[i]) }
+                cell_declaration.at.column++
+                ce_append_clones(tail, blk, index+1)
                 var scope = qmacro_block() { $b(tail); }
                 scope = ce_sequence_replace_local(scope, original_name, cell)
                 var complete : array<ExpressionPtr>
                 complete |> push <| cell_declaration
-                for (entry in (scope as ExprBlock).list) { complete |> push <| clone_expression(entry) }
+                ce_append_clones(complete, scope as ExprBlock)
                 scope = qmacro_block() { $b(complete); }
                 var lowered = ce_sequence_scope(scope, 0, element, share, error, builder)
-                for (entry in (lowered as ExprBlock).list) { output |> push <| clone_expression(entry) }
+                ce_append_clones(output, lowered as ExprBlock)
                 return qmacro_block() { $b(output); }
             }
         }
@@ -2408,7 +2371,7 @@ def ce_sequence_scope(node : ExpressionPtr; start : int; element : TypeDeclPtr; 
                 (decl as ExprLet).variables[0].init = qmacro($i(owned))
                 var tail : array<ExpressionPtr>
                 tail |> push <| decl
-                for (entry in (rest as ExprBlock).list) { tail |> push <| clone_expression(entry) }
+                ce_append_clones(tail, rest as ExprBlock)
                 rest = qmacro_block() { $b(tail); }
                 var setup <- qmacro_block_to_array() { var $i(owned) = $e(call.arguments[0]); }
                 var cleanup = qmacro($ { ce_dispose($i(owned)) })
@@ -2448,7 +2411,7 @@ def ce_sequence_scope(node : ExpressionPtr; start : int; element : TypeDeclPtr; 
                     (decl as ExprLet).variables[0].init = qmacro($i(name))
                     declarations |> push <| decl
                 }
-                for (i in range(index+1, length(blk.list))) { declarations |> push <| clone_expression(blk.list[i]) }
+                ce_append_clones(declarations, blk, index+1)
                 var raw_tail = qmacro_block() { $b(declarations); }
                 var rest = ce_sequence_scope(raw_tail, 0, element, share, error, builder)
                 let normalized=ce_normalize_source(builder,call.arguments[0])
@@ -2538,9 +2501,8 @@ def ce_sequence_guard(body : ExpressionPtr; var setup : array<ExpressionPtr>;
         return <- ce_sequence_scoped($i(child), $i(finish))
     })
     var factory = (factory_expr as ExprMakeBlock)._block as ExprBlock
-    var entries : array<ExpressionPtr>
-    for (entry in setup) { entries |> push <| clone_expression(entry) }
-    for (entry in factory.list) { entries |> push <| clone_expression(entry) }
+    var entries <- [for (entry in setup); clone_expression(entry)]
+    ce_append_clones(entries, factory)
     factory.list |> clear()
     for (entry in entries) { factory.list |> push <| clone_expression(entry) }
     var source = qmacro(invoke($e(factory_expr)))

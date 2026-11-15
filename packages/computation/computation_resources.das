@@ -1,6 +1,5 @@
 options gen2
 module computation_resources public
-require daslib/rtti
 
 // Cleanup runs when the body returns, however it returns: with a value, with
 // an Error or None, or through an early exit. A panic is fatal and runs nothing.
@@ -37,9 +36,7 @@ def ce_using_move(builder:auto; var resource:auto(T); body:block<(var item:auto(
 }
 
 // Stable address for the body and cleanup generators; no owning value capture.
-def ce_resource_cell_move(var resource:auto(T)) {
-    return new tuple<value:T>(value <- resource)
-}
+def ce_resource_cell_move(var resource:auto(T)) => new tuple<value:T>(value <- resource)
 def ce_resource_cell_close(var cell:tuple<value:auto(T)>?; cleanup:block<(var item:T):void>) {
     var owned <- cell.value
     // The cell now holds a moved-from resource; its real payload has one owner.

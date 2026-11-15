@@ -9,8 +9,7 @@ require daslib/templates_boost
 
 // Snapshots must not retain borrowed pointers or escaping executable captures.
 def private ce_snapshot_safe(t:TypeDeclPtr) : bool {
-    if (t==null) { return false }
-    if (t.baseType==Type.tPointer || t.baseType==Type.tBlock || t.baseType==Type.tLambda
+    if (t==null || t.baseType==Type.tPointer || t.baseType==Type.tBlock || t.baseType==Type.tLambda
         || t.baseType==Type.tIterator || t.baseType==Type.tHandle) { return false }
     if (t.baseType==Type.tStructure) {
         for (field in t.structType.fields) { if (!ce_snapshot_safe(field._type)) { return false } }
@@ -83,11 +82,10 @@ class DeferredResult : AstTypeInfoMacro {
 
 [call_macro(name="deferred")]
 class DeferredMacro : AstCallMacro {
-    def override canVisitArgument(expr:ExprCallMacro?; index:int) : bool {
-        return index<int(length(expr.arguments))-1
-    }
-    def override canFoldReturnResult(expr:ExprCallMacro?) : bool { return false }
-    def override visit(prog:ProgramPtr; mod:Module?; var expr:ExprCallMacro?) : ExpressionPtr {
+    def override canVisitArgument(expr:ExprCallMacro?; index:int) : bool =>
+        index<length(expr.arguments)-1
+    def override canFoldReturnResult(expr:ExprCallMacro?) : bool => false
+    def override visit(prog:ProgramPtr; mod:Module?; var expr:ExprCallMacro?) : ExpressionPtr {   // nolint:STYLE037,STYLE038 - the macro's entry: validation, then one arm per kind of result
         let count=length(expr.arguments)
         if ((count!=2 && count!=3) || !(expr.arguments[count-1] is ExprMakeBlock)) {
             macro_error(prog,expr.at,"deferred: expected builder, optional snapshot, and a trailing CE block")

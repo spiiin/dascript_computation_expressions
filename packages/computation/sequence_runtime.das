@@ -1,7 +1,6 @@
 options gen2
 module sequence_runtime public
 require ./builder_protocol.das public
-require daslib/rtti
 
 // LambdaIterator::close saves/restores the caller's stop flags but does not
 // clear them before running the finalizer (0.6.4). Enter recover to clear the
@@ -33,7 +32,7 @@ def sequence_each(var source : iterator<auto(T)>; action : block<(value:auto(V))
             var more=false
             unsafe {more=_builtin_iterator_iterate(source,addr(slot))}
             if (!more) {break}
-            unsafe {invoke(action,*slot)}
+            invoke(action,*slot)
         }
         sequence_close(source)
     } else {
@@ -76,9 +75,8 @@ def sequence_close(var source : iterator<auto(T)>) {
 
 // A copyable descriptor with one mutable payload, owned by the lexical CE scope.
 struct CeSequenceCellTag {_ce_marker:uint8}
-def ce_sequence_new_cell(value : auto(T)) {
-    return new tuple<tag:CeSequenceCellTag;value:T -const -&>(tag=CeSequenceCellTag(), value=value)
-}
+def ce_sequence_new_cell(value : auto(T)) =>
+    new tuple<tag:CeSequenceCellTag;value:T -const -&>(tag=CeSequenceCellTag(), value=value)
 def ce_dispose(var cell : tuple<tag:CeSequenceCellTag;value:auto(T)>?) {
     unsafe { delete cell }
 }
@@ -113,7 +111,7 @@ def sequence_each_move(var source:iterator<auto(T)&>; action:block<(var value:au
         var more=false
         unsafe {more=_builtin_iterator_iterate(source,addr(slot))}
         if (!more) {break}
-        unsafe {invoke(action,*slot)}
+        invoke(action,*slot)
     }
     sequence_close(source)
 }

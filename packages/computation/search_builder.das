@@ -7,11 +7,10 @@ def SearchBuilder(unused:type<auto(T)>) {
     static_assert(typeinfo can_copy(type<T>),"SearchBuilder requires copyable solutions")
     return (kind=SearchContext(),element=default<T -const>)
 }
-def SearchBuilder() {return SearchBuilder(type<int>)}
-def ce_protocol(builder:tuple<kind:SearchContext;element:auto(T)>) {return ce_sequence_protocol(type<T>)}
-def ce_sequence_run(builder:tuple<kind:SearchContext;element:auto(T)>; var source:iterator<T>) {
-    return <- ce_sequence_protect(source)
-}
+def SearchBuilder() => SearchBuilder(type<int>)
+def ce_protocol(builder:tuple<kind:SearchContext;element:auto(T)>) => ce_sequence_protocol(type<T>)
+def ce_sequence_run(builder:tuple<kind:SearchContext;element:auto(T)>; var source:iterator<T>) =>
+    <- ce_sequence_protect(source)
 // Empty source prunes only this branch of the depth-first search.
 def search_guard(accept:bool) {
     return <- generator<CeUnit> capture(copy(accept)) {
@@ -31,7 +30,7 @@ def search_once(var source:iterator<auto(T)>) : iterator<T> {
         return false
     } finally {ce_sequence_finalize($ {sequence_close(source)})}
 }
-def search_cut(var source:iterator<auto(T)>) {return <- search_once(source)}
+def search_cut(var source:iterator<auto(T)>) => <- search_once(source)
 
 // Explicit consuming source for dynamic arrays, including temporary literals.
 def search_choose(var values:array<auto(T)>) : iterator<T> {

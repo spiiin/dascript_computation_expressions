@@ -22,9 +22,9 @@ struct TaskJobSink {
 }
 var private native_channels=0
 
-def task_jobque_channels() {return native_channels}
+def task_jobque_channels() => native_channels
 def private ce_jobque_remove(var record:auto) {
-    if(record.channel!=null) {unsafe {channel_remove(record.channel)};native_channels--}
+    if(record.channel!=null) {unsafe(channel_remove(record.channel));native_channels--}
     unsafe {
         if(record.cancel!=null) {atomic32_remove(record.cancel)}
         if(record.pending!=null) {atomic32_remove(record.pending)}
@@ -52,16 +52,14 @@ def private ce_jobque_lease(var state:auto(S)?;owner:bool=false) {
 }
 def private ce_jobque_state(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(S)?>>) : S? {
     unsafe {
-        var lease=reinterpret<iterator<S?>?>(addr(queue.owner));var state:S?
+        var lease=addr<iterator<S?>?>(queue.owner);var state:S?
         if(!next(*lease,state)) {panic("task jobque: queue was moved or deleted")}
         return state
     }
 }
 def task_job_queue() : TaskJobQueue {
-    unsafe {
-        var state=new tuple<references:uint64;closed:bool;records:array<tuple<channel:Channel?;waiting:bool;cancel:Atomic32?;pending:Atomic32?>>>(references=uint64(1))
-        return <- (tag=TaskJobQueueTag(),owner <- ce_jobque_lease(state,true))
-    }
+    var state=new tuple<references:uint64;closed:bool;records:array<tuple<channel:Channel?;waiting:bool;cancel:Atomic32?;pending:Atomic32?>>>(references=uint64(1))
+    return <- (tag=TaskJobQueueTag(),owner <- ce_jobque_lease(state,true))
 }
 def task_jobque_collect(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(S)?>>) {
     var state=ce_jobque_state(queue);var removed=0
@@ -250,7 +248,7 @@ def private ce_jobque_stream_lease(var op:auto(O)?;owner:bool=false) {
 }
 def private ce_jobque_stream_op(stream:tuple<tag:TaskJobStreamTag;owner:iterator<auto(O)?>>) : O? {
     unsafe {
-        var lease=reinterpret<iterator<O?>?>(addr(stream.owner));var op:O?
+        var lease=addr<iterator<O?>?>(stream.owner);var op:O?
         if(!next(*lease,op)) {panic("task jobque stream: handle was moved or deleted")}
         return op
     }
@@ -363,6 +361,6 @@ def task_jobque_stream_cancel(stream:tuple<tag:TaskJobStreamTag;owner:iterator<a
     var op=ce_jobque_stream_op(stream);ce_jobque_stream_stop(op)
 }
 def task_jobque_stream_done(stream:tuple<tag:TaskJobStreamTag;owner:iterator<auto(O)?>>) : bool {
-    var op=ce_jobque_stream_op(stream);unsafe {return op.done}
+    var op=ce_jobque_stream_op(stream);return op.done
 }
 def ce_dispose(var stream:tuple<tag:TaskJobStreamTag;owner:iterator<auto?>>) {sequence_close(stream.owner)}

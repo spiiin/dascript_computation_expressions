@@ -28,14 +28,12 @@ require daslib/ast_boost
 
 [function_macro(name="sequence")]
 class SequenceFunctionMacro : AstFunctionAnnotation {
-    [unused_argument(group, args)] def override apply(var func : FunctionPtr; var group : ModuleGroup; var args : AnnotationArgumentList; var errors : das_string) : bool {
-        return ce_function_computation(func, "sequence", "SequenceBuilder", CeFunctionKind.Sequence, errors)
-    }
+    [unused_argument(group, args)] def override apply(var func : FunctionPtr; var group : ModuleGroup; var args : AnnotationArgumentList; var errors : das_string) : bool =>
+        ce_function_computation(func, "sequence", "SequenceBuilder", CeFunctionKind.Sequence, errors)
 }
 
 [function_macro(name="coroutine")]
 class CoroutineFunctionMacro : AstFunctionAnnotation {
-    [unused_argument(group, args)] def override apply(var func : FunctionPtr; var group : ModuleGroup; var args : AnnotationArgumentList; var errors : das_string) : bool {
-        return ce_function_computation(func, "coroutine", "CoroutineBuilder", CeFunctionKind.Coroutine, errors)
-    }
+    [unused_argument(group, args)] def override apply(var func : FunctionPtr; var group : ModuleGroup; var args : AnnotationArgumentList; var errors : das_string) : bool =>
+        ce_function_computation(func, "coroutine", "CoroutineBuilder", CeFunctionKind.Coroutine, errors)
 }

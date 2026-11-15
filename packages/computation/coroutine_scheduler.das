@@ -68,8 +68,7 @@ def private coroutine_check_idle(scheduler:CoroutineScheduler) {
     if (scheduler.busy) {panic("coroutine scheduler: mutation during tick or cleanup is unsupported")}
 }
 def coroutine_valid(scheduler:CoroutineScheduler; id:CoroutineTaskId) : bool {
-    if (id.owner==uint64(0) || id.owner!=scheduler.owner) {return false}
-    if (id.slot<=0 || id.slot>length(scheduler.tasks)) {return false}
+    if (id.owner==uint64(0) || id.owner!=scheduler.owner || id.slot<=0 || id.slot>length(scheduler.tasks)) {return false}
     return scheduler.tasks[id.slot-1].occupied && scheduler.tasks[id.slot-1].generation==id.generation
 }
 def private coroutine_check_id(scheduler:CoroutineScheduler; id:CoroutineTaskId) {
@@ -207,8 +206,8 @@ def coroutine_prune(var scheduler:CoroutineScheduler) : int {
     }
     return removed
 }
-def coroutine_task_count(scheduler:CoroutineScheduler) : int {return scheduler.count}
-def coroutine_slot_count(scheduler:CoroutineScheduler) : int {return length(scheduler.tasks)}
+def coroutine_task_count(scheduler:CoroutineScheduler) : int => scheduler.count
+def coroutine_slot_count(scheduler:CoroutineScheduler) : int => length(scheduler.tasks)
 
 // A scheduler for the length of a block: leaving the block closes its tasks.
 def coroutine_scope(body:block<(var scheduler:CoroutineScheduler):void>) {

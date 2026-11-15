@@ -84,8 +84,8 @@ def private task_scheduler_dispose(var frame:auto) {
     }
 }
 def private task_scheduler_create(unused:type<auto(T)>; config:TaskSchedulerConfig; owner:uint64) {
-    var placeholder:iterator<tuple<tag:TaskEventTag;ready:bool;value:T -const -&>>
-    var records:array<tuple<task:typedecl(task_create(placeholder));slot:TaskSlot>>
+    var _source:iterator<tuple<tag:TaskEventTag;ready:bool;value:T -const -&>>
+    var records:array<tuple<task:typedecl(task_create(_source));slot:TaskSlot>>
     // One owning frame avoids exposing a raw pointer and survives owner moves.
     var inscope frames:array<tuple<state:TaskSchedulerState;records:typedecl(records)>>
     frames |> emplace((state=TaskSchedulerState(config=config,owner=owner),records <- records))
@@ -97,7 +97,7 @@ def task_scheduler(unused:type<auto(T)>; config:TaskSchedulerConfig) {
     let owner=task_scheduler_new_owner()
     return <- task_scheduler_create(type<T>,config,owner)
 }
-def task_scheduler(unused:type<auto(T)>) {return <- task_scheduler(type<T>,TaskSchedulerConfig())}
+def task_scheduler(unused:type<auto(T)>) => <- task_scheduler(type<T>,TaskSchedulerConfig())
 
 // `TaskScheduler<T>` names what task_scheduler(type<T>) returns. The records a
 // scheduler keeps are private, so the name is the constructor's own result
@@ -124,12 +124,12 @@ def private task_scheduler_idle(scheduler:auto) {
     task_scheduler_live(scheduler)
     if(scheduler.frames[0].state.busy) {panic("task scheduler: mutation during tick or cleanup is unsupported")}
 }
-def private task_scheduler_active(status:TaskStatus) : bool {return status==TaskStatus.Created || status==TaskStatus.Waiting}
+def private task_scheduler_active(status:TaskStatus) : bool =>
+    status==TaskStatus.Created || status==TaskStatus.Waiting
 
 def task_valid(scheduler:auto; id:TaskId) : bool {
-    if(length(scheduler.frames)!=1) {return false}
-    if(id.owner==uint64(0) || id.owner!=scheduler.frames[0].state.owner) {return false}
-    if(id.slot<=0 || id.slot>length(scheduler.frames[0].records)) {return false}
+    if(length(scheduler.frames)!=1 || id.owner==uint64(0) || id.owner!=scheduler.frames[0].state.owner
+        || id.slot<=0 || id.slot>length(scheduler.frames[0].records)) {return false}
     let slot=scheduler.frames[0].records[id.slot-1].slot
     return slot.occupied && slot.generation==id.generation
 }
@@ -226,19 +226,15 @@ def private task_scheduler_spawn(var scheduler:auto; var source:auto; timed:bool
     }
 }
 
-def task_spawn(var scheduler:auto; var source:auto) : TaskId {
-    return task_scheduler_spawn(scheduler,source,false,int64(0),"")
-}
-def task_spawn(var scheduler:auto; var source:auto; timeout:TaskTimeout) : TaskId {
-    return task_scheduler_spawn(scheduler,source,true,timeout.after_ms,"")
-}
+def task_spawn(var scheduler:auto; var source:auto) : TaskId =>
+    task_scheduler_spawn(scheduler,source,false,int64(0),"")
+def task_spawn(var scheduler:auto; var source:auto; timeout:TaskTimeout) : TaskId =>
+    task_scheduler_spawn(scheduler,source,true,timeout.after_ms,"")
 // Named variants only add a diagnostic label; names need not be unique.
-def task_spawn_named(var scheduler:auto; name:string; var source:auto) : TaskId {
-    return task_scheduler_spawn(scheduler,source,false,int64(0),name)
-}
-def task_spawn_named(var scheduler:auto; name:string; var source:auto; timeout:TaskTimeout) : TaskId {
-    return task_scheduler_spawn(scheduler,source,true,timeout.after_ms,name)
-}
+def task_spawn_named(var scheduler:auto; name:string; var source:auto) : TaskId =>
+    task_scheduler_spawn(scheduler,source,false,int64(0),name)
+def task_spawn_named(var scheduler:auto; name:string; var source:auto; timeout:TaskTimeout) : TaskId =>
+    task_scheduler_spawn(scheduler,source,true,timeout.after_ms,name)
 def task_name(scheduler:auto; id:TaskId) : string {
     task_scheduler_check_id(scheduler,id)
     return scheduler.frames[0].records[id.slot-1].slot.name
@@ -399,7 +395,7 @@ def task_scheduler_scope(var scheduler:auto(S); body:block<(var owner:S):void>) 
     delete owned
 }
 
-def task_tick(var scheduler:auto; now_ms:int) : int {return task_tick(scheduler,int64(now_ms))}
+def task_tick(var scheduler:auto; now_ms:int) : int => task_tick(scheduler,int64(now_ms))
 
 // Earliest scheduler time at which a tick can make progress on time-based waits:
 // timeouts and task_delay_ms waits polled in the last tick. Returns now_ms when the
@@ -455,7 +451,8 @@ def task_stalled(scheduler:auto; older_than_ms:int64) : array<TaskInfo> {
     }
     return <- result
 }
-def task_stalled(scheduler:auto; older_than_ms:int) : array<TaskInfo> {return <- task_stalled(scheduler,int64(older_than_ms))}
+def task_stalled(scheduler:auto; older_than_ms:int) : array<TaskInfo> =>
+    <- task_stalled(scheduler,int64(older_than_ms))
 def task_dump_text(scheduler:auto) : string {
     var inscope infos <- task_dump(scheduler)
     let now=task_scheduler_time(scheduler)

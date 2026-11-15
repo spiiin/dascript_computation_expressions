@@ -7,7 +7,7 @@ struct TaskSemaphoreTag {_ce_marker:uint8}
 
 def task_semaphore(permits:int) {
     var inscope channel <- task_channel(type<CeUnit>,permits)
-    for(i in range(permits)) {verify(task_channel_try_send(channel,CeUnit()))}
+    for(_permit in range(permits)) {verify(task_channel_try_send(channel,CeUnit()))}
     return <- (tag=TaskSemaphoreTag(),channel <- channel)
 }
 def task_semaphore_close(semaphore:tuple<tag:TaskSemaphoreTag;channel:auto>) {task_channel_fail(semaphore.channel,"semaphore is closed")}

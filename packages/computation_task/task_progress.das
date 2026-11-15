@@ -29,7 +29,7 @@ def private ce_progress_lease(var state:auto(S)?;owner:bool=false) {
 }
 def private ce_progress_state(progress:tuple<tag:TaskProgressTag;owner:iterator<auto(S)?>>) : S? {
     unsafe {
-        var lease=reinterpret<iterator<S?>?>(addr(progress.owner));var state:S?
+        var lease=addr<iterator<S?>?>(progress.owner);var state:S?
         if(!next(*lease,state)) {panic("task progress: handle was moved or deleted")}
         return state
     }
@@ -67,14 +67,14 @@ def task_progress_report(progress:tuple<tag:TaskProgressTag;owner:iterator<auto(
     return true
 }
 def task_progress_close(progress:tuple<tag:TaskProgressTag;owner:iterator<auto(S)?>>) {
-    var state=ce_progress_state(progress);unsafe {state.closed=true}
+    var state=ce_progress_state(progress);state.closed=true
 }
 def task_progress_closed(progress:tuple<tag:TaskProgressTag;owner:iterator<auto(S)?>>) : bool {
-    var state=ce_progress_state(progress);unsafe {return state.closed}
+    var state=ce_progress_state(progress);return state.closed
 }
 // Zero until the first report.
 def task_progress_version(progress:tuple<tag:TaskProgressTag;owner:iterator<auto(S)?>>) : uint64 {
-    var state=ce_progress_state(progress);unsafe {return state.version}
+    var state=ce_progress_state(progress);return state.version
 }
 def task_progress_value(progress:tuple<tag:TaskProgressTag;owner:iterator<auto(S)?>>) {
     var state=ce_progress_state(progress)
@@ -106,10 +106,8 @@ def private ce_progress_wait(progress:tuple<tag:TaskProgressTag;owner:iterator<a
 }
 // Task<Result<Option<T>,string>>: the next report after this Task's first poll,
 // or none once the progress is closed. Intermediate reports are coalesced.
-def task_progress_wait(progress:tuple<tag:TaskProgressTag;owner:iterator<auto(S)?>>) {
-    return <- ce_progress_wait(progress,false,uint64(0))
-}
+def task_progress_wait(progress:tuple<tag:TaskProgressTag;owner:iterator<auto(S)?>>) =>
+    <- ce_progress_wait(progress,false,uint64(0))
 // Same, but newer than an explicitly observed version (no lost update between waits).
-def task_progress_wait_after(progress:tuple<tag:TaskProgressTag;owner:iterator<auto(S)?>>;version:uint64) {
-    return <- ce_progress_wait(progress,true,version)
-}
+def task_progress_wait_after(progress:tuple<tag:TaskProgressTag;owner:iterator<auto(S)?>>;version:uint64) =>
+    <- ce_progress_wait(progress,true,version)

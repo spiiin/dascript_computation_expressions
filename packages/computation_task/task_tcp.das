@@ -6,7 +6,7 @@ require daslib/strings_boost
 
 var private tcp_created=0
 var private tcp_released=0
-def task_tcp_stats() {return (created=tcp_created,released=tcp_released,active=tcp_created-tcp_released)}
+def task_tcp_stats() => (created=tcp_created,released=tcp_released,active=tcp_created-tcp_released)
 
 // One bounded line per connection. connect() has the SDK's bounded synchronous
 // connect phase; tick()/receive are nonblocking. All calls stay on one thread.
@@ -48,7 +48,7 @@ def task_tcp_request_line(host:string;port:int;request:string;max_bytes:int=6553
     var reader=new CeTaskTcpLine(max_bytes)
     if(reader.connect(host,port,connect_timeout_ms)) {
         peek_data(request) $(data) {
-            if(!empty(data)) {unsafe {if(!reader.send(reinterpret<uint8?>(addr(data[0])),length(data))) {reader.error="failed to send request"}}}
+            if(!empty(data)) {if(!reader.send(unsafe(addr<uint8?>(data[0])),length(data))) {reader.error="failed to send request"}}
         }
     } elif(empty(reader.error)) {reader.error="connection failed"}
     return <- task_from_poll(@() {

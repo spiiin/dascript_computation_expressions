@@ -95,4 +95,4 @@ def task_http_header(response:TaskHttpResponse;key:string) : string {
     for(header in response.headers) {if(to_lower(header.key)==wanted) {return header.value}}
     return ""
 }
-def task_http_ok(response:TaskHttpResponse) : bool {return response.status>=200 && response.status<300}
+def task_http_ok(response:TaskHttpResponse) : bool => response.status>=200 && response.status<300

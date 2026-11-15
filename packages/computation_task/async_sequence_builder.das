@@ -24,21 +24,20 @@ struct template AsyncSequence {
 // Reuse its owning combinator for cooperative polling, cancellation and cleanup.
 def ce_merge_sources(builder:tuple<kind:AsyncSequenceContext;element:auto>;
     var left:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(L)>>;status:TaskStatus;value:L;error:string;polling:bool>;
-    var right:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(R)>>;status:TaskStatus;value:R;error:string;polling:bool>) {
-    return <- task_when_all(left,right)
-}
+    var right:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(R)>>;status:TaskStatus;value:R;error:string;polling:bool>) =>
+        <- task_when_all(left,right)
 
 def AsyncSequenceBuilder(unused:type<auto(T)>) {
     static_assert(typeinfo ce_resumable_payload(default<T>))
     var marker:T -const -&?
     return (kind=AsyncSequenceContext(),element=marker)
 }
-def AsyncSequenceBuilder() {return AsyncSequenceBuilder(type<int>)}
+def AsyncSequenceBuilder() => AsyncSequenceBuilder(type<int>)
 
-def ce_protocol(builder:tuple<kind:AsyncSequenceContext;element:auto(T)?>) {
-    return ce_resumable_protocol(type<tuple<tag:TaskEventTag;ready:bool;value:Option<T>>>)
-}
-def ce_await_pending(builder:tuple<kind:AsyncSequenceContext;element:auto(T)?>) {return task_pending(type<Option<T>>)}
+def ce_protocol(builder:tuple<kind:AsyncSequenceContext;element:auto(T)?>) =>
+    ce_resumable_protocol(type<tuple<tag:TaskEventTag;ready:bool;value:Option<T>>>)
+def ce_await_pending(builder:tuple<kind:AsyncSequenceContext;element:auto(T)?>) =>
+    task_pending(type<Option<T>>)
 def ce_await_yield(builder:tuple<kind:AsyncSequenceContext;element:auto(T)?>; value:T) {
     static_if(typeinfo can_copy(type<T>)) {return task_ready(some(value))}
     else {
@@ -56,8 +55,10 @@ def private ce_async_sequence_done(unused:type<auto(T)>) {
     var item <- move_none(type<T>)
     return <- task_ready_move(item)
 }
-def ce_await_zero(builder:tuple<kind:AsyncSequenceContext;element:auto(T)?>) {return <- ce_async_sequence_done(type<T>)}
-def ce_await_return(builder:tuple<kind:AsyncSequenceContext;element:auto(T)?>; value:CeUnit) {return <- ce_await_zero(builder)}
+def ce_await_zero(builder:tuple<kind:AsyncSequenceContext;element:auto(T)?>) =>
+    <- ce_async_sequence_done(type<T>)
+def ce_await_return(builder:tuple<kind:AsyncSequenceContext;element:auto(T)?>; value:CeUnit) =>
+    <- ce_await_zero(builder)
 def ce_await_return(builder:tuple<kind:AsyncSequenceContext;element:auto(T)?>; value:auto) {
     concept_assert(false,"async sequence: emit elements with yield; only bare return is supported")
     return <- ce_await_zero(builder)
@@ -67,8 +68,9 @@ def ce_await_value(builder:tuple<kind:AsyncSequenceContext;element:auto>; event:
     return event.value
 }
 def ce_await_borrow_value(builder:tuple<kind:AsyncSequenceContext;element:auto>; var event:tuple<tag:TaskEventTag;ready:bool;value:auto(U)>) : U& {unsafe {return event.value}}
-def ce_await_failed(builder:tuple<kind:AsyncSequenceContext;element:auto>; event:auto) {return false}
-def ce_await_failure(builder:tuple<kind:AsyncSequenceContext;element:auto(T)?>; event:auto) {return <- ce_await_pending(builder)}
+def ce_await_failed(builder:tuple<kind:AsyncSequenceContext;element:auto>; event:auto) => false
+def ce_await_failure(builder:tuple<kind:AsyncSequenceContext;element:auto(T)?>; event:auto) =>
+    <- ce_await_pending(builder)
 
 // One iterator owns both the Task and its event slot. The yielded reference
 // stays valid across the entire continuation, including subsequent suspension.
@@ -207,12 +209,10 @@ def ce_await_for_merge(builder:tuple<kind:AsyncSequenceContext;element:auto?>;
 // A next-Task owns a separate lease, never a reference into the caller's stack.
 // The sequence's primary lease closes the producer even with a pending next.
 def private ce_async_sequence_close(var state:auto(State)?; cancelled:bool) {
-    unsafe {
-        if(state.closed) {return}
-        state.closed=true
-        state.cancelled=cancelled
-        sequence_close(state.source)
-    }
+    if(state.closed) {return}
+    state.closed=true
+    state.cancelled=cancelled
+    sequence_close(state.source)
 }
 def private ce_async_sequence_release(var state:auto(State)?) {
     unsafe {
@@ -242,14 +242,14 @@ def ce_sequence_run(builder:tuple<kind:AsyncSequenceContext;element:auto(T)?>;
 def private ce_async_sequence_state(stream:tuple<tag:AsyncSequenceTag;owner:iterator<auto(State)?>;element:auto>) : State? {
     unsafe {
         var state:State?
-        var owner=reinterpret<iterator<State?>?>(addr(stream.owner))
+        var owner=addr<iterator<State?>?>(stream.owner)
         if(!next(*owner,state)) {panic("async sequence: owner has been moved or deleted")}
         return state
     }
 }
 def async_sequence_close(stream:tuple<tag:AsyncSequenceTag;owner:iterator<auto(State)?>;element:auto>) {
     var state=ce_async_sequence_state(stream)
-    unsafe {if(state.polling) {panic("async sequence: cannot close during producer poll")}}
+    if(state.polling) {panic("async sequence: cannot close during producer poll")}
     ce_async_sequence_close(state,true)
 }
 def ce_dispose(var stream:tuple<tag:AsyncSequenceTag;owner:iterator<auto(State)?>;element:auto>) {

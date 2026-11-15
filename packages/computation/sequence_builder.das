@@ -7,28 +7,23 @@ struct SequenceContext {_ce_marker:uint8}
 struct MoveSequenceContext {_ce_marker:uint8}
 def SequenceBuilder(t : type<auto(T)>) {
     static_if (typeinfo can_copy(type<T>)) {
-        var element:T -const
-        return (kind=SequenceContext(),element=element)
+        return (kind=SequenceContext(),element=default<T -const>)
     } else {
         var marker:T -const -&?
         return (kind=MoveSequenceContext(),element=marker)
     }
 }
 
-def SequenceBuilder() { return SequenceBuilder(type<int>) }
+def SequenceBuilder() => SequenceBuilder(type<int>)
 
 
 
-def ce_protocol(builder : tuple<kind:SequenceContext;element:auto(T)>) {
-    return ce_sequence_protocol(type<T>)
-}
-def ce_sequence_run(builder : tuple<kind:SequenceContext;element:auto(T)>; var source : iterator<T>) : iterator<T> {
-    return <- ce_sequence_protect(source)
-}
+def ce_protocol(builder : tuple<kind:SequenceContext;element:auto(T)>) =>
+    ce_sequence_protocol(type<T>)
+def ce_sequence_run(builder : tuple<kind:SequenceContext;element:auto(T)>; var source : iterator<T>) : iterator<T> =>
+    <- ce_sequence_protect(source)
 
-def ce_protocol(builder:tuple<kind:MoveSequenceContext;element:auto(T)?>) {
-    return <- (strategy=CeSequenceProtocol(),element <- default<T>)
-}
-def ce_sequence_run(builder:tuple<kind:MoveSequenceContext;element:auto(T)?>; var source:iterator<T>) {
-    return <- ce_sequence_own_elements(source)
-}
+def ce_protocol(builder:tuple<kind:MoveSequenceContext;element:auto(T)?>) =>
+    <- (strategy=CeSequenceProtocol(),element <- default<T>)
+def ce_sequence_run(builder:tuple<kind:MoveSequenceContext;element:auto(T)?>; var source:iterator<T>) =>
+    <- ce_sequence_own_elements(source)

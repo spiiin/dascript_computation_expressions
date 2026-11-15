@@ -45,7 +45,7 @@ def private ce_event_lease(var state:auto(S)?;close_source:bool=false) {
 
 def private ce_event_state(source:tuple<tag:TaskEventSourceTag;owner:iterator<auto(S)?>>) : S? {
     unsafe {
-        var lease=reinterpret<iterator<S?>?>(addr(source.owner))
+        var lease=addr<iterator<S?>?>(source.owner)
         var state:S?
         if(!next(*lease,state)) {panic("task event source: handle was moved or deleted")}
         return state
@@ -64,11 +64,9 @@ def task_event_source(unused:type<auto(T)>) : TaskEventSource<T -const -&> {
 
 def task_event_close(source:tuple<tag:TaskEventSourceTag;owner:iterator<auto(S)?>>) : bool {
     var state=ce_event_state(source)
-    unsafe {
-        if(state.closed) {return false}
-        state.closed=true
-        return true
-    }
+    if(state.closed) {return false}
+    state.closed=true
+    return true
 }
 
 def ce_dispose(var source:tuple<tag:TaskEventSourceTag;owner:auto>) {

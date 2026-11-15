@@ -3,22 +3,21 @@ module coroutine_builder public
 require ./builder_protocol.das public
 require ./sequence_runtime.das public
 require ./sequence_function.das public
-require daslib/rtti
 
 struct CoroutineBuilder {_ce_marker:uint8}
 struct CoroutineWait {frames:int}
 struct CoroutineFrame {_ce_marker:uint8}
 
-def next_frame() {return CoroutineWait(frames=1)}
+def next_frame() => CoroutineWait(frames=1)
 def wait_frames(frames:int) {
     if (frames<0) {panic("wait_frames: frame count must be non-negative")}
     return CoroutineWait(frames=frames)
 }
-def ce_protocol(builder:CoroutineBuilder) {return ce_sequence_protocol(type<CoroutineWait>)}
+def ce_protocol(_builder:CoroutineBuilder) => ce_sequence_protocol(type<CoroutineWait>)
 
 // Expand each suspension into exactly N frame boundaries. The outer iterator
 // closes this owner when it is closed.
-def ce_sequence_run(builder:CoroutineBuilder; var source:iterator<CoroutineWait>) : iterator<CoroutineFrame> {
+def ce_sequence_run(_builder:CoroutineBuilder; var source:iterator<CoroutineWait>) : iterator<CoroutineFrame> {
     var frames <- generator<CoroutineFrame> capture(<-source) {
         var request=CoroutineWait()
         while (ce_sequence_next_value(source,request)) {
@@ -32,7 +31,7 @@ def ce_sequence_run(builder:CoroutineBuilder; var source:iterator<CoroutineWait>
 
 // Await a child through `child |> yield_from`, forwarding one boundary per tick.
 // The adapter owns the child, including when the parent is cancelled.
-def ce_source(builder:CoroutineBuilder; var child:iterator<CoroutineFrame>) : iterator<CoroutineWait> {
+def ce_source(_builder:CoroutineBuilder; var child:iterator<CoroutineFrame>) : iterator<CoroutineWait> {
     var requests <- generator<CoroutineWait> capture(<-child) {
         var frame=CoroutineFrame()
         while (ce_sequence_next_value(child,frame)) {yield next_frame()}
@@ -44,8 +43,7 @@ def ce_source(builder:CoroutineBuilder; var child:iterator<CoroutineFrame>) : it
 // True: suspended at a frame boundary. False: completed and closed.
 def coroutine_resume(var task:iterator<CoroutineFrame>) : bool {
     var frame=CoroutineFrame()
-    var more=false
-    more=ce_sequence_next_value(task,frame)
+    let more=ce_sequence_next_value(task,frame)
     if (!more) {sequence_close(task)}
     return more
 }

@@ -12,22 +12,19 @@ struct TaskArrayEventTag {_ce_marker:uint8}
 // The pair combinators consume owners and poll left-to-right cooperatively.
 def ce_merge_sources(builder:tuple<kind:TaskContext;element:auto>;
     var left:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(CeTaskMergeLeft)>>;status:TaskStatus;value:CeTaskMergeLeft;error:string;polling:bool>;
-    var right:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(CeTaskMergeRight)>>;status:TaskStatus;value:CeTaskMergeRight;error:string;polling:bool>) {
-    return <- task_when_all(left,right)
-}
+    var right:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(CeTaskMergeRight)>>;status:TaskStatus;value:CeTaskMergeRight;error:string;polling:bool>) =>
+        <- task_when_all(left,right)
 
 // Match the whole payload, rather than a nested variant pattern: the 0.6.4
 // compiler crashes on that pattern when a Result contains a grouped pair.
 def ce_merge_sources(builder:tuple<kind:TaskResultContext;element:auto>;
     var left:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(CeTaskMergeLeft)>>;status:TaskStatus;value:CeTaskMergeLeft;error:string;polling:bool>;
-    var right:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(CeTaskMergeRight)>>;status:TaskStatus;value:CeTaskMergeRight;error:string;polling:bool>) {
-    return <- task_result_when_all(left,right)
-}
+    var right:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(CeTaskMergeRight)>>;status:TaskStatus;value:CeTaskMergeRight;error:string;polling:bool>) =>
+        <- task_result_when_all(left,right)
 def ce_merge_sources(builder:tuple<kind:TaskResultErrorContext;element:auto;error:auto(E)?>;
     var left:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(CeTaskMergeLeft)>>;status:TaskStatus;value:CeTaskMergeLeft;error:string;polling:bool>;
-    var right:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(CeTaskMergeRight)>>;status:TaskStatus;value:CeTaskMergeRight;error:string;polling:bool>) {
-    return <- task_result_when_all(left,right)
-}
+    var right:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(CeTaskMergeRight)>>;status:TaskStatus;value:CeTaskMergeRight;error:string;polling:bool>) =>
+        <- task_result_when_all(left,right)
 
 // Owning array results use the same Task representation as any other payload.
 def private task_array_store(var target:auto(Target)&; var child:auto) {
@@ -70,9 +67,8 @@ def private task_release_array(var children:array<auto>) {
     delete children
 }
 
-def private task_pair_shape(policy:TaskAllPolicy; left:auto(A);right:auto(B)) {
-    return <- (first <- default<A -const -&>,second <- default<B -const -&>)
-}
+def private task_pair_shape(policy:TaskAllPolicy; left:auto(A);right:auto(B)) =>
+    <- (first <- default<A -const -&>,second <- default<B -const -&>)
 // The Result policy holds for any error type; both tasks fail with the same one.
 def private task_pair_shape(policy:TaskResultAllPolicy;
     left:variant<err:auto(E);ok:auto(A)>;right:variant<err:auto(F);ok:auto(B)>) {
@@ -83,17 +79,17 @@ def private task_pair_shape(policy:TaskResultAllPolicy;
     return <- ce_move_ok(pair,type<E>)
 }
 
-def private task_pair_value(policy:TaskAllPolicy; var left:auto; var right:auto) {
-    return <- (first <- left,second <- right)
-}
+def private task_pair_value(policy:TaskAllPolicy; var left:auto; var right:auto) =>
+    <- (first <- left,second <- right)
 def private task_pair_value(policy:TaskResultAllPolicy;
     var left:variant<err:auto(E);ok:auto(A)>; var right:variant<err:auto(F);ok:auto(B)>) {
     var pair <- (first <- left as ok,second <- right as ok)
     return <- ce_move_ok(pair,type<E>)
 }
 
-def private task_pair_stops(policy:TaskAllPolicy; value:auto) {return false}
-def private task_pair_stops(policy:TaskResultAllPolicy; value:variant<err:auto(E);ok:auto(T)>) {return value is err}
+def private task_pair_stops(policy:TaskAllPolicy; value:auto) => false
+def private task_pair_stops(policy:TaskResultAllPolicy; value:variant<err:auto(E);ok:auto(T)>) =>
+    value is err
 def private task_pair_error(policy:TaskAllPolicy; value:auto; unused:type<auto(T)>) {var result:T -const -&;return <- result}
 def private task_pair_error(policy:TaskResultAllPolicy; value:variant<err:auto(E);ok:auto(T)>; unused:type<auto(R)>) {
     var result:R -const -& = variant type<R -const -&>(err=value as err)
@@ -103,7 +99,7 @@ def private task_pair_error(policy:TaskResultAllPolicy; value:variant<err:auto(E
 // Both arguments are consuming owners. Aliases must be rejected before moving.
 def private task_check_distinct(var left:auto; var right:auto) {
     unsafe {
-        if(reinterpret<void?>(addr(left))==reinterpret<void?>(addr(right))) {
+        if(addr<void?>(left)==addr<void?>(right)) {
             panic("task composition: the same owner cannot be passed twice")
         }
     }
@@ -122,9 +118,8 @@ def private task_release_pair(var left:auto; var right:auto) {
     task_release_child(right)
 }
 
-def private task_pair_pending(policy:auto; left:auto; right:auto) {
-    return <- task_pending(type<typedecl(task_pair_shape(policy,left,right)) -const -&>)
-}
+def private task_pair_pending(policy:auto; left:auto; right:auto) =>
+    <- task_pending(type<typedecl(task_pair_shape(policy,left,right)) -const -&>)
 def private task_pair(var left:auto(L); var right:auto(R); policy:auto(P)) {
     var events <- generator<tuple<tag:TaskEventTag;ready:bool;value:typedecl(task_pair_shape(policy,left.value,right.value)) -const -&>> capture(<-left,<-right) {
         while(true) {
@@ -170,12 +165,12 @@ def task_result_when_all(var left:auto(L); var right:auto(R)) {
 
 // The error type of a group of tasks, as a null marker: a task without a
 // result of its own (Task<CeUnit>) fails with whatever its neighbour does.
-def private ce_task_fault(value:variant<err:auto(E);ok:auto(T)>) : E -const -&? {return null}
-def private ce_task_fault(value:CeUnit) : string? {return null}
-def private ce_task_fault(left:variant<err:auto(E);ok:auto(T)>; right:auto) : E -const -&? {return null}
-def private ce_task_fault(left:CeUnit; right:auto) : typedecl(ce_task_fault(right)) {return null}
+def private ce_task_fault(value:variant<err:auto(E);ok:auto(T)>) : E -const -&? => null
+def private ce_task_fault(_value:CeUnit) : string? => null
+def private ce_task_fault(left:variant<err:auto(E);ok:auto(T)>; right:auto) : E -const -&? => null
+def private ce_task_fault(left:CeUnit; right:auto) : typedecl(ce_task_fault(right)) => null
 
-def private ce_task_result_source(var source:auto; fault:auto) {return <- source}
+def private ce_task_result_source(var source:auto; fault:auto) => <- source
 def private ce_task_result_source(var source:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:CeUnit>>;status:TaskStatus;value:CeUnit;error:string;polling:bool>; fault:auto(E)?) {
     var stream <- ce_await_source(TaskBuilder(type<CeUnit>),source)
     var events <- generator<tuple<tag:TaskEventTag;ready:bool;value:Result<CeUnit;E>>> capture(<-stream) {

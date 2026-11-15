@@ -1,7 +1,6 @@
 options gen2
 module task_delay public
 require ./task_builder.das public
-require daslib/rtti
 
 // wake_ms collects the earliest clock deadline observed during the tick.
 struct TaskClockSample {owner:uint64;now_ms:int64;wake_ms:uint64=uint64(-1)}
@@ -51,4 +50,4 @@ def task_delay_ms(duration_ms:int64) {
     }
     return <- task_create(events)
 }
-def task_delay_ms(duration_ms:int) {return <- task_delay_ms(int64(duration_ms))}
+def task_delay_ms(duration_ms:int) => <- task_delay_ms(int64(duration_ms))

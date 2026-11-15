@@ -13,6 +13,13 @@ def ce_unique_name(prefix : string; at : LineInfo) : string {
     return "{make_unique_private_name(prefix, at)}_{ce_unique_serial}"
 }
 
+// Add copies of the statements of `blk` from `start` on: what follows a
+// statement in its block, or the whole of a lowered block.
+def ce_append_clones(var into : array<ExpressionPtr>; blk : ExprBlock?; start : int = 0) {
+    into |> reserve(length(into) + length(blk.list) - start)
+    for (i in range(start, length(blk.list))) { into |> push <| clone_expression(blk.list[i]) }
+}
+
 [macro_interface]
 class CeMatchBindingFinder : AstVisitor {
     name:string
@@ -92,7 +99,7 @@ def private ce_task_replace_tail(body:ExpressionPtr;original:string;value:Expres
 def private ce_task_wrap_loop(loop:ExpressionPtr;control:string) : ExpressionPtr {
     var outer=qmacro_expr() {for($i(control) in ce_task_loop_scope()) {}}
     outer.at=loop.at
-    outer.at.column+=1
+    outer.at.column++
     var body=qmacro_block() {} as ExprBlock
     body.at=outer.at
     body.list |> push <| clone_expression(loop)
@@ -172,7 +179,7 @@ def ce_match_arms(node:ExpressionPtr; var error:string&) : ExpressionPtr {
 
 // A resumable builder supplies events, await adapters and return conversion.
 // The sequence lowering subsequently adds protected source/resource ownership.
-def ce_resumable_scope(node:ExpressionPtr; builder:string; var error:string&;
+def ce_resumable_scope(node:ExpressionPtr; builder:string; var error:string&;   // nolint:STYLE037,STYLE038 - one arm per statement kind of a resumable scope
     await_source:block<(source:ExpressionPtr;isAwait:bool):ExpressionPtr>; control:string="") : ExpressionPtr {
     if (node==null) {return qmacro_block() {}}
     var blk=qmacro_block() {} as ExprBlock
@@ -191,7 +198,7 @@ def ce_resumable_scope(node:ExpressionPtr; builder:string; var error:string&;
                 local.name := replacement
                 if(index+1<length(blk.list)) {
                     var tail:array<ExpressionPtr>
-                    for(i in range(index+1,length(blk.list))) {tail |> push <| clone_expression(blk.list[i])}
+                    ce_append_clones(tail,blk,index+1)
                     let renamed=ce_task_rename_tail(qmacro_block() {$b(tail);},original,replacement)
                     blk.list.resize(index+1)
                     blk.list |> push <| renamed
@@ -205,11 +212,10 @@ def ce_resumable_scope(node:ExpressionPtr; builder:string; var error:string&;
             var decl=stmt as ExprLet
             var local=decl.variables[0]
             if(local.flags.inScope || decl.letFlags.inScope || local.flags.init_via_move || local.flags.init_via_clone) {
-                let initial=clone_expression(binding)
                 local.flags.inScope=false;decl.letFlags.inScope=false
                 local.flags.init_via_move=false;local.flags.init_via_clone=false
                 local._type.flags.ref=true
-                local.init=qmacro(use_task_local($e(initial)))
+                local.init=qmacro(use_task_local($e(binding)))
                 binding=local.init
             }
         }
@@ -228,7 +234,7 @@ def ce_resumable_scope(node:ExpressionPtr; builder:string; var error:string&;
                 declaration.variables[0].init.at=stmt.at
                 tail |> push <| declaration
             }
-            for(i in range(index+1,length(blk.list))) {tail |> push <| clone_expression(blk.list[i])}
+            ce_append_clones(tail,blk,index+1)
             let rest=ce_resumable_scope(qmacro_block() {$b(tail);},builder,error,await_source,control)
             var loop=qmacro_expr() {
                 for($i(event) in $e(source)) {
@@ -286,8 +292,7 @@ def ce_resumable_scope(node:ExpressionPtr; builder:string; var error:string&;
             let nested=ce_unique_name("__task_for_control",stmt.at)
             let body=ce_resumable_scope(loop.body,builder,error,await_source,nested)
             loop.body=qmacro_block() {ce_task_loop_signal($i(nested),0);$e(body)}
-            var originals:array<ExpressionPtr>
-            for(source in loop.sources) {originals |> push <| invoke(await_source,clone_expression(source),false)}
+            let originals <- [for(source in loop.sources); invoke(await_source,clone_expression(source),false)]
             for(source in loop.sources) {
                 let original=invoke(await_source,clone_expression(source),false)
                 source=qmacro(invoke($ {
@@ -376,8 +381,7 @@ def ce_resumable_scope(node:ExpressionPtr; builder:string; var error:string&;
             let nested=ce_unique_name("__task_while_control",stmt.at)
             let body=ce_resumable_scope(loop.body,builder,error,await_source,nested)
             loop.body=qmacro_block() {ce_task_loop_signal($i(nested),0);$e(body)}
-            let condition=clone_expression(loop.cond)
-            loop.cond=qmacro(ce_task_loop_not_broken($i(nested)) && $e(condition))
+            loop.cond=qmacro(ce_task_loop_not_broken($i(nested)) && $e(loop.cond))
             output |> push <| ce_task_wrap_loop(loop,nested)
         } elif(stmt is ExprBlock) {
             output |> push <| ce_resumable_scope(stmt,builder,error,await_source,control)
@@ -428,7 +432,7 @@ def ce_resumable_scope(node:ExpressionPtr; builder:string; var error:string&;
         if(!empty(control) && index+1<length(blk.list) && (ce_is_match_statement(stmt) || stmt is ExprIfThenElse || stmt is ExprBlock || stmt is ExprFor || stmt is ExprWhile
             || (stmt is ExprCall && (stmt as ExprCall).name=="try_finally"))) {
             var tail:array<ExpressionPtr>
-            for(i in range(index+1,length(blk.list))) {tail |> push <| clone_expression(blk.list[i])}
+            ce_append_clones(tail,blk,index+1)
             let rest=ce_resumable_scope(qmacro_block() {$b(tail);},builder,error,await_source,control)
             output |> push <| qmacro_expr() {if(ce_task_loop_active($i(control))) {$e(rest)}}
             return qmacro_block() {$b(output);}

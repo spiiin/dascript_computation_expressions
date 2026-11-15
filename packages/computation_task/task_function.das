@@ -33,21 +33,18 @@ require daslib/ast_boost
 
 [function_macro(name="task")]
 class TaskFunctionMacro : AstFunctionAnnotation {
-    [unused_argument(group, args)] def override apply(var func : FunctionPtr; var group : ModuleGroup; var args : AnnotationArgumentList; var errors : das_string) : bool {
-        return ce_function_computation(func, "task", "TaskBuilder", CeFunctionKind.Task, errors)
-    }
+    [unused_argument(group, args)] def override apply(var func : FunctionPtr; var group : ModuleGroup; var args : AnnotationArgumentList; var errors : das_string) : bool =>
+        ce_function_computation(func, "task", "TaskBuilder", CeFunctionKind.Task, errors)
 }
 
 [function_macro(name="task_result")]
 class TaskResultFunctionMacro : AstFunctionAnnotation {
-    [unused_argument(group, args)] def override apply(var func : FunctionPtr; var group : ModuleGroup; var args : AnnotationArgumentList; var errors : das_string) : bool {
-        return ce_function_computation(func, "task_result", "TaskResultBuilder", CeFunctionKind.TaskResult, errors)
-    }
+    [unused_argument(group, args)] def override apply(var func : FunctionPtr; var group : ModuleGroup; var args : AnnotationArgumentList; var errors : das_string) : bool =>
+        ce_function_computation(func, "task_result", "TaskResultBuilder", CeFunctionKind.TaskResult, errors)
 }
 
 [function_macro(name="async_sequence")]
 class AsyncSequenceFunctionMacro : AstFunctionAnnotation {
-    [unused_argument(group, args)] def override apply(var func : FunctionPtr; var group : ModuleGroup; var args : AnnotationArgumentList; var errors : das_string) : bool {
-        return ce_function_computation(func, "async_sequence", "AsyncSequenceBuilder", CeFunctionKind.AsyncSequence, errors)
-    }
+    [unused_argument(group, args)] def override apply(var func : FunctionPtr; var group : ModuleGroup; var args : AnnotationArgumentList; var errors : das_string) : bool =>
+        ce_function_computation(func, "async_sequence", "AsyncSequenceBuilder", CeFunctionKind.AsyncSequence, errors)
 }

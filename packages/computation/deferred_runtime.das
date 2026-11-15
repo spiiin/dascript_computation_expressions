@@ -1,7 +1,6 @@
 options gen2
 module deferred_runtime public
 require ./sequence_runtime.das public
-require daslib/rtti
 
 struct DeferredComputation {_ce_marker:uint8}
 struct CeDeferredValueBuilder {_ce_marker:uint8}
@@ -97,7 +96,7 @@ def ce_deferred_reference_scope(var source:iterator<auto(T)&>; var cleanup:lambd
             var more=false
             unsafe {more=_builtin_iterator_iterate(state.source,addr(slot))}
             if (!more) {ce_deferred_reference_close(state);break}
-            unsafe {yield *slot}
+            yield *slot
         }
         return false
     } finally {ce_sequence_finalize($ {ce_deferred_reference_close(state)})}
@@ -113,6 +112,5 @@ def private ce_deferred_wrap_sequence(var source:iterator<auto(T)>; var cleanup:
 }
 
 // Preserve the existing low-level entry point for ordinary value builders.
-def ce_deferred_create(builder:auto; data:auto; body:auto) {
-    return <- ce_deferred_create(builder,data,body,CeDeferredValueBuilder())
-}
+def ce_deferred_create(builder:auto; data:auto; body:auto) =>
+    <- ce_deferred_create(builder,data,body,CeDeferredValueBuilder())

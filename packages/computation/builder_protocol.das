@@ -22,26 +22,24 @@ def ce_move_some(var value:auto(T)) : Option<T -const -&> {
     return <- result
 }
 struct CeResumableNoZero {_ce_marker:uint8}
-def ce_await_zero(builder:auto) {return CeResumableNoZero()}
+def ce_await_zero(builder:auto) => CeResumableNoZero()
 
 // Optional asynchronous For source. The fallback is inspected only by type.
 struct CeResumableForFallback {_ce_marker:uint8}
-def ce_await_for_source(builder:auto; source:auto; control:auto) {return CeResumableForFallback()}
-def ce_await_for_merge(builder:auto; left,right:auto) {return CeResumableForFallback()}
+def ce_await_for_source(builder:auto; source:auto; control:auto) => CeResumableForFallback()
+def ce_await_for_merge(builder:auto; left,right:auto) => CeResumableForFallback()
 def ce_await_for_incompatible(builder:auto) {
     concept_assert(false,"async For: all sources must support ce_await_for_merge; cannot mix AsyncSequence and native sources")
 }
 
-def ce_sequence_protocol(unused : type<auto(T)>) {
-    return (strategy=CeSequenceProtocol(), element=default<T -const -&>)
-}
+def ce_sequence_protocol(unused : type<auto(T)>) =>
+    (strategy=CeSequenceProtocol(), element=default<T -const -&>)
 
-def ce_resumable_protocol(unused:type<auto(T)>) {
-    return (strategy=CeResumableProtocol(),element=default<T -const -&>)
-}
+def ce_resumable_protocol(unused:type<auto(T)>) =>
+    (strategy=CeResumableProtocol(),element=default<T -const -&>)
 
 // Default for copyable eager outcomes. Move-only builders override this.
-def ce_delay(builder : auto; body : block<() : auto(R)>) : R { return invoke(body) }
+def ce_delay(builder : auto; body : block<() : auto(R)>) : R => invoke(body)
 
 // Do not export generic deduction aliases into nested standard templates.
 def private ce_canonical_type(t:TypeDeclPtr) : TypeDeclPtr {
@@ -60,9 +58,7 @@ class CeCanonical : AstTypeInfoMacro {
         return qmacro_expr() {reinterpret<$t(clean)>($e(expr.subexpr))}
     }
 }
-def ce_source_pair(first:auto;second:auto) {
-    unsafe {return typeinfo ce_canonical((first=first,second=second))}
-}
+def ce_source_pair(first:auto;second:auto) => typeinfo ce_canonical((first=first,second=second))
 
 // Run a continuation over an owned temporary source, which is released when
 // the continuation returns. The continuation arrives as an argument,
@@ -84,29 +80,29 @@ def ce_owned_apply_copy(var source : auto; next : auto) {
 // Type-only fallback marker. The macro emits the original Bind/Return when
 // no more specific overload exists; this function never runs in generated CE.
 struct CeBindReturnFallback {_ce_marker:uint8}
-def ce_bind_return(builder:auto; source:auto; mapper:auto) { return CeBindReturnFallback() }
+def ce_bind_return(builder:auto; source:auto; mapper:auto) => CeBindReturnFallback()
 
-def ce_bind2_return(builder:auto; left:auto; right:auto; mapper:auto) { return CeBindReturnFallback() }
+def ce_bind2_return(builder:auto; left:auto; right:auto; mapper:auto) => CeBindReturnFallback()
 
 // Optional grouped bind with a continuation returning the builder outcome.
-def ce_bind2(builder:auto; left:auto; right:auto; next:auto) { return CeBindReturnFallback() }
+def ce_bind2(builder:auto; left:auto; right:auto; next:auto) => CeBindReturnFallback()
 
 // Compile-time defaults, removed by the macro before runtime.
 struct CeMissingProtocol {_ce_marker:uint8}
 struct CeMergeSourcesFallback {_ce_marker:uint8}
-def ce_merge_sources(builder:auto; left,right:auto) { return CeMergeSourcesFallback() }
+def ce_merge_sources(builder:auto; left,right:auto) => CeMergeSourcesFallback()
 // Type-only diagnostic envelope, always removed by ce_checked_merge.
 def ce_merge_origin(source:auto; builder:auto; location:string) {}
 // A materialized resumable merge keeps its left type for diagnostic recovery.
 def ce_merge_origin(source:auto; builder:auto; location:string; left:auto) {}
-def ce_protocol(builder:auto) { return CeMissingProtocol() }
+def ce_protocol(builder:auto) => CeMissingProtocol()
 struct CeRunFallback {_ce_marker:uint8}
-def ce_run(builder:auto; outcome:auto) { return CeRunFallback() }
+def ce_run(builder:auto; outcome:auto) => CeRunFallback()
 
 // Optional eager loops. Marker overloads are only inspected at compile time.
 struct CeLoopFallback {_ce_marker:uint8}
-def ce_for(builder:auto; source:auto; body:auto) { return CeLoopFallback() }
-def ce_while(builder:auto; condition:auto; body:auto) { return CeLoopFallback() }
+def ce_for(builder:auto; source:auto; body:auto) => CeLoopFallback()
+def ce_while(builder:auto; condition:auto; body:auto) => CeLoopFallback()
 
 // Used only under typedecl; never traverses the source at runtime.
 def ce_for_element(source:auto) {
@@ -126,11 +122,11 @@ def ce_for_element(source:auto(T)[] ==const) : T const& { unsafe { return source
 
 // Optional simultaneous For of any arity. traverse(visitor) retains native source
 // evaluation and element references; visitor(body) returns whether to continue.
-def ce_for_zip(builder:auto; arity:int; traverse:auto) { return CeLoopFallback() }
+def ce_for_zip(builder:auto; arity:int; traverse:auto) => CeLoopFallback()
 
 // Optional source conversion. The marker is erased without evaluating this call.
 struct CeSourceFallback {_ce_marker:uint8}
-def ce_source(builder:auto; source:auto) {return CeSourceFallback()}
+def ce_source(builder:auto; source:auto) => CeSourceFallback()
 
 // A source the builder cannot bind. ce_unwrap answers with a marker, so the
 // compiler does not list every ce_unwrap of every builder; the operation that
@@ -138,8 +134,8 @@ def ce_source(builder:auto; source:auto) {return CeSourceFallback()}
 // of them returns a value of the type the lowering expects, so that nothing
 // else fails after the report.
 struct CeNotBindable {_ce_marker:uint8}
-def ce_unwrap(builder:auto; source:auto) { return CeNotBindable() }
-def ce_unwrap_borrow(builder:auto; source:auto) { return CeNotBindable() }
+def ce_unwrap(builder:auto; source:auto) => CeNotBindable()
+def ce_unwrap_borrow(builder:auto; source:auto) => CeNotBindable()
 def ce_bind(builder:auto; source:auto; next:block<(value:CeNotBindable):auto(R)>) : R -const -& {
     concept_assert(false, "computation: {typeinfo stripped_typename(builder)} cannot bind a source of type {typeinfo stripped_typename(source)}: no ce_unwrap(builder, source) accepts it")
     var result : R -const -&
@@ -176,15 +172,17 @@ struct CeDirectProtocol {_ce_marker:uint8}
 // of a source, and what a bind of that source produces. They pick the hook's
 // result by overload, so the type is known without rewriting the call.
 // `_::` looks the builder's own operations up where the scope is compiled.
-def ce_direct_picked(source:auto(S); hook:CeSourceFallback) : S -const -& {return source}
-def ce_direct_picked(source:auto; hook:auto(H)) : H -const -& {return hook}
-def ce_direct_resolved(builder:auto; source:auto) {return ce_direct_picked(source,_::ce_source(builder,source))}
-def ce_direct_typed(builder:auto; source:auto) {return _::ce_unwrap(builder,ce_direct_resolved(builder,source))}
+def ce_direct_picked(source:auto(S); hook:CeSourceFallback) : S -const -& => source
+def ce_direct_picked(source:auto; hook:auto(H)) : H -const -& => hook
+def ce_direct_resolved(builder:auto; source:auto) =>
+    ce_direct_picked(source,_::ce_source(builder,source))
+def ce_direct_typed(builder:auto; source:auto) =>
+    _::ce_unwrap(builder,ce_direct_resolved(builder,source))
 
 // Opt-in linear bind/return collection fusion. Descriptor calls are type-only.
 struct CeCollectSink {_ce_marker:uint8}
 struct CeCollectSinkFallback {_ce_marker:uint8}
-def ce_collect_sink(builder:auto) {return CeCollectSinkFallback()}
+def ce_collect_sink(builder:auto) => CeCollectSinkFallback()
 
 def ce_collect_sink_protocol(unused:type<auto(T)>) {
     var marker:T -const -&?

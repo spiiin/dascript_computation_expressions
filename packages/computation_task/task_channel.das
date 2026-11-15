@@ -27,7 +27,7 @@ def private ce_channel_lease(var state:auto(S)?;owner:bool=false) {
 }
 def private ce_channel_state(channel:tuple<tag:TaskChannelTag;owner:iterator<auto(S)?>>) : S? {
     unsafe {
-        var lease=reinterpret<iterator<S?>?>(addr(channel.owner));var state:S?
+        var lease=addr<iterator<S?>?>(channel.owner);var state:S?
         if(!next(*lease,state)) {panic("task channel: handle was moved or deleted")}
         return state
     }
@@ -49,7 +49,7 @@ def task_channel_clone(channel:tuple<tag:TaskChannelTag;owner:iterator<auto(S)?>
     }
 }
 def task_channel_close(channel:tuple<tag:TaskChannelTag;owner:iterator<auto(S)?>>) {
-    var state=ce_channel_state(channel);unsafe {state.closed=true}
+    var state=ce_channel_state(channel);state.closed=true
 }
 def task_channel_fail(channel:tuple<tag:TaskChannelTag;owner:iterator<auto(S)?>>;message:string) {
     var state=ce_channel_state(channel);unsafe {

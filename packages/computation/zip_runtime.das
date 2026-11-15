@@ -20,7 +20,7 @@ def private ce_zip_pack(var source:iterator<auto(T)>; mode:auto) {
         return <- (stream <- source, slot=value, mode=mode)
     }
 }
-def ce_zip_cursor(var source:iterator<auto>) { return <- ce_zip_pack(source,CeZipMutable()) }
+def ce_zip_cursor(var source:iterator<auto>) => <- ce_zip_pack(source,CeZipMutable())
 def ce_zip_cursor(source:auto ==const) {
     unsafe {
         var stream <- each(source)
@@ -62,7 +62,7 @@ def ce_sequence_input(var source:iterator<auto(T)>) : iterator<T> {
     return <- generator<T> capture(<-cursor) {
         while (ce_zip_next(cursor)) {
             static_if (typeinfo is_ref_value(type<T>)) {
-                unsafe {yield *cursor.slot}
+                yield *cursor.slot
             } else {yield cursor.slot}
         }
         return false

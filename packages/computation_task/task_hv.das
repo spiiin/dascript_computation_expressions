@@ -62,14 +62,12 @@ def hv_websocket_stats() {
 }
 
 def private ce_hv_shutdown(var state:CeHvSocket?) {
-    unsafe {
-        if(state.disposed) {return}
-        state.disposed=true
-        state.opened=false
-        if(is_alive(state.client)) {state.cleanup();hv_stopped++}
-        delete state.messages
-        state.queued_bytes=0
-    }
+    if(state.disposed) {return}
+    state.disposed=true
+    state.opened=false
+    if(is_alive(state.client)) {state.cleanup();hv_stopped++}
+    delete state.messages
+    state.queued_bytes=0
 }
 
 def private ce_hv_lease(var state:CeHvSocket?) {
@@ -89,12 +87,10 @@ def private ce_hv_lease(var state:CeHvSocket?) {
 }
 
 def private ce_hv_state(socket:HvWebSocket) : CeHvSocket? {
-    unsafe {
-        var lease=reinterpret<iterator<CeHvSocket?>?>(addr(socket.lease))
-        var state:CeHvSocket?
-        if(!next(*lease,state)) {panic("WebSocket: owner has been moved or deleted")}
-        return state
-    }
+    var lease=unsafe(addr<iterator<CeHvSocket?>?>(socket.lease))
+    var state:CeHvSocket?
+    if(!next(*lease,state)) {panic("WebSocket: owner has been moved or deleted")}
+    return state
 }
 
 def hv_websocket(config:HvWebSocketConfig=HvWebSocketConfig()) : HvWebSocket {
@@ -127,25 +123,21 @@ struct CeHvOperation {
 
 def private ce_hv_operation(socket:HvWebSocket;kind:int;argument:string="") {
     var state=ce_hv_state(socket)
-    unsafe {
-        if(state.references==uint64(-1)) {panic("WebSocket: reference count exhausted")}
-        state.references++
-        hv_ops_created++
-        return new CeHvOperation(lease <- ce_hv_lease(state),state=state,kind=kind,argument=argument)
-    }
+    if(state.references==uint64(-1)) {panic("WebSocket: reference count exhausted")}
+    state.references++
+    hv_ops_created++
+    return new CeHvOperation(lease <- ce_hv_lease(state),state=state,kind=kind,argument=argument)
 }
 
 def private ce_hv_begin(var op:CeHvOperation?) : string {
-    unsafe {
-        var state=op.state
-        if(state.disposed) {return "WebSocket: owner was disposed"}
-        if(op.claimed) {return ""}
-        if(state.active!=0l) {return "WebSocket: another operation is active"}
-        if(state.serial==9223372036854775807l) {return "WebSocket: operation serial exhausted"}
-        state.serial++;state.active=state.serial
-        op.serial=state.serial;op.claimed=true
-        return ""
-    }
+    var state=op.state
+    if(state.disposed) {return "WebSocket: owner was disposed"}
+    if(op.claimed) {return ""}
+    if(state.active!=0l) {return "WebSocket: another operation is active"}
+    if(state.serial==9223372036854775807l) {return "WebSocket: operation serial exhausted"}
+    state.serial++;state.active=state.serial
+    op.serial=state.serial;op.claimed=true
+    return ""
 }
 
 def private ce_hv_finish(var op:CeHvOperation?) {
@@ -166,41 +158,39 @@ def private ce_hv_finish(var op:CeHvOperation?) {
 }
 
 def private ce_hv_unit_error(var op:CeHvOperation?;message:string) {
-    unsafe {op.done=true}
+    op.done=true
     return task_ready(result_error(message,type<CeUnit>))
 }
 
 def private ce_hv_poll_unit(var op:CeHvOperation?) {
     let failure=ce_hv_begin(op)
     if(!empty(failure)) {return ce_hv_unit_error(op,failure)}
-    unsafe {
-        var state=op.state
-        if(op.kind==0) {
-            if(!state.attempted) {
-                if(!starts_with(op.argument,"ws://") && !starts_with(op.argument,"wss://")) {
-                    return ce_hv_unit_error(op,"WebSocket: URL must start with ws:// or wss://")
-                }
-                state.attempted=true
-                let code=state.init(op.argument)
-                if(is_alive(state.client)) {hv_started++}
-                if(code!=0) {ce_hv_shutdown(state);return ce_hv_unit_error(op,"WebSocket: open failed ({code})")}
-            } elif(!op.done && state.was_opened) {
-                return ce_hv_unit_error(op,"WebSocket: connection has already been opened")
+    var state=op.state
+    if(op.kind==0) {
+        if(!state.attempted) {
+            if(!starts_with(op.argument,"ws://") && !starts_with(op.argument,"wss://")) {
+                return ce_hv_unit_error(op,"WebSocket: URL must start with ws:// or wss://")
             }
-            state.process_event_que()
-            if(!empty(state.error)) {let message=state.error;ce_hv_shutdown(state);return ce_hv_unit_error(op,message)}
-            if(state.was_opened) {op.done=true;return task_ready(result_ok(CeUnit()))}
-            if(state.peer_closed) {ce_hv_shutdown(state);return ce_hv_unit_error(op,"WebSocket: closed before handshake completed")}
-            return task_pending(type<Result<CeUnit;string>>)
+            state.attempted=true
+            let code=state.init(op.argument)
+            if(is_alive(state.client)) {hv_started++}
+            if(code!=0) {ce_hv_shutdown(state);return ce_hv_unit_error(op,"WebSocket: open failed ({code})")}
+        } elif(!op.done && state.was_opened) {
+            return ce_hv_unit_error(op,"WebSocket: connection has already been opened")
         }
         state.process_event_que()
         if(!empty(state.error)) {let message=state.error;ce_hv_shutdown(state);return ce_hv_unit_error(op,message)}
-        if(!state.opened) {return ce_hv_unit_error(op,"WebSocket: connection is not open")}
-        let code=state.send_result(op.argument)
-        if(code<0) {ce_hv_shutdown(state);return ce_hv_unit_error(op,"WebSocket: send failed ({code})")}
-        op.done=true
-        return task_ready(result_ok(CeUnit()))
+        if(state.was_opened) {op.done=true;return task_ready(result_ok(CeUnit()))}
+        if(state.peer_closed) {ce_hv_shutdown(state);return ce_hv_unit_error(op,"WebSocket: closed before handshake completed")}
+        return task_pending(type<Result<CeUnit;string>>)
     }
+    state.process_event_que()
+    if(!empty(state.error)) {let message=state.error;ce_hv_shutdown(state);return ce_hv_unit_error(op,message)}
+    if(!state.opened) {return ce_hv_unit_error(op,"WebSocket: connection is not open")}
+    let code=state.send_result(op.argument)
+    if(code<0) {ce_hv_shutdown(state);return ce_hv_unit_error(op,"WebSocket: send failed ({code})")}
+    op.done=true
+    return task_ready(result_ok(CeUnit()))
 }
 
 def ws_connect(socket:HvWebSocket;url:string) {
@@ -214,28 +204,26 @@ def ws_send_text(socket:HvWebSocket;text:string) {
 }
 
 def private ce_hv_text_error(var op:CeHvOperation?;message:string) {
-    unsafe {op.done=true}
+    op.done=true
     return task_ready(result_error(message,type<string>))
 }
 
 def private ce_hv_poll_text(var op:CeHvOperation?) {
     let failure=ce_hv_begin(op)
     if(!empty(failure)) {return ce_hv_text_error(op,failure)}
-    unsafe {
-        var state=op.state
-        if(!state.attempted) {return ce_hv_text_error(op,"WebSocket: connection is not open")}
-        state.process_event_que()
-        if(!empty(state.error)) {let message=state.error;ce_hv_shutdown(state);return ce_hv_text_error(op,message)}
-        if(!empty(state.messages)) {
-            let message=state.messages[0]
-            state.queued_bytes-=length(message)
-            state.messages |> erase(0)
-            op.done=true
-            return task_ready(result_ok(message))
-        }
-        if(state.peer_closed) {return ce_hv_text_error(op,"WebSocket: closed before a text message arrived")}
-        return task_pending(type<Result<string;string>>)
+    var state=op.state
+    if(!state.attempted) {return ce_hv_text_error(op,"WebSocket: connection is not open")}
+    state.process_event_que()
+    if(!empty(state.error)) {let message=state.error;ce_hv_shutdown(state);return ce_hv_text_error(op,message)}
+    if(!empty(state.messages)) {
+        let message=state.messages[0]
+        state.queued_bytes-=length(message)
+        state.messages |> erase(0)
+        op.done=true
+        return task_ready(result_ok(message))
     }
+    if(state.peer_closed) {return ce_hv_text_error(op,"WebSocket: closed before a text message arrived")}
+    return task_pending(type<Result<string;string>>)
 }
 
 def ws_receive_text(socket:HvWebSocket) {

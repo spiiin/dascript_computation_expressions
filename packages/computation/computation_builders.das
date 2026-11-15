@@ -1,7 +1,6 @@
 options gen2
 module computation_builders public
 require ./builder_protocol.das public
-require daslib/rtti
 require ./zip_runtime.das public
 
 struct ResultBuilder {_ce_marker:uint8}
@@ -13,36 +12,21 @@ struct OptionBuilder {_ce_marker:uint8}
 // out: an instance of a generic over Result<auto(T);string> holds a type alias,
 // and the splicer refuses a body with one.
 [inline]
-def ce_unwrap(builder : ResultBuilder; value : variant<err:string;ok:auto(T)>) : T {
-    return value as ok
-}
+def ce_unwrap(builder : ResultBuilder; value : variant<err:string;ok:auto(T)>) : T => value as ok
 [inline]
-def ce_unwrap(builder : OptionBuilder; value : variant<none:void;some:auto(T)>) : T {
-    return value as some
-}
+def ce_unwrap(builder : OptionBuilder; value : variant<none:void;some:auto(T)>) : T => value as some
 
-def result_ok(value : auto(T)) : Result<T -const -&;string> {
-    return <- result::ok(value,type<string>)
-}
-def result_error(message : string; unused : type<auto(T)>) : Result<T -const -&;string> {
-    return <- result::err(message,type<T>)
-}
+def result_ok(value : auto(T)) : Result<T -const -&;string> => <- result::ok(value,type<string>)
+def result_error(message : string; unused : type<auto(T)>) : Result<T -const -&;string> =>
+    <- result::err(message,type<T>)
 
 [inline]
-def ce_return(builder : ResultBuilder; value : auto(T)) {
-    return result_ok(value)
-}
+def ce_return(builder : ResultBuilder; value : auto(T)) => result_ok(value)
 [inline]
-def ce_return(builder : OptionBuilder; value : auto(T)) {
-    return some(value)
-}
+def ce_return(builder : OptionBuilder; value : auto(T)) => some(value)
 
-def ce_return_from(builder : ResultBuilder; value : Result<auto(T);string>) {
-    return value
-}
-def ce_return_from(builder : OptionBuilder; value : Option<auto(T)>) {
-    return value
-}
+def ce_return_from(builder : ResultBuilder; value : Result<auto(T);string>) => value
+def ce_return_from(builder : OptionBuilder; value : Option<auto(T)>) => value
 
 def ce_bind(builder : ResultBuilder; value : Result<auto(T);string>;
             next : block<(item : T) : auto(R)>) : R {
@@ -57,8 +41,8 @@ def ce_bind(builder : OptionBuilder; value : Option<auto(T)>;
 
 // Unit is a successful computation with no useful payload (not None/Error).
 
-def ce_zero(builder : ResultBuilder) { return variant type<Result<CeUnit;string>>(ok=CeUnit()) }
-def ce_zero(builder : OptionBuilder) { return variant type<Option<CeUnit>>(some=CeUnit()) }
+def ce_zero(_builder : ResultBuilder) => variant type<Result<CeUnit;string>>(ok=CeUnit())
+def ce_zero(_builder : OptionBuilder) => variant type<Option<CeUnit>>(some=CeUnit())
 
 // Synchronous builders force the thunk here; no block escapes its stack frame.
 
@@ -73,12 +57,8 @@ def ce_combine(builder : OptionBuilder; first : Option<CeUnit>;
     return ce_delay(builder, next)
 }
 // These signatures require each loop iteration to compute Unit.
-def ce_loop_failed(builder : ResultBuilder; step : Result<CeUnit;string>) : bool {
-    return step is err
-}
-def ce_loop_failed(builder : OptionBuilder; step : Option<CeUnit>) : bool {
-    return step is none
-}
+def ce_loop_failed(builder : ResultBuilder; step : Result<CeUnit;string>) : bool => step is err
+def ce_loop_failed(builder : OptionBuilder; step : Option<CeUnit>) : bool => step is none
 
 
 // Fold loop effects. Result/Option keep their first failure; Writer appends logs.
@@ -91,24 +71,20 @@ def ce_loop_append(builder : OptionBuilder; first, step : Option<CeUnit>) {
     return step
 }
 
-def ce_protocol(builder : ResultBuilder) { return CeDirectProtocol() }
-def ce_protocol(builder : OptionBuilder) { return CeDirectProtocol() }
+def ce_protocol(_builder : ResultBuilder) => CeDirectProtocol()
+def ce_protocol(_builder : OptionBuilder) => CeDirectProtocol()
 
 // Direct lowering: a failed source leaves the scope as the scope's own type.
 [inline]
-def ce_direct_failed(builder : ResultBuilder; source : variant<err:string;ok:auto(T)>) : bool {
-    return source is err
-}
+def ce_direct_failed(builder : ResultBuilder; source : variant<err:string;ok:auto(T)>) : bool =>
+    source is err
 [inline]
-def ce_direct_failed(builder : OptionBuilder; source : variant<none:void;some:auto(T)>) : bool {
-    return source is none
-}
-def ce_direct_failure(builder : ResultBuilder; source : Result<auto(T);string>; witness : auto(R)?) : R {
-    return variant type<R>(err=source as err)
-}
-def ce_direct_failure(builder : OptionBuilder; source : Option<auto(T)>; witness : auto(R)?) : R {
-    return default<R>
-}
+def ce_direct_failed(builder : OptionBuilder; source : variant<none:void;some:auto(T)>) : bool =>
+    source is none
+def ce_direct_failure(builder : ResultBuilder; source : Result<auto(T);string>; witness : auto(R)?) : R =>
+    variant type<R>(err=source as err)
+def ce_direct_failure(builder : OptionBuilder; source : Option<auto(T)>; witness : auto(R)?) : R =>
+    default<R>
 
 
 def ce_merge_sources(builder : ResultBuilder; left : Result<auto;string>;
@@ -176,31 +152,23 @@ def ResultBuilder(unused : type<auto(E)>) {
     var marker : E -const -&?
     return (kind=ResultErrorContext(), error=marker)
 }
-def ce_protocol(builder : tuple<kind:ResultErrorContext;error:auto(E)?>) { return CeDirectProtocol() }
+def ce_protocol(builder : tuple<kind:ResultErrorContext;error:auto(E)?>) => CeDirectProtocol()
 [inline]
-def ce_unwrap(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; value : variant<err:E;ok:auto(T)>) : T {
-    return value as ok
-}
-def ce_return(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; value : auto(T)) {
-    return <- result::ok(value, type<E>)
-}
-def ce_return_from(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; value : Result<auto(T);E>) {
-    return value
-}
-def ce_zero(builder : tuple<kind:ResultErrorContext;error:auto(E)?>) {
-    return variant type<Result<CeUnit;E>>(ok=CeUnit())
-}
+def ce_unwrap(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; value : variant<err:E;ok:auto(T)>) : T =>
+    value as ok
+def ce_return(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; value : auto(T)) =>
+    <- result::ok(value, type<E>)
+def ce_return_from(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; value : Result<auto(T);E>) =>
+    value
+def ce_zero(builder : tuple<kind:ResultErrorContext;error:auto(E)?>) =>
+    variant type<Result<CeUnit;E>>(ok=CeUnit())
 [inline]
-def ce_direct_failed(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; source : variant<err:E;ok:auto(T)>) : bool {
-    return source is err
-}
+def ce_direct_failed(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; source : variant<err:E;ok:auto(T)>) : bool =>
+    source is err
 def ce_direct_failure(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; source : Result<auto(T);E>;
-                      witness : auto(R)?) : R {
-    return variant type<R>(err=source as err)
-}
-def ce_loop_failed(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; step : Result<CeUnit;E>) : bool {
-    return step is err
-}
+                      witness : auto(R)?) : R => variant type<R>(err=source as err)
+def ce_loop_failed(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; step : Result<CeUnit;E>) : bool =>
+    step is err
 def ce_loop_append(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; first, step : Result<CeUnit;E>) {
     if (first is err) { return first }
     return step

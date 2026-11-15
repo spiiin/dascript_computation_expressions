@@ -1,7 +1,6 @@
 options gen2
 module move_builders public
 require ./computation_builders.das public
-require daslib/rtti
 // Consuming outcomes: bind owns the variant, continuation only borrows payload.
 struct MoveResultBuilder {_ce_marker:uint8}
 struct MoveOptionBuilder {_ce_marker:uint8}
@@ -22,21 +21,20 @@ def ce_move_ok(var value:auto(T); unused:type<auto(E)>) : Result<T -const -&;E -
     result as ok <- value
     return <- result
 }
-def move_error(message:string; unused:type<auto(T)>) : Result<T -const -&;string> {
-    return <- variant type<Result<T -const -&;string>>(err=message)
-}
-def ce_protocol(builder:MoveResultBuilder) {return CeOwnedProtocol()}
+def move_error(message:string; unused:type<auto(T)>) : Result<T -const -&;string> =>
+    <- variant type<Result<T -const -&;string>>(err=message)
+def ce_protocol(_builder:MoveResultBuilder) => CeOwnedProtocol()
 def ce_unwrap(builder:MoveResultBuilder; var source:Result<auto(T);string>) : T& {unsafe {return source as ok}}
 def ce_return(builder:MoveResultBuilder; value:auto(T)) : Result<T -const -&;string> {
     concept_assert(typeinfo can_copy(type<T>),"owned CE: use return <- value for a move-only payload")
     return <- variant type<Result<T -const -&;string>>(ok=value)
 }
-def ce_return_move(builder:MoveResultBuilder; var value:auto(T)) : Result<T;string> {return <- move_ok(value)}
-def ce_return_from(builder:MoveResultBuilder; var source:Result<auto(T);string>) {return <- source}
-def ce_delay(builder:MoveResultBuilder; body:block<():auto(R)>) : R {return <- invoke(body)}
-def ce_zero(builder:MoveResultBuilder) : Result<CeUnit;string> {
-    return <- variant type<Result<CeUnit;string>>(ok=CeUnit())
-}
+def ce_return_move(builder:MoveResultBuilder; var value:auto(T)) : Result<T;string> =>
+    <- move_ok(value)
+def ce_return_from(builder:MoveResultBuilder; var source:Result<auto(T);string>) => <- source
+def ce_delay(builder:MoveResultBuilder; body:block<():auto(R)>) : R => <- invoke(body)
+def ce_zero(_builder:MoveResultBuilder) : Result<CeUnit;string> =>
+    <- variant type<Result<CeUnit;string>>(ok=CeUnit())
 // V preserves scalar references and native reference types (array/struct).
 // invoke below checks compatibility with the actual payload T.
 def ce_bind(builder:MoveResultBuilder; var source:Result<auto(T);string>;
@@ -51,7 +49,7 @@ def ce_combine(builder:MoveResultBuilder; first:Result<CeUnit;string>; next:bloc
     if (first is err) {return <- variant type<R>(err=first as err)}
     return <- invoke(next)
 }
-def ce_loop_failed(builder:MoveResultBuilder; result:Result<CeUnit;string>) {return result is err}
+def ce_loop_failed(builder:MoveResultBuilder; result:Result<CeUnit;string>) => result is err
 def ce_collect_append(builder:MoveResultBuilder; var total:Result<CeUnit;string>;
                       step:Result<CeUnit;string>) {if (!(total is err)) {total=step}}
 def ce_merge_sources(builder:MoveResultBuilder; var left:Result<auto;string>;
@@ -66,21 +64,19 @@ def ce_merge_sources(builder:MoveResultBuilder; var left:Result<auto;string>;
     }
 }
 
-def move_none(unused:type<auto(T)>) : Option<T -const -&> {
-    return <- default<Option<T -const -&>>
-}
-def ce_protocol(builder:MoveOptionBuilder) {return CeOwnedProtocol()}
+def move_none(unused:type<auto(T)>) : Option<T -const -&> => <- default<Option<T -const -&>>
+def ce_protocol(_builder:MoveOptionBuilder) => CeOwnedProtocol()
 def ce_unwrap(builder:MoveOptionBuilder; var source:Option<auto(T)>) : T& {unsafe {return source as some}}
 def ce_return(builder:MoveOptionBuilder; value:auto(T)) : Option<T -const -&> {
     concept_assert(typeinfo can_copy(type<T>),"owned CE: use return <- value for a move-only payload")
     return <- variant type<Option<T -const -&>>(some=value)
 }
-def ce_return_move(builder:MoveOptionBuilder; var value:auto(T)) : Option<T> {return <- ce_move_some(value)}
-def ce_return_from(builder:MoveOptionBuilder; var source:Option<auto(T)>) {return <- source}
-def ce_delay(builder:MoveOptionBuilder; body:block<():auto(R)>) : R {return <- invoke(body)}
-def ce_zero(builder:MoveOptionBuilder) : Option<CeUnit> {
-    return <- variant type<Option<CeUnit>>(some=CeUnit())
-}
+def ce_return_move(builder:MoveOptionBuilder; var value:auto(T)) : Option<T> =>
+    <- ce_move_some(value)
+def ce_return_from(builder:MoveOptionBuilder; var source:Option<auto(T)>) => <- source
+def ce_delay(builder:MoveOptionBuilder; body:block<():auto(R)>) : R => <- invoke(body)
+def ce_zero(_builder:MoveOptionBuilder) : Option<CeUnit> =>
+    <- variant type<Option<CeUnit>>(some=CeUnit())
 def ce_bind(builder:MoveOptionBuilder; var source:Option<auto(T)>;
             next:block<(var value:auto(V)):auto(R)>) : R {
     var inscope owner <- source
@@ -93,7 +89,7 @@ def ce_combine(builder:MoveOptionBuilder; first:Option<CeUnit>; next:block<():au
     if (first is none) {return <- default<R>}
     return <- invoke(next)
 }
-def ce_loop_failed(builder:MoveOptionBuilder; result:Option<CeUnit>) {return result is none}
+def ce_loop_failed(builder:MoveOptionBuilder; result:Option<CeUnit>) => result is none
 def ce_collect_append(builder:MoveOptionBuilder; var total:Option<CeUnit>;
                       step:Option<CeUnit>) {if (!(total is none)) {total=step}}
 def ce_merge_sources(builder:MoveOptionBuilder; var left:Option<auto>;
