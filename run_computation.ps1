@@ -276,7 +276,7 @@ try {
         Check 'tests/test_computation_control.das' $true 'control flow checks OK'
         Check 'tests/test_computation_return_position.das' $false 'return must be the final statement'
         Check 'tests/test_computation_loop_value.das' $false 'variant<err:string;ok:int>'
-        Check 'tests/test_direct_break_scope.das' $false 'break and continue need a loop in the same scope'
+        Check 'tests/test_direct_break_scope.das' $false 'break and continue need a loop around them'
         Check 'tests/test_computation_combine_value.das' $false 'ce_combine'
         Check 'tests/test_computation_loop_mixed.das' $false 'variant<none;some:int>'
         Check 'tests/test_direct_lowering.das' $true 'direct lowering checks OK'
