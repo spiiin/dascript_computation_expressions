@@ -30,6 +30,15 @@ require daslib/templates_boost
 // The names Task, Result and the builders are therefore looked up later, in the
 // module that declares the function; task_builder.das brings them along.
 
+[macro_interface]
+class CeLastLine : AstVisitor {
+    line : uint = 0u
+    def override preVisitExpression(expr : ExpressionPtr) : void {
+        let ending = expr.at.last_line > expr.at.line ? expr.at.last_line : expr.at.line
+        if (ending > line) { line = ending }
+    }
+}
+
 // `Name<first>` or `Name<first;second>`, as the parser builds it.
 def private ce_template_type(name : string; at : LineInfo; var first : TypeDeclPtr; var second : TypeDeclPtr = null) : TypeDeclPtr {
     var result = new TypeDecl(baseType=Type.typeMacro, at=at)
@@ -69,6 +78,20 @@ def private ce_task_function(var func : FunctionPtr; annotation, builder : strin
     var call = new ExprCallMacro(at=at, name:="computation", macro=find_call_macro(library, "computation"))
     call.arguments |> push <| qmacro($c(builder)(type<$t(value)>))
     call.arguments |> push <| qmacro($ { $b(statements); })
+    // The macro reads from the block's position where the computation ends.
+    // A function body records no such range, so it ends on the line after
+    // the last one any of its code is on: normally the closing brace.
+    var finder = new CeLastLine()
+    make_visitor(*finder) $(adapter) {
+        for (statement in statements) { visit(statement, adapter) }
+    }
+    var extent = at
+    extent.last_line = finder.line + 1u
+    extent.last_column = 1u
+    unsafe { delete finder }
+    var carried = call.arguments[1] as ExprMakeBlock
+    carried.at = extent
+    carried._block.at = extent
     var lowered = qmacro_block() {
         return <- $e(call)
     }

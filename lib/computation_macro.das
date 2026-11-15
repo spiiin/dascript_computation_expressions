@@ -194,9 +194,48 @@ def ce_resumable_merge_source(node:ExpressionPtr; builder:string; var error:stri
 // gets the position of the statement being lowered; user code keeps its own.
 // A typedecl(expr) keeps its expression inside the type, out of the visitor's
 // reach, so declared types are walked explicitly.
+//
+// The compiler prints errors in source order. A call that carries the rest of
+// a scope as a block cannot be typed while anything inside that block is
+// wrong, and neither can the declarations a scope needs in front of its
+// statements. Their errors only repeat that something else failed, so they
+// are placed at the end of the computation, after the errors that matter.
+//
+// The compiler also prints one error per line and counts the rest. On that
+// last line an inner carrier therefore stands a column to the left of the one
+// around it: when a carrier itself is what does not fit its builder, such as
+// a try_with handler of the wrong type, it is the innermost one that fails,
+// and that is the error shown.
+var private ce_scope_tail = LineInfo()
+def private ce_scope_end(at : LineInfo) : LineInfo {
+    return ce_scope_tail.fileInfo != null && ce_scope_tail.fileInfo == at.fileInfo ? ce_scope_tail : at
+}
+def private ce_scope_carrier(expr : ExpressionPtr) : bool {
+    if (expr is ExprCall) {
+        let call = expr as ExprCall
+        let count = length(call.arguments)
+        return count > 0 && call.arguments[count-1] is ExprMakeBlock
+    }
+    if (expr is ExprInvoke) {
+        let call = expr as ExprInvoke
+        return length(call.arguments) > 0 && call.arguments[0] is ExprMakeBlock
+    }
+    return false
+}
 [macro_interface]
 class CeRestamp : AstVisitor {
     @safe_when_uninitialized at : LineInfo
+    @safe_when_uninitialized tail : LineInfo
+    ended : bool            // `tail` is the end of a computation, not `at` again
+    outer : bool            // what wraps the whole computation stays at its very end
+    carriers : array<Expression?>
+    def inward() : LineInfo {
+        var position = tail
+        let column = int(tail.column) - (outer ? 0 : 1 + length(carriers))
+        position.column = uint(column < 1 ? 1 : column)
+        position.last_column = position.column
+        return position
+    }
     def declared(var variable : VariablePtr) {
         if (variable.at.fileInfo != at.fileInfo) { variable.at = at }
         if (variable._type == null) { return }
@@ -204,7 +243,22 @@ class CeRestamp : AstVisitor {
         for (inner in variable._type.typeMacroExpr) { ce_restamp(inner, at) }
     }
     def override preVisitExpression(var expr : ExpressionPtr) : void {
-        if (expr.at.fileInfo != at.fileInfo) { expr.at = at }
+        if (ended && expr is ExprCallMacro && (expr as ExprCallMacro).name == "__ce_stage") {
+            // What this stage emits later lies inside the carriers around it.
+            (expr as ExprCallMacro).arguments[1].at = self->inward()
+        }
+        if (expr.at.fileInfo == at.fileInfo) { return }
+        if (ended && ce_scope_carrier(expr)) {
+            expr.at = self->inward()
+            carriers |> push(expr)
+        } else {
+            expr.at = at
+        }
+    }
+    def override visitExpression(var expr : ExpressionPtr) : ExpressionPtr {
+        let count = length(carriers)
+        if (count > 0 && carriers[count-1] == expr) { carriers |> pop() }
+        return expr
     }
     def override preVisitExprBlockArgument(blk : ExprBlock?; var arg : VariablePtr; lastArg : bool) : void {
         self.declared(arg)
@@ -213,9 +267,58 @@ class CeRestamp : AstVisitor {
         self.declared(arg)
     }
 }
-def ce_restamp(var expr : ExpressionPtr; at : LineInfo) {
+def ce_restamp(var expr : ExpressionPtr; at : LineInfo; outer : bool = false) {
     if (expr == null || at.fileInfo == null) { return }
-    var visitor = new CeRestamp(at=at)
+    let ended = ce_scope_tail.fileInfo != null && ce_scope_tail.fileInfo == at.fileInfo
+    var visitor = new CeRestamp(at=at, tail=ce_scope_end(at), ended=ended, outer=outer)
+    make_visitor(*visitor) $(adapter) { visit(expr, adapter) }
+    unsafe { delete visitor }
+}
+
+// A scope lowered into a generator is restamped more carefully. The compiler
+// names what it hoists out of a generator after positions: a generator's
+// yield argument after the line of its block, a local after its own line and
+// column. Those nodes keep the positions they have. Generated calls move:
+// that is where a builder operation that does not fit is reported. A call
+// takes the position of the first user code inside it, or of the user code
+// just before it. Yields move too. While anything in the generator is wrong,
+// the compiler complains about every yield in it, and those complaints
+// should follow the real error: a generated yield goes to the end of the
+// computation, a yield the user wrote goes just past its value.
+[macro_interface]
+class CeRestampCalls : AstVisitor {
+    @safe_when_uninitialized latest : LineInfo
+    @safe_when_uninitialized tail : LineInfo
+    waiting : array<Expression?>
+    def override preVisitExpression(var expr : ExpressionPtr) : void {
+        if (expr.at.fileInfo != latest.fileInfo) {
+            if (expr is ExprCall) { waiting |> push(expr) }
+            elif (expr is ExprYield) { expr.at = tail }
+            return
+        }
+        latest = expr.at
+        for (call in waiting) { call.at = expr.at }
+        waiting |> clear()
+    }
+    def override visitExpression(var expr : ExpressionPtr) : ExpressionPtr {
+        let count = length(waiting)
+        if (count > 0 && waiting[count-1] == expr) {
+            expr.at = latest
+            waiting |> pop()
+        } elif (expr is ExprYield && expr.at.fileInfo == latest.fileInfo
+                && !(expr.at.line == tail.line && expr.at.column == tail.column)) {
+            // Just past the last piece of the value the user yields.
+            let column = latest.last_column > latest.column ? latest.last_column : latest.column + 1u
+            expr.at = latest
+            expr.at.column = column
+            expr.at.last_column = column
+        }
+        return expr
+    }
+}
+def ce_restamp_calls(var expr : ExpressionPtr; at : LineInfo) {
+    if (expr == null || at.fileInfo == null) { return }
+    var visitor = new CeRestampCalls(latest=at, tail=ce_scope_end(at))
     make_visitor(*visitor) $(adapter) { visit(expr, adapter) }
     unsafe { delete visitor }
 }
@@ -250,7 +353,8 @@ def ce_stage(op : string; at : LineInfo; probes : array<ExpressionPtr>; payload 
     var slots : array<ExpressionPtr>
     for (probe in probes) { ce_stage_push_probe(slots, probe) }
     stage.arguments |> push <| new ExprConstString(at=at, value:=op)
-    stage.arguments |> push <| new ExprConstInt(at=at, value=length(slots))
+    // The slot count carries the end of the computation to the stage's visit.
+    stage.arguments |> push <| new ExprConstInt(at=ce_scope_end(at), value=length(slots))
     for (slot in slots) { stage.arguments |> push <| slot }
     for (item in payload) { stage.arguments |> push <| clone_expression(item) }
     return stage
@@ -1405,6 +1509,9 @@ def private ce_direct_replica(blk : ExprBlock?; start : int; builder : string) :
                 terminal = qmacro_block() { $b(forwarded); }
             } else {
                 terminal = qmacro_expr() { return ce_return($i(builder), $e(value)) }
+                // The same position as in the scope itself: an error in the
+                // value is then reported once, not once per copy.
+                (((terminal as ExprReturn).subexpr as ExprCall).arguments[1]).at = value.at
             }
         } elif (ce_direct_returns(last)) {
             // Every branch has the scope's type; the first one is enough.
@@ -1506,7 +1613,9 @@ def private ce_direct_statement(blk : ExprBlock?; index : int; builder, witness 
             if (!empty(error)) { return true }
             returned = ce_direct_leave(qmacro(ce_return_from($i(builder), $i(forwarded))), witness, looped)
         } else {
-            returned = ce_direct_leave(qmacro(ce_return($i(builder), $e(ret.subexpr))), witness, looped)
+            var value = qmacro(ce_return($i(builder), $e(ret.subexpr)))
+            (value as ExprCall).arguments[1].at = ret.subexpr.at
+            returned = ce_direct_leave(value, witness, looped)
         }
         returned.at = stmt.at
         output |> push <| returned
@@ -1634,7 +1743,7 @@ def private ce_direct_lower(blk : ExprBlock?; start : int; builder, witness : st
     }
     if (top && (empty(output) || !ce_direct_returns(output[length(output)-1]))) {
         var zero = qmacro_expr() { return ce_zero($i(builder)) }
-        ce_restamp(zero, blk.at)
+        ce_restamp(zero, ce_scope_end(blk.at))
         output |> push <| zero
     }
     return <- output
@@ -1656,8 +1765,8 @@ def private ce_direct_scope(blk : ExprBlock?; start : int; builder : string; var
         if (state.loops) {
             var flag = qmacro_expr() { var $i(ce_direct_left(witness)) = false }
             var slot = qmacro_expr() { var $i(ce_direct_outcome(witness)) : typedecl(*$i(witness)) }
-            ce_restamp(flag, blk.at)
-            ce_restamp(slot, blk.at)
+            ce_restamp(flag, ce_scope_end(blk.at), true)
+            ce_restamp(slot, ce_scope_end(blk.at), true)
             output |> emplace(flag, 0)
             output |> emplace(slot, 0)
         }
@@ -1665,7 +1774,7 @@ def private ce_direct_scope(blk : ExprBlock?; start : int; builder : string; var
         var declared = qmacro_expr() {
             var $i(witness) : typedecl(invoke($ { $b(replica); }))?
         }
-        ce_restamp(declared, blk.at)
+        ce_restamp(declared, ce_scope_end(blk.at), true)
         output |> emplace(declared, 0)
     }
     return <- output
@@ -1938,7 +2047,7 @@ def ce_lower_impl(blk : ExprBlock?; start : int; builder : string; collect_mode 
         if (done) { return <- output }
     }
     var zero = qmacro_expr() { return ce_zero($i(builder)) }
-    ce_restamp(zero, blk.at)
+    ce_restamp(zero, ce_scope_end(blk.at))
     output |> push <| zero
     return <- output
 }
@@ -1994,15 +2103,20 @@ class ComputationMacro : AstCallMacro {
     }
     def override canFoldReturnResult(expr : ExprCallMacro?) : bool { return false }
     def override visit(prog : ProgramPtr; mod : Module?; var expr : ExprCallMacro?) : ExpressionPtr {
+        let nowhere = LineInfo()
+        ce_scope_tail = nowhere
         if (expr.name=="__ce_stage") {
             if (!ce_stage_ready(expr)) { return null }
+            ce_scope_tail = expr.arguments[1].at
             var stage_error : string
             var staged = ce_stage_visit(expr, stage_error)
             if (!empty(stage_error)) {
+                ce_scope_tail = nowhere
                 macro_error(prog, expr.arguments[0].at, stage_error)
                 return null
             }
             ce_restamp(staged, expr.arguments[0].at)
+            ce_scope_tail = nowhere
             return staged
         }
         if (length(expr.arguments)==2 && expr.name=="computation" && expr.arguments[1] is ExprMakeBlock) {
@@ -2032,6 +2146,10 @@ class ComputationMacro : AstCallMacro {
             return null
         }
         if (expr.arguments[0]._type == null) { return null }
+        // Where this computation ends: the closing brace of its block.
+        ce_scope_tail = blk.at
+        ce_scope_tail.line = blk.at.last_line
+        ce_scope_tail.column = blk.at.last_column
         serial++
         let name = ce_unique_name("__ce_builder_{serial}", expr.at)
         let protocol = expr.arguments[1]._type
@@ -2074,9 +2192,11 @@ class ComputationMacro : AstCallMacro {
                 macro_error(prog, expr.at, error)
                 return null
             }
+            ce_restamp_calls(body, expr.at)
             var element = clone_type(protocol.argTypes[1])
             var builder_type = clone_type(bt)
             var run=ce_run_scope(name,qmacro(ce_sequence_run($i(name), source)),true,expr.at)
+            ce_scope_tail = nowhere
             return qmacro(invoke($($i(name) : $t(builder_type)) {
                 var source <- generator<$t(element)> {
                     $e(body)
@@ -2106,8 +2226,9 @@ class ComputationMacro : AstCallMacro {
             $e(run);
         })
         var result = qmacro(invoke($e(scope), $e(expr.arguments[0])))
+        ce_restamp(result, ce_scope_end(expr.at), true)
         result.at = expr.at
-        ce_restamp(result, expr.at)
+        ce_scope_tail = nowhere
         return result
     }
 }
