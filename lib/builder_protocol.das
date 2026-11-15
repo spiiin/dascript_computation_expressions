@@ -139,6 +139,37 @@ def ce_for_zip(builder:auto; arity:int; traverse:auto) { return CeLoopFallback()
 struct CeSourceFallback {_ce_marker:uint8}
 def ce_source(builder:auto; source:auto) {return CeSourceFallback()}
 
+// A source the builder cannot bind. ce_unwrap answers with a marker, so the
+// compiler does not list every ce_unwrap of every builder; the operation that
+// consumes the source then reports one error, at the user's statement. Each
+// of them returns a value of the type the lowering expects, so that nothing
+// else fails after the report.
+struct CeNotBindable {_ce_marker:uint8}
+def ce_unwrap(builder:auto; source:auto) { return CeNotBindable() }
+def ce_unwrap_borrow(builder:auto; source:auto) { return CeNotBindable() }
+def ce_bind(builder:auto; source:auto; next:block<(value:CeNotBindable):auto(R)>) : R -const -& {
+    concept_assert(false, "computation: {typeinfo stripped_typename(builder)} cannot bind a source of type {typeinfo stripped_typename(source)}: no ce_unwrap(builder, source) accepts it")
+    var result : R -const -&
+    return <- result
+}
+def ce_bind(builder:auto; source:auto; next:block<(var value:CeNotBindable&):auto(R)>) : R -const -& {
+    concept_assert(false, "computation: {typeinfo stripped_typename(builder)} cannot bind a source of type {typeinfo stripped_typename(source)}: no ce_unwrap(builder, source) accepts it")
+    var result : R -const -&
+    return <- result
+}
+def ce_direct_failed(builder:auto; source:auto) : bool {
+    concept_assert(false, "computation: {typeinfo stripped_typename(builder)} cannot bind a source of type {typeinfo stripped_typename(source)}: no ce_unwrap(builder, source) accepts it")
+    return false
+}
+// ce_direct_failed has already reported a source that cannot be bound at all.
+def ce_direct_failure(builder:auto; source:auto; witness:auto(R)?) : R -const -& {
+    static_if (typeinfo stripped_typename(_::ce_unwrap(builder, source)) != "builder_protocol::CeNotBindable") {
+        concept_assert(false, "computation: {typeinfo stripped_typename(builder)} has no ce_direct_failure for a source of type {typeinfo stripped_typename(source)}")
+    }
+    var result : R -const -&
+    return <- result
+}
+
 // Eager outcomes with explicit ownership and consuming bind.
 struct CeOwnedProtocol {_ce_marker:uint8}
 

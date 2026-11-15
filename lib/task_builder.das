@@ -298,6 +298,21 @@ def task_poll(var task:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;
     return task.status
 }
 
+// A source a task cannot await. One error at the bind replaces the list of
+// every ce_await_source; the value it would have produced is a marker, so
+// nothing else fails after the report.
+def ce_await_source(builder:auto; source:auto) : iterator<tuple<tag:TaskEventTag;ready:bool;value:CeNotBindable>> {
+    concept_assert(false, "computation: a task cannot bind a source of type {typeinfo stripped_typename(source)}: no ce_await_source(builder, source) accepts it")
+    var events : iterator<tuple<tag:TaskEventTag;ready:bool;value:CeNotBindable>>
+    return <- events
+}
+def ce_await_value(builder:tuple<kind:TaskContext;element:auto(T)?>; event:tuple<tag:TaskEventTag;ready:bool;value:CeNotBindable>) { return CeNotBindable() }
+def ce_await_value(builder:tuple<kind:TaskResultContext;element:auto(T)?>; event:tuple<tag:TaskEventTag;ready:bool;value:CeNotBindable>) { return CeNotBindable() }
+def ce_await_failed(builder:tuple<kind:TaskResultContext;element:auto(T)?>; event:tuple<tag:TaskEventTag;ready:bool;value:CeNotBindable>) { return false }
+def ce_await_failure(builder:tuple<kind:TaskResultContext;element:auto(T)?>; event:tuple<tag:TaskEventTag;ready:bool;value:CeNotBindable>) { return task_pending(type<Result<T;string>>) }
+def ce_await_return(builder:tuple<kind:TaskContext;element:auto(T)?>; value:CeNotBindable) { return task_pending(type<T>) }
+def ce_await_return(builder:tuple<kind:TaskResultContext;element:auto(T)?>; value:CeNotBindable) { return task_pending(type<Result<T;string>>) }
+
 // Move an awaited child into the parent; closing the parent cancels the child.
 def ce_await_source(builder:auto; var task:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(T)>>;status:TaskStatus;value:T;error:string;polling:bool>) : iterator<tuple<tag:TaskEventTag;ready:bool;value:T>> {
     return <- generator<tuple<tag:TaskEventTag;ready:bool;value:T>> capture(<-task) {

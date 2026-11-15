@@ -56,6 +56,11 @@ def ce_normalize_source(builder:string; source:ExpressionPtr) : ExpressionPtr {
     }
     var result=qmacro(typeinfo ce_resolved_source(ce_source($i(builder),$e(source))))
     result.at=source.at
+    // qmacro stamps the hook call, and the root of the source it substitutes,
+    // with this file's position; an error in either belongs to the user's source.
+    var hook=(result as ExprTypeInfo).subexpr as ExprCall
+    hook.at=source.at
+    hook.arguments[1].at=source.at
     return result
 }
 def ce_return_from_source(builder:string; source:ExpressionPtr; collect:bool; owned:bool=false) : ExpressionPtr {
@@ -278,9 +283,17 @@ def private ce_stage_ready(expr : ExprCallMacro?) : bool {
         if (merged._type != null && !merged._type.isAutoOrAlias
                 && ce_stage_unresolved_call(expr.arguments[8])) { return true }
     }
+    // A bind's last probe unwraps what the ce_source hook returns. It is a call
+    // on a call and is typed a pass late, so it is awaited only when the builder
+    // has a hook for this source; without one it is never read.
+    var optional = -1
+    if ((expr.arguments[0] as ExprConstString).value == "bind" && ce_stage_probe_slots(expr) == 6) {
+        let hook = expr.arguments[3]
+        if (hook._type != null && ce_is_protocol(hook._type, "CeSourceFallback")) { optional = 4 }
+    }
     for (index in range(ce_stage_probe_slots(expr))) {
         let probe = expr.arguments[2 + index]
-        if (probe is ExprConstBool) { continue }
+        if (probe is ExprConstBool || index == optional) { continue }
         if (probe._type == null || probe._type.isAutoOrAlias) { return false }
     }
     return true
@@ -387,9 +400,32 @@ def private ce_bind_emit(builder : string; source, mapper, ordinary : Expression
     ce_stage_retype_argument(next, source._type)
     return ce_stage_apply_emit(source, next, collect_mode, at)
 }
+// A source the builder cannot bind is reported once, at the bind, and the rest
+// of the scope is not emitted: everything in it depends on the value.
+def private ce_bind_invalid(var expr : ExprCallMacro?; source, unwrapped : ExpressionPtr) : ExpressionPtr {
+    let at = ce_stage_at(expr)
+    var builderType = clone_type((unwrapped as ExprCall).arguments[0]._type)
+    var sourceType = clone_type(source._type)
+    builderType.flags.ref = false; builderType.flags.constant = false
+    sourceType.flags.ref = false; sourceType.flags.constant = false
+    let message = "computation: {describe(builderType)} cannot bind a source of type {describe(sourceType)}: no ce_unwrap(builder, source) accepts it"
+    var invalid = qmacro(invoke($ { static_assert(false, $v(message)); return CeNotBindable() }))
+    // A collecting scope returns its collection by move; Zero has that type.
+    if (ce_stage_flag(expr, 4)) {
+        invalid = qmacro(invoke($ { static_assert(false, $v(message)); return <- ce_zero($i(ce_stage_text(expr, 3))) }))
+    }
+    // qmacro stamped both with the template position; the error belongs to the user.
+    invalid.at = at
+    (((invalid as ExprInvoke).arguments[0] as ExprMakeBlock)._block as ExprBlock).list[0].at = at
+    return invalid
+}
 def private ce_stage_bind(var expr : ExprCallMacro?; var error : string&) : ExpressionPtr {
     let source = ce_stage_probe(expr, 0, error)
     if (source == null) { return null }
+    // Slot 3 is the source's hook call, or a constant when it has none.
+    let hooked = !(expr.arguments[3] is ExprConstBool) && !ce_is_protocol(expr.arguments[3]._type, "CeSourceFallback")
+    let unwrapped = ce_stage_probe(expr, hooked ? 2 : 1, error)
+    if (ce_is_protocol(unwrapped._type, "CeNotBindable")) { return ce_bind_invalid(expr, source, unwrapped) }
     var rest <- ce_stage_statements(ce_stage_payload(expr, 0))
     let argument = ce_stage_text(expr, 2)
     let builder = ce_stage_text(expr, 3)
@@ -1810,8 +1846,22 @@ def private ce_lower_statement(blk : ExprBlock?; index : int; builder : string; 
             staged = ce_merge_apply(call.arguments[0], builder, null, collect_mode, error, payload, mutable_bind)
             if (!empty(error)) { return true }
         } else {
+            // What the builder unwraps from this source: from the source as
+            // written, and from what its ce_source hook makes of it. Both are
+            // plain calls, typed in the pass that types the source, and the
+            // stage reads the one the hook selects.
+            // A borrowing bind unwraps with ce_unwrap_borrow, as its
+            // continuation does; the other operation may not even compile.
+            let unwrap = borrow_bind && !owned ? "ce_unwrap_borrow" : "ce_unwrap"
             var probes : array<ExpressionPtr>
             probes |> push <| source
+            if (source is ExprTypeInfo && (source as ExprTypeInfo).trait == "ce_resolved_source") {
+                let hook = (source as ExprTypeInfo).subexpr as ExprCall
+                probes |> push <| qmacro($c(unwrap)($i(builder), $e(hook.arguments[1])))
+                probes |> push <| qmacro($c(unwrap)($i(builder), $e(hook)))
+            } else {
+                probes |> push <| qmacro($c(unwrap)($i(builder), $e(source)))
+            }
             staged = ce_stage("bind", stmt.at, probes, payload)
         }
         output |> push <| qmacro_expr() { return $e(staged) }
@@ -2005,7 +2055,11 @@ class ComputationMacro : AstCallMacro {
                         return qmacro(ce_await_source($i(name),$e(merged)))
                     }
                     let normalized=ce_normalize_source(name,source)
-                    return qmacro(ce_await_source($i(name),$e(normalized)))
+                    // A source that cannot be awaited is reported at this call,
+                    // so the call and the hook around the source point at it.
+                    var awaited=qmacro(ce_await_source($i(name),$e(normalized)))
+                    ce_restamp(awaited,source.at)
+                    return awaited
                 })
                 let zero=qmacro_expr() {
                     static_if(typeinfo ce_has_resumable_zero(ce_await_zero($i(name)))) {
