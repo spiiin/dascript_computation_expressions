@@ -3,13 +3,12 @@ require ../lib/computation.das
 var closed=0
 struct LootFeed {}
 def ce_dispose(var feed:LootFeed) {closed++}
-def loot_feed() {
-    return <- computation(SequenceBuilder()) {
-        let feed=LootFeed() |> use_resource
-        yield 10
-        yield 20
-        panic("loot feed disconnected")
-    }
+[sequence]
+def loot_feed() : int {
+    let feed=LootFeed() |> use_resource
+    yield 10
+    yield 20
+    panic("loot feed disconnected")
 }
 [export]
 def main() {

@@ -4,20 +4,18 @@ require ../lib/deferred_computation.das
 require ../lib/async_sequence_builder.das
 require ../lib/task_scheduler.das
 
-def pages(first:int) {
-    return <- computation(AsyncSequenceBuilder(type<array<int>>)) {
-        for(i in range(3)) {
-            task_delay_ms(5) |> bind
-            yield <- [first+i]
-        }
+[async_sequence]
+def pages(first:int) : array<int> {
+    for(i in range(3)) {
+        task_delay_ms(5) |> bind
+        yield <- [first+i]
     }
 }
-def offsets() {
-    return <- computation(AsyncSequenceBuilder()) {
-        for(i in range(2)) {
-            task_delay_ms(7) |> bind
-            yield 100+i
-        }
+[async_sequence]
+def offsets() : int {
+    for(i in range(2)) {
+        task_delay_ms(7) |> bind
+        yield 100+i
     }
 }
 def combined() {

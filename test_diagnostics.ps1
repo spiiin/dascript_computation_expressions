@@ -17,6 +17,8 @@ $cases=@(
     @{File='test_task_function_untyped.das';Message='needs the type of the task value';Marker='[task]';ExactErrors=1},
     @{File='test_task_function_finally.das';Message='a task body has no native finally';Marker='[task_result]';ExactErrors=1},
     @{File='test_task_function_const_argument.das';Message='declare it var to move it into the task';Marker='[task]';ExactErrors=1},
+    @{File='test_sequence_function_untyped.das';Message='needs the type of one element';Marker='[sequence]';ExactErrors=1},
+    @{File='test_coroutine_function_typed.das';Message='produces no value';Marker='[coroutine]';ExactErrors=1},
     # A mistake in the body comes first, before the errors of the code wrapped around it.
     @{File='test_user_error_direct.das';Message="can't locate variable 'missing_direct'";Marker='missing_direct';ExactErrors=0;First=$true},
     @{File='test_user_error_writer.das';Message="can't locate variable 'missing_writer'";Marker='missing_writer';ExactErrors=0;First=$true},

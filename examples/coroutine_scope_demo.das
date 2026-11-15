@@ -4,11 +4,10 @@ require ../lib/coroutine_scheduler.das
 var disposed=0
 struct Resource {}
 def ce_dispose(var resource:Resource) {disposed++}
+[coroutine]
 def npc() {
-    return <- computation(CoroutineBuilder()) {
-        let resource=Resource() |> use_resource
-        yield wait_frames(10)
-    }
+    let resource=Resource() |> use_resource
+    yield wait_frames(10)
 }
 [export]
 def main() {

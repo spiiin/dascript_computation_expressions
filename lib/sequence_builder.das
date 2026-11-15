@@ -2,6 +2,7 @@ options gen2
 module sequence_builder public
 require ./builder_protocol.das public
 require ./sequence_runtime.das public
+require ./sequence_function.das public
 struct SequenceContext {_ce_marker:uint8}
 struct MoveSequenceContext {_ce_marker:uint8}
 def SequenceBuilder(t : type<auto(T)>) {

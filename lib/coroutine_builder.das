@@ -2,6 +2,7 @@ options gen2
 module coroutine_builder public
 require ./builder_protocol.das public
 require ./sequence_runtime.das public
+require ./sequence_function.das public
 require daslib/rtti
 
 struct CoroutineBuilder {_ce_marker:uint8}

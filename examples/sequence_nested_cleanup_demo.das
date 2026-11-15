@@ -4,19 +4,17 @@ var active=0
 struct EnemyFeed {}
 def open_feed() {active++;return EnemyFeed()}
 def ce_dispose(var feed:EnemyFeed) {active--}
-def enemies() {
-    return <- computation(SequenceBuilder()) {
-        let feed=open_feed() |> use_resource
-        yield 10
-        yield 20
-        panic("enemy feed disconnected")
-    }
+[sequence]
+def enemies() : int {
+    let feed=open_feed() |> use_resource
+    yield 10
+    yield 20
+    panic("enemy feed disconnected")
 }
-def rewards() {
-    return <- computation(SequenceBuilder()) {
-        let enemy=enemies() |> bind
-        yield enemy*2
-    }
+[sequence]
+def rewards() : int {
+    let enemy=enemies() |> bind
+    yield enemy*2
 }
 [export]
 def main() {

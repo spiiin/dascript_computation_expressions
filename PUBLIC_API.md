@@ -187,6 +187,30 @@ def drain(var tasks : array<Task<int>>; limit : int) : int {
 Массив, таблица или итератор без `var` отклоняются сразу, с подсказкой
 объявить аргумент `var`.
 
+Для builders, которые выдают поток значений, есть такие же аннотации.
+Объявленный результат у них — тип одного элемента; корутина значений не
+выдаёт и результата не объявляет:
+
+| Аннотация | Builder | `def f(...) : T` возвращает |
+| --- | --- | --- |
+| `[sequence]` | `SequenceBuilder(type<T>)` | `iterator<T>` |
+| `[async_sequence]` | `AsyncSequenceBuilder(type<T>)` | асинхронный поток элементов `T` |
+| `[coroutine]` | `CoroutineBuilder()` | корутину; результат не объявляется |
+
+```das
+[sequence]
+def evens(limit : int) : int {
+    for (value in range(limit)) {
+        if (value % 2 == 0) { yield value }
+    }
+}
+```
+
+`[sequence]` и `[coroutine]` приходят вместе с `./lib/sequence_builder.das` и
+`./lib/coroutine_builder.das`, `[async_sequence]` — с
+`./lib/async_sequence_builder.das`. Аргументы `var` перемещаются так же, как у
+`[task]`.
+
 ## Имена типов Task
 
 Задачи и их handles — именованные кортежи, и у основных есть имена, чтобы

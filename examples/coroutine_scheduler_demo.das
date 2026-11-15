@@ -2,15 +2,14 @@ options gen2
 require ../lib/computation_macro.das
 require ../lib/coroutine_scheduler.das
 
+[coroutine]
 def npc(name:string; fail:bool) {
-    return <- computation(CoroutineBuilder()) {
-        print("{name}: start\n")
-        yield next_frame()
-        if (fail) {panic("{name}: path unavailable")}
-        print("{name}: move\n")
-        yield next_frame()
-        print("{name}: done\n")
-    }
+    print("{name}: start\n")
+    yield next_frame()
+    if (fail) {panic("{name}: path unavailable")}
+    print("{name}: move\n")
+    yield next_frame()
+    print("{name}: done\n")
 }
 [export]
 def main() {

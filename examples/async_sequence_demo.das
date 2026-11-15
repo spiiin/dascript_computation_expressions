@@ -6,16 +6,15 @@ require ../lib/task_scheduler.das
 
 var produced=0
 var closed=0
-def readings() {
-    return <- computation(AsyncSequenceBuilder(type<int>)) {
-        try_finally($ {
-            for(i in range(3)) {
-                task_delay_ms(10) |> bind
-                produced++
-                yield 20+i
-            }
-        },$ {closed++})
-    }
+[async_sequence]
+def readings() : int {
+    try_finally($ {
+        for(i in range(3)) {
+            task_delay_ms(10) |> bind
+            produced++
+            yield 20+i
+        }
+    },$ {closed++})
 }
 [task]
 def consume() : int {
