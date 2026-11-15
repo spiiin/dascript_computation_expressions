@@ -77,15 +77,15 @@ def ce_http_work(request:TaskHttpRequest) : TaskHttpResponse {
 
 // Task<Result<TaskHttpResponse,string>>. HTTP error statuses (404, 500, ...) are
 // successful responses; only transport failures (DNS, connect, timeout) are err.
-def task_http(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(S)?>>;request:TaskHttpRequest) {
+def task_http(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(SS)?>>;request:TaskHttpRequest) {
     ce_http_validate(request)
     return <- task_jobque(queue,request,@@ce_http_work)
 }
-def task_http_get(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(S)?>>;url:string) {
+def task_http_get(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(SS)?>>;url:string) {
     var inscope request=TaskHttpRequest(url=url)
     return <- task_http(queue,request)
 }
-def task_http_post(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(S)?>>;url:string;body:string;content_type:string="application/json") {
+def task_http_post(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(SS)?>>;url:string;body:string;content_type:string="application/json") {
     var inscope request=TaskHttpRequest(method="POST",url=url,body=body,content_type=content_type)
     return <- task_http(queue,request)
 }

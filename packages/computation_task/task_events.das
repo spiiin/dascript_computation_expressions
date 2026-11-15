@@ -9,10 +9,10 @@ struct TaskEventSourceTag {_ce_marker:uint8}
 // `TaskEventSource<T>` names the handle that task_event_source(type<T>)
 // returns. The state layout is repeated in task_event_source; its declared
 // result type keeps the two in step.
-[template_tuple(T)]
+[template_tuple(TT)]
 struct template TaskEventSource {
     tag : TaskEventSourceTag
-    owner : iterator<tuple<references:uint64;closed:bool;serial:uint64;slots:array<tuple<id:uint64;ready:bool;value:T>>>?>
+    owner : iterator<tuple<references:uint64;closed:bool;serial:uint64;slots:array<tuple<id:uint64;ready:bool;value:TT>>>?>
 }
 var private event_sources_created=0
 var private event_sources_released=0
@@ -30,8 +30,8 @@ def task_event_stats() {
 
 // Only the owner's lease closes the source; waiter leases retain its storage.
 // Generator cleanup also runs when a lease is deleted before its first yield.
-def private ce_event_lease(var state:auto(S)?;close_source:bool=false) {
-    return <- generator<S?> capture(copy(state),copy(close_source)) {
+def private ce_event_lease(var state:auto(SS)?;close_source:bool=false) {
+    return <- generator<SS?> capture(copy(state),copy(close_source)) {
         while(true) {yield state}
         return false
     } finally {ce_sequence_finalize($ {
@@ -43,26 +43,26 @@ def private ce_event_lease(var state:auto(S)?;close_source:bool=false) {
     })}
 }
 
-def private ce_event_state(source:tuple<tag:TaskEventSourceTag;owner:iterator<auto(S)?>>) : S? {
+def private ce_event_state(source:tuple<tag:TaskEventSourceTag;owner:iterator<auto(SS)?>>) : SS? {
     unsafe {
-        var lease=addr<iterator<S?>?>(source.owner)
-        var state:S?
+        var lease=addr<iterator<SS?>?>(source.owner)
+        var state:SS?
         if(!next(*lease,state)) {panic("task event source: handle was moved or deleted")}
         return state
     }
 }
 
-def task_event_source(unused:type<auto(T)>) : TaskEventSource<T -const -&> {
-    static_assert(typeinfo ce_resumable_payload(default<T -const -&>))
-    concept_assert(typeinfo can_copy(type<T -const -&>),"task events: broadcast payload must be copyable")
+def task_event_source(unused:type<auto(TT)>) : TaskEventSource<TT -const -&> {
+    static_assert(typeinfo ce_resumable_payload(default<TT -const -&>))
+    concept_assert(typeinfo can_copy(type<TT -const -&>),"task events: broadcast payload must be copyable")
     unsafe {
-        var state=new tuple<references:uint64;closed:bool;serial:uint64;slots:array<tuple<id:uint64;ready:bool;value:T -const -&>>>(references=uint64(1))
+        var state=new tuple<references:uint64;closed:bool;serial:uint64;slots:array<tuple<id:uint64;ready:bool;value:TT -const -&>>>(references=uint64(1))
         event_sources_created++
         return <- (tag=TaskEventSourceTag(),owner <- ce_event_lease(state,true))
     }
 }
 
-def task_event_close(source:tuple<tag:TaskEventSourceTag;owner:iterator<auto(S)?>>) : bool {
+def task_event_close(source:tuple<tag:TaskEventSourceTag;owner:iterator<auto(SS)?>>) : bool {
     var state=ce_event_state(source)
     if(state.closed) {return false}
     state.closed=true
@@ -73,14 +73,14 @@ def ce_dispose(var source:tuple<tag:TaskEventSourceTag;owner:auto>) {
     sequence_close(source.owner)
 }
 
-def task_event_subscriber_count(source:tuple<tag:TaskEventSourceTag;owner:iterator<auto(S)?>>) : int {
+def task_event_subscriber_count(source:tuple<tag:TaskEventSourceTag;owner:iterator<auto(SS)?>>) : int {
     let state=ce_event_state(source)
     unsafe {return length(state.slots)}
 }
 
 // Broadcast only to already registered waits. Each wait latches its first event.
 // No user continuation or callback runs while emit walks the slots.
-def task_event_emit(source:tuple<tag:TaskEventSourceTag;owner:iterator<auto(S)?>>;value:auto(T)) : int {
+def task_event_emit(source:tuple<tag:TaskEventSourceTag;owner:iterator<auto(SS)?>>;value:auto(TT)) : int {
     var state=ce_event_state(source)
     unsafe {
         if(state.closed) {return 0}
@@ -88,7 +88,7 @@ def task_event_emit(source:tuple<tag:TaskEventSourceTag;owner:iterator<auto(S)?>
         for(slot in state.slots) {
             if(!slot.ready) {
                 // Native callbacks may supply a borrowed string# buffer.
-                static_if(typeinfo is_string(type<T>)) {slot.value=string(value)}
+                static_if(typeinfo is_string(type<TT>)) {slot.value=string(value)}
                 else {slot.value=value}
                 slot.ready=true;delivered++
             }
@@ -97,7 +97,7 @@ def task_event_emit(source:tuple<tag:TaskEventSourceTag;owner:iterator<auto(S)?>
     }
 }
 
-def private ce_event_poll(var op:auto(O)?) {
+def private ce_event_poll(var op:auto(OO)?) {
     unsafe {
         var state=op.state
         if(op.id==uint64(0) && !state.closed) {
@@ -116,7 +116,7 @@ def private ce_event_poll(var op:auto(O)?) {
     }
 }
 
-def private ce_event_finish(var op:auto(O)?) {
+def private ce_event_finish(var op:auto(OO)?) {
     unsafe {
         var state=op.state
         for(i in range(length(state.slots))) {
@@ -134,12 +134,12 @@ def private ce_event_finish(var op:auto(O)?) {
     }
 }
 
-def task_wait_event(source:tuple<tag:TaskEventSourceTag;owner:iterator<auto(S)?>>) {
+def task_wait_event(source:tuple<tag:TaskEventSourceTag;owner:iterator<auto(SS)?>>) {
     var state=ce_event_state(source)
     unsafe {
         if(state.references==uint64(-1)) {panic("task events: reference count exhausted")}
         state.references++
-        var op=new tuple<state:S?;lease:iterator<S?>;id:uint64>(state=state,lease <- ce_event_lease(state))
+        var op=new tuple<state:SS?;lease:iterator<SS?>;id:uint64>(state=state,lease <- ce_event_lease(state))
         event_waits_created++
         return <- task_from_poll(@(){return ce_event_poll(op)},@(){ce_event_finish(op)})
     }

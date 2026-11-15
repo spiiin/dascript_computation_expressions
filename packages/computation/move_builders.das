@@ -5,48 +5,48 @@ require ./computation_builders.das public
 struct MoveResultBuilder {_ce_marker:uint8}
 struct MoveOptionBuilder {_ce_marker:uint8}
 
-def move_ok(var value:auto(T)) : Result<T -const -&;string> {
+def move_ok(var value:auto(TT)) : Result<TT -const -&;string> {
     // SDK 0.6.5-RC2 AOT does not clear a tuple payload's source when it is
     // moved directly in a variant initializer. Enter ok with an empty payload,
     // then use a separate field move, preserving the standard Result layout.
-    var vacant=default<T -const -&>
+    var vacant=default<TT -const -&>
     var result <- result::move_ok(vacant,type<string>)
     result as ok <- value
     return <- result
 }
 // The same for a Result that fails with E.
-def ce_move_ok(var value:auto(T); unused:type<auto(E)>) : Result<T -const -&;E -const -&> {
-    var vacant=default<T -const -&>
-    var result <- result::move_ok(vacant,type<E -const -&>)
+def ce_move_ok(var value:auto(TT); unused:type<auto(EE)>) : Result<TT -const -&;EE -const -&> {
+    var vacant=default<TT -const -&>
+    var result <- result::move_ok(vacant,type<EE -const -&>)
     result as ok <- value
     return <- result
 }
-def move_error(message:string; unused:type<auto(T)>) : Result<T -const -&;string> =>
-    <- variant type<Result<T -const -&;string>>(err=message)
+def move_error(message:string; unused:type<auto(TT)>) : Result<TT -const -&;string> =>
+    <- variant type<Result<TT -const -&;string>>(err=message)
 def ce_protocol(_builder:MoveResultBuilder) => CeOwnedProtocol()
-def ce_unwrap(builder:MoveResultBuilder; var source:Result<auto(T);string>) : T& {unsafe {return source as ok}}
-def ce_return(builder:MoveResultBuilder; value:auto(T)) : Result<T -const -&;string> {
-    concept_assert(typeinfo can_copy(type<T>),"owned CE: use return <- value for a move-only payload")
-    return <- variant type<Result<T -const -&;string>>(ok=value)
+def ce_unwrap(builder:MoveResultBuilder; var source:Result<auto(TT);string>) : TT& {unsafe {return source as ok}}
+def ce_return(builder:MoveResultBuilder; value:auto(TT)) : Result<TT -const -&;string> {
+    concept_assert(typeinfo can_copy(type<TT>),"owned CE: use return <- value for a move-only payload")
+    return <- variant type<Result<TT -const -&;string>>(ok=value)
 }
-def ce_return_move(builder:MoveResultBuilder; var value:auto(T)) : Result<T;string> =>
+def ce_return_move(builder:MoveResultBuilder; var value:auto(TT)) : Result<TT;string> =>
     <- move_ok(value)
-def ce_return_from(builder:MoveResultBuilder; var source:Result<auto(T);string>) => <- source
-def ce_delay(builder:MoveResultBuilder; body:block<():auto(R)>) : R => <- invoke(body)
+def ce_return_from(builder:MoveResultBuilder; var source:Result<auto(TT);string>) => <- source
+def ce_delay(builder:MoveResultBuilder; body:block<():auto(RR)>) : RR => <- invoke(body)
 def ce_zero(_builder:MoveResultBuilder) : Result<CeUnit;string> =>
     <- variant type<Result<CeUnit;string>>(ok=CeUnit())
 // V preserves scalar references and native reference types (array/struct).
 // invoke below checks compatibility with the actual payload T.
-def ce_bind(builder:MoveResultBuilder; var source:Result<auto(T);string>;
-            next:block<(var value:auto(V)):auto(R)>) : R {
+def ce_bind(builder:MoveResultBuilder; var source:Result<auto(TT);string>;
+            next:block<(var value:auto(VV)):auto(RR)>) : RR {
     var inscope owner <- source
-    if (owner is err) {return <- variant type<R>(err=owner as err)}
-    var inscope result:R
+    if (owner is err) {return <- variant type<RR>(err=owner as err)}
+    var inscope result:RR
     result <- invoke(next,owner as ok)
     return <- result
 }
-def ce_combine(builder:MoveResultBuilder; first:Result<CeUnit;string>; next:block<():auto(R)>) : R {
-    if (first is err) {return <- variant type<R>(err=first as err)}
+def ce_combine(builder:MoveResultBuilder; first:Result<CeUnit;string>; next:block<():auto(RR)>) : RR {
+    if (first is err) {return <- variant type<RR>(err=first as err)}
     return <- invoke(next)
 }
 def ce_loop_failed(builder:MoveResultBuilder; result:Result<CeUnit;string>) => result is err
@@ -64,29 +64,29 @@ def ce_merge_sources(builder:MoveResultBuilder; var left:Result<auto;string>;
     }
 }
 
-def move_none(unused:type<auto(T)>) : Option<T -const -&> => <- default<Option<T -const -&>>
+def move_none(unused:type<auto(TT)>) : Option<TT -const -&> => <- default<Option<TT -const -&>>
 def ce_protocol(_builder:MoveOptionBuilder) => CeOwnedProtocol()
-def ce_unwrap(builder:MoveOptionBuilder; var source:Option<auto(T)>) : T& {unsafe {return source as some}}
-def ce_return(builder:MoveOptionBuilder; value:auto(T)) : Option<T -const -&> {
-    concept_assert(typeinfo can_copy(type<T>),"owned CE: use return <- value for a move-only payload")
-    return <- variant type<Option<T -const -&>>(some=value)
+def ce_unwrap(builder:MoveOptionBuilder; var source:Option<auto(TT)>) : TT& {unsafe {return source as some}}
+def ce_return(builder:MoveOptionBuilder; value:auto(TT)) : Option<TT -const -&> {
+    concept_assert(typeinfo can_copy(type<TT>),"owned CE: use return <- value for a move-only payload")
+    return <- variant type<Option<TT -const -&>>(some=value)
 }
-def ce_return_move(builder:MoveOptionBuilder; var value:auto(T)) : Option<T> =>
+def ce_return_move(builder:MoveOptionBuilder; var value:auto(TT)) : Option<TT> =>
     <- ce_move_some(value)
-def ce_return_from(builder:MoveOptionBuilder; var source:Option<auto(T)>) => <- source
-def ce_delay(builder:MoveOptionBuilder; body:block<():auto(R)>) : R => <- invoke(body)
+def ce_return_from(builder:MoveOptionBuilder; var source:Option<auto(TT)>) => <- source
+def ce_delay(builder:MoveOptionBuilder; body:block<():auto(RR)>) : RR => <- invoke(body)
 def ce_zero(_builder:MoveOptionBuilder) : Option<CeUnit> =>
     <- variant type<Option<CeUnit>>(some=CeUnit())
-def ce_bind(builder:MoveOptionBuilder; var source:Option<auto(T)>;
-            next:block<(var value:auto(V)):auto(R)>) : R {
+def ce_bind(builder:MoveOptionBuilder; var source:Option<auto(TT)>;
+            next:block<(var value:auto(VV)):auto(RR)>) : RR {
     var inscope owner <- source
-    if (owner is none) {return <- default<R>}
-    var inscope result:R
+    if (owner is none) {return <- default<RR>}
+    var inscope result:RR
     result <- invoke(next,owner as some)
     return <- result
 }
-def ce_combine(builder:MoveOptionBuilder; first:Option<CeUnit>; next:block<():auto(R)>) : R {
-    if (first is none) {return <- default<R>}
+def ce_combine(builder:MoveOptionBuilder; first:Option<CeUnit>; next:block<():auto(RR)>) : RR {
+    if (first is none) {return <- default<RR>}
     return <- invoke(next)
 }
 def ce_loop_failed(builder:MoveOptionBuilder; result:Option<CeUnit>) => result is none
@@ -103,33 +103,33 @@ def ce_merge_sources(builder:MoveOptionBuilder; var left:Option<auto>;
     }
 }
 
-def ce_try_finally(builder:MoveResultBuilder; body:block<():auto(R)>; cleanup:block<():void>) : R {
-    var inscope result:R
+def ce_try_finally(builder:MoveResultBuilder; body:block<():auto(RR)>; cleanup:block<():void>) : RR {
+    var inscope result:RR
     result <- invoke(body)
     invoke(cleanup)
     return <- result
 }
-def ce_using(builder:MoveResultBuilder; resource:auto(T); body:block<(item:T):auto(R)>;
-             cleanup:block<(var item:T):void>) : R {
-    concept_assert(typeinfo can_copy(type<T>),"owned CE: move-only payloads use bind; use_resource needs a copyable handle")
+def ce_using(builder:MoveResultBuilder; resource:auto(TT); body:block<(item:TT):auto(RR)>;
+             cleanup:block<(var item:TT):void>) : RR {
+    concept_assert(typeinfo can_copy(type<TT>),"owned CE: move-only payloads use bind; use_resource needs a copyable handle")
     var owner=resource
-    var inscope result:R
+    var inscope result:RR
     result <- invoke(body,owner)
     invoke(cleanup,owner)
     return <- result
 }
 
-def ce_try_finally(builder:MoveOptionBuilder; body:block<():auto(R)>; cleanup:block<():void>) : R {
-    var inscope result:R
+def ce_try_finally(builder:MoveOptionBuilder; body:block<():auto(RR)>; cleanup:block<():void>) : RR {
+    var inscope result:RR
     result <- invoke(body)
     invoke(cleanup)
     return <- result
 }
-def ce_using(builder:MoveOptionBuilder; resource:auto(T); body:block<(item:T):auto(R)>;
-             cleanup:block<(var item:T):void>) : R {
-    concept_assert(typeinfo can_copy(type<T>),"owned CE: move-only payloads use bind; use_resource needs a copyable handle")
+def ce_using(builder:MoveOptionBuilder; resource:auto(TT); body:block<(item:TT):auto(RR)>;
+             cleanup:block<(var item:TT):void>) : RR {
+    concept_assert(typeinfo can_copy(type<TT>),"owned CE: move-only payloads use bind; use_resource needs a copyable handle")
     var owner=resource
-    var inscope result:R
+    var inscope result:RR
     result <- invoke(body,owner)
     invoke(cleanup,owner)
     return <- result

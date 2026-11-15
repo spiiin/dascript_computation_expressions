@@ -4,28 +4,28 @@ require ./computation_effects.das public
 
 struct WriterResultBuilder {_ce_marker:uint8}
 
-def writer_result(value : Result<auto(T);string>; log : string = "") {
+def writer_result(value : Result<auto(TT);string>; log : string = "") {
     return (result = value, log = log)
 }
-def writer_result_ok(value : auto(T); log : string = "") {
+def writer_result_ok(value : auto(TT); log : string = "") {
     return writer_result(result_ok(value), log)
 }
-def writer_result_error(message : string; unused : type<auto(T)>; log : string = "") {
-    return writer_result(result_error(message, type<T>), log)
+def writer_result_error(message : string; unused : type<auto(TT)>; log : string = "") {
+    return writer_result(result_error(message, type<TT>), log)
 }
 // Re-type only the absent success payload, preserving both error and log.
-def private wr_failure(message, log : string; unused : type<auto(R)>) : R {
-    var failed = default<R>
+def private wr_failure(message, log : string; unused : type<auto(RR)>) : RR {
+    var failed = default<RR>
     failed.result = variant type<typedecl(failed.result)>(err=message)
     failed.log = log
     return failed
 }
 
 def ce_unwrap(builder : WriterResultBuilder;
-              value : tuple<result : Result<auto(T);string>; log : string>) : T {
+              value : tuple<result : Result<auto(TT);string>; log : string>) : TT {
     return value.result as ok
 }
-def ce_unwrap(builder : WriterResultBuilder; value : Result<auto(T);string>) : T {
+def ce_unwrap(builder : WriterResultBuilder; value : Result<auto(TT);string>) : TT {
     return value as ok
 }
 // Lift tell (Writer<Unit>) only; arbitrary Writer payloads require explicit conversion.
@@ -33,34 +33,34 @@ def ce_unwrap(builder : WriterResultBuilder; value : tuple<value : CeUnit; log :
     return CeUnit()
 }
 def ce_bind(builder : WriterResultBuilder;
-            value : tuple<result : Result<auto(T);string>; log : string>;
-            next : block<(item : T) : auto(R)>) : R {
+            value : tuple<result : Result<auto(TT);string>; log : string>;
+            next : block<(item : TT) : auto(RR)>) : RR {
     if (value.result is err) {
-        return wr_failure(value.result as err, value.log, type<R>)
+        return wr_failure(value.result as err, value.log, type<RR>)
     }
     var rest = invoke(next, value.result as ok)
     rest.log = value.log + rest.log
     return rest
 }
-def ce_bind(builder : WriterResultBuilder; value : Result<auto(T);string>;
-            next : block<(item : T) : auto(R)>) : R {
+def ce_bind(builder : WriterResultBuilder; value : Result<auto(TT);string>;
+            next : block<(item : TT) : auto(RR)>) : RR {
     return ce_bind(builder, writer_result(value), next)
 }
 def ce_bind(builder : WriterResultBuilder; value : tuple<value : CeUnit; log : string>;
-            next : block<(item : CeUnit) : auto(R)>) : R {
+            next : block<(item : CeUnit) : auto(RR)>) : RR {
     return ce_bind(builder, writer_result(ce_zero(ResultBuilder()), value.log), next)
 }
-def ce_return(builder : WriterResultBuilder; value : auto(T)) {
+def ce_return(builder : WriterResultBuilder; value : auto(TT)) {
     return writer_result_ok(value)
 }
 def ce_zero(builder : WriterResultBuilder) {
     return writer_result(ce_zero(ResultBuilder()))
 }
 def ce_return_from(builder : WriterResultBuilder;
-                   value : tuple<result : Result<auto(T);string>; log : string>) {
+                   value : tuple<result : Result<auto(TT);string>; log : string>) {
     return value
 }
-def ce_return_from(builder : WriterResultBuilder; value : Result<auto(T);string>) {
+def ce_return_from(builder : WriterResultBuilder; value : Result<auto(TT);string>) {
     return writer_result(value)
 }
 def ce_return_from(builder : WriterResultBuilder; value : tuple<value : CeUnit; log : string>) {
@@ -68,9 +68,9 @@ def ce_return_from(builder : WriterResultBuilder; value : tuple<value : CeUnit; 
 }
 def ce_combine(builder : WriterResultBuilder;
                first : tuple<result : Result<CeUnit;string>; log : string>;
-               next : block<() : auto(R)>) : R {
+               next : block<() : auto(RR)>) : RR {
     if (first.result is err) {
-        return wr_failure(first.result as err, first.log, type<R>)
+        return wr_failure(first.result as err, first.log, type<RR>)
     }
     var rest = ce_delay(builder, next)
     rest.log = first.log + rest.log
@@ -89,22 +89,22 @@ def ce_loop_append(builder : WriterResultBuilder;
 def ce_protocol(builder : WriterResultBuilder) { return CeValueProtocol() }
 
 def ce_bind_return(builder:WriterResultBuilder;
-                   source:tuple<result:Result<auto(T);string>;log:string>;
-                   mapper:block<(value:T):auto(U)>) : typedecl(ce_return(builder,default<U>)) {
+                   source:tuple<result:Result<auto(TT);string>;log:string>;
+                   mapper:block<(value:TT):auto(UU)>) : typedecl(ce_return(builder,default<UU>)) {
     if (source.result is err) {
-        return wr_failure(source.result as err,source.log,type<typedecl(ce_return(builder,default<U>))>)
+        return wr_failure(source.result as err,source.log,type<typedecl(ce_return(builder,default<UU>))>)
     }
     let mapped=invoke(mapper,source.result as ok)
     return writer_result_ok(mapped,source.log)
 }
-def ce_bind_return(builder:WriterResultBuilder; source:Result<auto(T);string>;
-                   mapper:block<(value:T):auto(U)>) : typedecl(ce_return(builder,default<U>)) {
-    if (source is err) { return wr_failure(source as err,"",type<typedecl(ce_return(builder,default<U>))>) }
+def ce_bind_return(builder:WriterResultBuilder; source:Result<auto(TT);string>;
+                   mapper:block<(value:TT):auto(UU)>) : typedecl(ce_return(builder,default<UU>)) {
+    if (source is err) { return wr_failure(source as err,"",type<typedecl(ce_return(builder,default<UU>))>) }
     let mapped=invoke(mapper,source as ok)
     return writer_result_ok(mapped)
 }
 def ce_bind_return(builder:WriterResultBuilder; source:tuple<value:CeUnit;log:string>;
-                   mapper:block<(value:CeUnit):auto(U)>) : typedecl(ce_return(builder,default<U>)) {
+                   mapper:block<(value:CeUnit):auto(UU)>) : typedecl(ce_return(builder,default<UU>)) {
     let mapped=invoke(mapper,CeUnit())
     return writer_result_ok(mapped,source.log)
 }

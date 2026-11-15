@@ -15,8 +15,8 @@ struct CeUnit {_ce_marker:uint8}
 
 // Standard Option representation, with a separate field move for the SDK AOT
 // tuple-in-variant initializer bug. Arrays and tuple/struct payloads stay owned.
-def ce_move_some(var value:auto(T)) : Option<T -const -&> {
-    var vacant=default<T -const -&>
+def ce_move_some(var value:auto(TT)) : Option<TT -const -&> {
+    var vacant=default<TT -const -&>
     var result <- option::move_some(vacant)
     result as some <- value
     return <- result
@@ -32,14 +32,14 @@ def ce_await_for_incompatible(builder:auto) {
     concept_assert(false,"async For: all sources must support ce_await_for_merge; cannot mix AsyncSequence and native sources")
 }
 
-def ce_sequence_protocol(unused : type<auto(T)>) =>
-    (strategy=CeSequenceProtocol(), element=default<T -const -&>)
+def ce_sequence_protocol(unused : type<auto(TT)>) =>
+    (strategy=CeSequenceProtocol(), element=default<TT -const -&>)
 
-def ce_resumable_protocol(unused:type<auto(T)>) =>
-    (strategy=CeResumableProtocol(),element=default<T -const -&>)
+def ce_resumable_protocol(unused:type<auto(TT)>) =>
+    (strategy=CeResumableProtocol(),element=default<TT -const -&>)
 
 // Default for copyable eager outcomes. Move-only builders override this.
-def ce_delay(builder : auto; body : block<() : auto(R)>) : R => invoke(body)
+def ce_delay(builder : auto; body : block<() : auto(RR)>) : RR => invoke(body)
 
 // Do not export generic deduction aliases into nested standard templates.
 def private ce_canonical_type(t:TypeDeclPtr) : TypeDeclPtr {
@@ -109,16 +109,16 @@ def ce_for_element(source:auto) {
     for (value in source) { var item : typedecl(value) -const -&; return <- item }
 }
 
-def ce_for_element(var source:iterator<auto(T)>) {
-    var item : T -const -&
+def ce_for_element(var source:iterator<auto(TT)>) {
+    var item : TT -const -&
     return <- item
 }
 
 // Preserve native for references when iterating arrays (type-only calls).
-def ce_for_element(var source:array<auto(T)> ==const) : T& { unsafe { return source[0] } }
-def ce_for_element(source:array<auto(T)> ==const) : T const& { unsafe { return source[0] } }
-def ce_for_element(var source:auto(T)[] ==const) : T& { unsafe { return source[0] } }
-def ce_for_element(source:auto(T)[] ==const) : T const& { unsafe { return source[0] } }
+def ce_for_element(var source:array<auto(TT)> ==const) : TT& { unsafe { return source[0] } }
+def ce_for_element(source:array<auto(TT)> ==const) : TT const& { unsafe { return source[0] } }
+def ce_for_element(var source:auto(TT)[] ==const) : TT& { unsafe { return source[0] } }
+def ce_for_element(source:auto(TT)[] ==const) : TT const& { unsafe { return source[0] } }
 
 // Optional simultaneous For of any arity. traverse(visitor) retains native source
 // evaluation and element references; visitor(body) returns whether to continue.
@@ -136,14 +136,14 @@ def ce_source(builder:auto; source:auto) => CeSourceFallback()
 struct CeNotBindable {_ce_marker:uint8}
 def ce_unwrap(builder:auto; source:auto) => CeNotBindable()
 def ce_unwrap_borrow(builder:auto; source:auto) => CeNotBindable()
-def ce_bind(builder:auto; source:auto; next:block<(value:CeNotBindable):auto(R)>) : R -const -& {
+def ce_bind(builder:auto; source:auto; next:block<(value:CeNotBindable):auto(RR)>) : RR -const -& {
     concept_assert(false, "computation: {typeinfo stripped_typename(builder)} cannot bind a source of type {typeinfo stripped_typename(source)}: no ce_unwrap(builder, source) accepts it")
-    var result : R -const -&
+    var result : RR -const -&
     return <- result
 }
-def ce_bind(builder:auto; source:auto; next:block<(var value:CeNotBindable&):auto(R)>) : R -const -& {
+def ce_bind(builder:auto; source:auto; next:block<(var value:CeNotBindable&):auto(RR)>) : RR -const -& {
     concept_assert(false, "computation: {typeinfo stripped_typename(builder)} cannot bind a source of type {typeinfo stripped_typename(source)}: no ce_unwrap(builder, source) accepts it")
-    var result : R -const -&
+    var result : RR -const -&
     return <- result
 }
 def ce_direct_failed(builder:auto; source:auto) : bool {
@@ -151,11 +151,11 @@ def ce_direct_failed(builder:auto; source:auto) : bool {
     return false
 }
 // ce_direct_failed has already reported a source that cannot be bound at all.
-def ce_direct_failure(builder:auto; source:auto; witness:auto(R)?) : R -const -& {
+def ce_direct_failure(builder:auto; source:auto; witness:auto(RR)?) : RR -const -& {
     static_if (typeinfo stripped_typename(_::ce_unwrap(builder, source)) != "builder_protocol::CeNotBindable") {
         concept_assert(false, "computation: {typeinfo stripped_typename(builder)} has no ce_direct_failure for a source of type {typeinfo stripped_typename(source)}")
     }
-    var result : R -const -&
+    var result : RR -const -&
     return <- result
 }
 
@@ -172,8 +172,8 @@ struct CeDirectProtocol {_ce_marker:uint8}
 // of a source, and what a bind of that source produces. They pick the hook's
 // result by overload, so the type is known without rewriting the call.
 // `_::` looks the builder's own operations up where the scope is compiled.
-def ce_direct_picked(source:auto(S); hook:CeSourceFallback) : S -const -& => source
-def ce_direct_picked(source:auto; hook:auto(H)) : H -const -& => hook
+def ce_direct_picked(source:auto(SS); hook:CeSourceFallback) : SS -const -& => source
+def ce_direct_picked(source:auto; hook:auto(HH)) : HH -const -& => hook
 def ce_direct_resolved(builder:auto; source:auto) =>
     ce_direct_picked(source,_::ce_source(builder,source))
 def ce_direct_typed(builder:auto; source:auto) =>
@@ -184,7 +184,7 @@ struct CeCollectSink {_ce_marker:uint8}
 struct CeCollectSinkFallback {_ce_marker:uint8}
 def ce_collect_sink(builder:auto) => CeCollectSinkFallback()
 
-def ce_collect_sink_protocol(unused:type<auto(T)>) {
-    var marker:T -const -&?
+def ce_collect_sink_protocol(unused:type<auto(TT)>) {
+    var marker:TT -const -&?
     return (kind=CeCollectSink(),element=marker)
 }

@@ -8,49 +8,49 @@ struct ValidationErrors {
     count : int
 }
 
-def validation_ok(value : auto(T)) : variant<valid:T -const -&;invalid:ValidationErrors> =>
-    variant<valid:T -const -&;invalid:ValidationErrors>(valid=value)
-def validation_error(message : string; unused : type<auto(T)>) : variant<valid:T -const -&;invalid:ValidationErrors> =>
-    variant<valid:T -const -&;invalid:ValidationErrors>(invalid=ValidationErrors(messages=message, count=1))
+def validation_ok(value : auto(TT)) : variant<valid:TT -const -&;invalid:ValidationErrors> =>
+    variant<valid:TT -const -&;invalid:ValidationErrors>(valid=value)
+def validation_error(message : string; unused : type<auto(TT)>) : variant<valid:TT -const -&;invalid:ValidationErrors> =>
+    variant<valid:TT -const -&;invalid:ValidationErrors>(invalid=ValidationErrors(messages=message, count=1))
 // Inputs are already computed. Combine independent failures in left-to-right order.
-def validation_zip(left : variant<valid:auto(A);invalid:ValidationErrors>;
-                   right : variant<valid:auto(B);invalid:ValidationErrors>) {
+def validation_zip(left : variant<valid:auto(AA);invalid:ValidationErrors>;
+                   right : variant<valid:auto(BB);invalid:ValidationErrors>) {
     if (left is invalid) {
         var errors = left as invalid
         if (right is invalid) {
             errors.messages += "\n{(right as invalid).messages}"
             errors.count += (right as invalid).count
         }
-        return variant<valid:tuple<first:A -const -&;second:B -const -&>;invalid:ValidationErrors>(invalid=errors)
+        return variant<valid:tuple<first:AA -const -&;second:BB -const -&>;invalid:ValidationErrors>(invalid=errors)
     }
     if (right is invalid) {
-        return variant<valid:tuple<first:A -const -&;second:B -const -&>;invalid:ValidationErrors>(invalid=right as invalid)
+        return variant<valid:tuple<first:AA -const -&;second:BB -const -&>;invalid:ValidationErrors>(invalid=right as invalid)
     }
-    return variant<valid:tuple<first:A -const -&;second:B -const -&>;invalid:ValidationErrors>(valid=(first=left as valid, second=right as valid))
+    return variant<valid:tuple<first:AA -const -&;second:BB -const -&>;invalid:ValidationErrors>(valid=(first=left as valid, second=right as valid))
 }
 
 def ce_protocol(_builder : ValidationBuilder) => CeDirectProtocol()
 [inline]
-def ce_direct_failed(builder : ValidationBuilder; source : variant<valid:auto(T);invalid:ValidationErrors>) : bool =>
+def ce_direct_failed(builder : ValidationBuilder; source : variant<valid:auto(TT);invalid:ValidationErrors>) : bool =>
     source is invalid
-def ce_direct_failure(builder : ValidationBuilder; source : variant<valid:auto(T);invalid:ValidationErrors>;
-                      witness : auto(R)?) : R => variant type<R>(invalid=source as invalid)
+def ce_direct_failure(builder : ValidationBuilder; source : variant<valid:auto(TT);invalid:ValidationErrors>;
+                      witness : auto(RR)?) : RR => variant type<RR>(invalid=source as invalid)
 [inline]
-def ce_unwrap(builder : ValidationBuilder; source : variant<valid:auto(T);invalid:ValidationErrors>) : T =>
+def ce_unwrap(builder : ValidationBuilder; source : variant<valid:auto(TT);invalid:ValidationErrors>) : TT =>
     source as valid
 [inline]
-def ce_return(builder : ValidationBuilder; value : auto(T)) => validation_ok(value)
-def ce_return_from(builder : ValidationBuilder; source : variant<valid:auto(T);invalid:ValidationErrors>) : variant<valid:T -const -&;invalid:ValidationErrors> =>
+def ce_return(builder : ValidationBuilder; value : auto(TT)) => validation_ok(value)
+def ce_return_from(builder : ValidationBuilder; source : variant<valid:auto(TT);invalid:ValidationErrors>) : variant<valid:TT -const -&;invalid:ValidationErrors> =>
     source
 def ce_zero(_builder : ValidationBuilder) => validation_ok(CeUnit())
-def ce_bind(builder : ValidationBuilder; source : variant<valid:auto(T);invalid:ValidationErrors>;
-            next : block<(value:T):auto(R)>) : R {
-    if (source is invalid) { return variant type<R>(invalid=source as invalid) }
+def ce_bind(builder : ValidationBuilder; source : variant<valid:auto(TT);invalid:ValidationErrors>;
+            next : block<(value:TT):auto(RR)>) : RR {
+    if (source is invalid) { return variant type<RR>(invalid=source as invalid) }
     return invoke(next, source as valid)
 }
 def ce_combine(builder : ValidationBuilder; first : variant<valid:CeUnit;invalid:ValidationErrors>;
-               next : block<():auto(R)>) : R {
-    if (first is invalid) { return variant type<R>(invalid=first as invalid) }
+               next : block<():auto(RR)>) : RR {
+    if (first is invalid) { return variant type<RR>(invalid=first as invalid) }
     return invoke(next)
 }
 def ce_loop_append(_builder : ValidationBuilder; first, step : variant<valid:CeUnit;invalid:ValidationErrors>) {
@@ -63,37 +63,37 @@ def ce_loop_failed(_builder : ValidationBuilder; step : variant<valid:CeUnit;inv
 
 
 
-def ce_merge_sources(builder : ValidationBuilder; left : variant<valid:auto(A);invalid:ValidationErrors>;
-                     right : variant<valid:auto(B);invalid:ValidationErrors>) =>
+def ce_merge_sources(builder : ValidationBuilder; left : variant<valid:auto(AA);invalid:ValidationErrors>;
+                     right : variant<valid:auto(BB);invalid:ValidationErrors>) =>
                          validation_zip(left, right)
 
-def ce_bind_return(builder : ValidationBuilder; source : variant<valid:auto(T);invalid:ValidationErrors>;
-                   mapper : block<(value:T):auto(U)>) : variant<valid:U -const -&;invalid:ValidationErrors> {
-    if (source is invalid) { return variant<valid:U -const -&;invalid:ValidationErrors>(invalid=source as invalid) }
-    return variant<valid:U -const -&;invalid:ValidationErrors>(valid=invoke(mapper, source as valid))
+def ce_bind_return(builder : ValidationBuilder; source : variant<valid:auto(TT);invalid:ValidationErrors>;
+                   mapper : block<(value:TT):auto(UU)>) : variant<valid:UU -const -&;invalid:ValidationErrors> {
+    if (source is invalid) { return variant<valid:UU -const -&;invalid:ValidationErrors>(invalid=source as invalid) }
+    return variant<valid:UU -const -&;invalid:ValidationErrors>(valid=invoke(mapper, source as valid))
 }
 
 def ce_bind2_return(builder:ValidationBuilder;
-                    left:variant<valid:auto(A);invalid:ValidationErrors>; right:variant<valid:auto(B);invalid:ValidationErrors>;
-                    mapper:block<(pair:tuple<first:A -const -&;second:B -const -&>):auto(U)>) : typedecl(ce_return(builder,default<U>)) {
+                    left:variant<valid:auto(AA);invalid:ValidationErrors>; right:variant<valid:auto(BB);invalid:ValidationErrors>;
+                    mapper:block<(pair:tuple<first:AA -const -&;second:BB -const -&>):auto(UU)>) : typedecl(ce_return(builder,default<UU>)) {
     if (left is invalid) {
         var errors=left as invalid
         if (right is invalid) { errors.messages+="\n{(right as invalid).messages}"; errors.count+=(right as invalid).count }
-        return variant type<typedecl(ce_return(builder,default<U>))>(invalid=errors)
+        return variant type<typedecl(ce_return(builder,default<UU>))>(invalid=errors)
     }
-    if (right is invalid) { return variant type<typedecl(ce_return(builder,default<U>))>(invalid=right as invalid) }
-    return variant type<typedecl(ce_return(builder,default<U>))>(valid=invoke(mapper,ce_source_pair(left as valid,right as valid)))
+    if (right is invalid) { return variant type<typedecl(ce_return(builder,default<UU>))>(invalid=right as invalid) }
+    return variant type<typedecl(ce_return(builder,default<UU>))>(valid=invoke(mapper,ce_source_pair(left as valid,right as valid)))
 }
 
 // Grouped bind: the continuation already returns an outcome.
 def ce_bind2(builder:ValidationBuilder;
-                    left:variant<valid:auto(A);invalid:ValidationErrors>; right:variant<valid:auto(B);invalid:ValidationErrors>;
-                    mapper:block<(pair:tuple<first:A -const -&;second:B -const -&>):auto(R)>) : R {
+                    left:variant<valid:auto(AA);invalid:ValidationErrors>; right:variant<valid:auto(BB);invalid:ValidationErrors>;
+                    mapper:block<(pair:tuple<first:AA -const -&;second:BB -const -&>):auto(RR)>) : RR {
     if (left is invalid) {
         var errors=left as invalid
         if (right is invalid) { errors.messages+="\n{(right as invalid).messages}"; errors.count+=(right as invalid).count }
-        return variant type<R>(invalid=errors)
+        return variant type<RR>(invalid=errors)
     }
-    if (right is invalid) { return variant type<R>(invalid=right as invalid) }
+    if (right is invalid) { return variant type<RR>(invalid=right as invalid) }
     return invoke(mapper,ce_source_pair(left as valid,right as valid))
 }

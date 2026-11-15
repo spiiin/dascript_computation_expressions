@@ -83,35 +83,35 @@ def private task_scheduler_dispose(var frame:auto) {
         if(record.slot.occupied && record.slot.active) {task_cancel(record.task)}
     }
 }
-def private task_scheduler_create(unused:type<auto(T)>; config:TaskSchedulerConfig; owner:uint64) {
-    var _source:iterator<tuple<tag:TaskEventTag;ready:bool;value:T -const -&>>
+def private task_scheduler_create(unused:type<auto(TT)>; config:TaskSchedulerConfig; owner:uint64) {
+    var _source:iterator<tuple<tag:TaskEventTag;ready:bool;value:TT -const -&>>
     var records:array<tuple<task:typedecl(task_create(_source));slot:TaskSlot>>
     // One owning frame avoids exposing a raw pointer and survives owner moves.
     var inscope frames:array<tuple<state:TaskSchedulerState;records:typedecl(records)>>
     frames |> emplace((state=TaskSchedulerState(config=config,owner=owner),records <- records))
     return <- (kind=TaskSchedulerTag(),frames <- frames)
 }
-def task_scheduler(unused:type<auto(T)>; config:TaskSchedulerConfig) {
-    static_assert(typeinfo ce_resumable_payload(default<T>))
+def task_scheduler(unused:type<auto(TT)>; config:TaskSchedulerConfig) {
+    static_assert(typeinfo ce_resumable_payload(default<TT>))
     task_scheduler_validate(config)
     let owner=task_scheduler_new_owner()
-    return <- task_scheduler_create(type<T>,config,owner)
+    return <- task_scheduler_create(type<TT>,config,owner)
 }
-def task_scheduler(unused:type<auto(T)>) => <- task_scheduler(type<T>,TaskSchedulerConfig())
+def task_scheduler(unused:type<auto(TT)>) => <- task_scheduler(type<TT>,TaskSchedulerConfig())
 
 // `TaskScheduler<T>` names what task_scheduler(type<T>) returns. The records a
 // scheduler keeps are private, so the name is the constructor's own result
 // type rather than a layout written out twice. It declares a variable, a
 // field or a parameter; T cannot be deduced from an argument through it.
 [typemacro_function]
-def public TaskScheduler(macroArgument, passArgument : TypeDeclPtr; T : TypeDeclPtr) : TypeDeclPtr {
+def public TaskScheduler(macroArgument, passArgument : TypeDeclPtr; TT : TypeDeclPtr) : TypeDeclPtr {
     if (passArgument != null) { return null }
     var named = new TypeDecl(baseType=Type.typeDecl, at=macroArgument.at)
-    named.typeMacroExpr |> push <| qmacro(task_scheduler(type<$t(T)>))
+    named.typeMacroExpr |> push <| qmacro(task_scheduler(type<$t(TT)>))
     return named
 }
 
-def finalize(var scheduler:tuple<kind:TaskSchedulerTag;frames:array<auto(F)>>) {
+def finalize(var scheduler:tuple<kind:TaskSchedulerTag;frames:array<auto(FF)>>) {
     ce_sequence_finalize($ {
         if(!empty(scheduler.frames)) {task_scheduler_dispose(scheduler.frames[0])}
         delete scheduler.frames
@@ -389,7 +389,7 @@ def task_prune(var scheduler:auto) : int {
     scheduler.frames[0].state.busy=false
     return removed
 }
-def task_scheduler_scope(var scheduler:auto(S); body:block<(var owner:S):void>) {
+def task_scheduler_scope(var scheduler:auto(SS); body:block<(var owner:SS):void>) {
     var owned <- scheduler
     invoke(body,owned)
     delete owned

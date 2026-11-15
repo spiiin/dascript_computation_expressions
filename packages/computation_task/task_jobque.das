@@ -33,8 +33,8 @@ def private ce_jobque_remove(var record:auto) {
 def private ce_jobque_request_cancel(var record:auto) {
     if(record.cancel!=null) {record.cancel |> set(1)}
 }
-def private ce_jobque_lease(var state:auto(S)?;owner:bool=false) {
-    return <- generator<S?> capture(copy(state),copy(owner)) {
+def private ce_jobque_lease(var state:auto(SS)?;owner:bool=false) {
+    return <- generator<SS?> capture(copy(state),copy(owner)) {
         while(true) {yield state}
         return false
     } finally {ce_sequence_finalize($ {unsafe {
@@ -50,9 +50,9 @@ def private ce_jobque_lease(var state:auto(S)?;owner:bool=false) {
         }
     }})}
 }
-def private ce_jobque_state(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(S)?>>) : S? {
+def private ce_jobque_state(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(SS)?>>) : SS? {
     unsafe {
-        var lease=addr<iterator<S?>?>(queue.owner);var state:S?
+        var lease=addr<iterator<SS?>?>(queue.owner);var state:SS?
         if(!next(*lease,state)) {panic("task jobque: queue was moved or deleted")}
         return state
     }
@@ -61,14 +61,14 @@ def task_job_queue() : TaskJobQueue {
     var state=new tuple<references:uint64;closed:bool;records:array<tuple<channel:Channel?;waiting:bool;cancel:Atomic32?;pending:Atomic32?>>>(references=uint64(1))
     return <- (tag=TaskJobQueueTag(),owner <- ce_jobque_lease(state,true))
 }
-def task_jobque_collect(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(S)?>>) {
+def task_jobque_collect(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(SS)?>>) {
     var state=ce_jobque_state(queue);var removed=0
     unsafe {for(record in state.records) {
         if(record.channel!=null && !record.waiting && record.channel.isReady) {ce_jobque_remove(record);removed++}
     }}
     return removed
 }
-def private ce_jobque_finish(var op:auto(O)?) {unsafe {
+def private ce_jobque_finish(var op:auto(OO)?) {unsafe {
     if(op.index>=0) {
         // Harmless after completion; stops a cooperative worker on cancel/timeout.
         ce_jobque_request_cancel(op.state.records[op.index])
@@ -77,7 +77,7 @@ def private ce_jobque_finish(var op:auto(O)?) {unsafe {
     op.state=null;sequence_close(op.lease);delete op
 }}
 // Allocates a channel record (and optional atomics) for one native job.
-def private ce_jobque_allocate(var state:auto(S)?;cooperative:bool) : int {unsafe {
+def private ce_jobque_allocate(var state:auto(SS)?;cooperative:bool) : int {unsafe {
     if(state.closed) {panic("task jobque: queue is closed")}
     if(get_total_hw_jobs()<0) {panic("task jobque: invalid pool")}
     var ch=channel_create();append(ch,1)
@@ -90,7 +90,7 @@ def private ce_jobque_allocate(var state:auto(S)?;cooperative:bool) : int {unsaf
     native_channels++
     return record
 }}
-def private ce_jobque_poll(var op:auto(O)?) {unsafe {
+def private ce_jobque_poll(var op:auto(OO)?) {unsafe {
     typedef JobValue=typedecl(invoke(op.work,op.input)) -const -&
     if(!op.started) {
         // Fails before allocating a native channel when the host has no pool.
@@ -120,35 +120,35 @@ def private ce_jobque_poll(var op:auto(O)?) {unsafe {
 }}
 // Work is a function pointer, not a closure borrowing main-thread state.
 // The SDK clones input/result across contexts; no cooperative channel is shared.
-def task_jobque_move(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(S)?>>;
-    var input:auto(Input);work:function<(input:Input):auto(Value)>) {
-    static_assert(typeinfo ce_resumable_payload(default<Input -const -&>))
-    static_assert(typeinfo ce_resumable_payload(default<Value -const -&>))
+def task_jobque_move(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(SS)?>>;
+    var input:auto(InputT);work:function<(input:InputT):auto(ValueT)>) {
+    static_assert(typeinfo ce_resumable_payload(default<InputT -const -&>))
+    static_assert(typeinfo ce_resumable_payload(default<ValueT -const -&>))
     var state=ce_jobque_state(queue)
     unsafe {
         if(state.closed) {panic("task jobque: queue is closed")}
         state.references++
         var lease <- ce_jobque_lease(state)
-        var op=new tuple<state:S?;lease:typedecl(lease);index:int;started:bool;input:Input -const -&;work:typedecl(work) -const -&>(state=state,lease <- lease,index=-1,input <- input,work=work)
+        var op=new tuple<state:SS?;lease:typedecl(lease);index:int;started:bool;input:InputT -const -&;work:typedecl(work) -const -&>(state=state,lease <- lease,index=-1,input <- input,work=work)
         return <- task_from_poll(@(){return <- ce_jobque_poll(op)},@(){ce_jobque_finish(op)})
     }
 }
 
 // Copy/clone the submission snapshot; use task_jobque_move to transfer it.
-def task_jobque(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(S)?>>;
-    input:auto(Input);work:function<(input:Input):auto(Value)>) {
-    var inscope snapshot <- default<tuple<value:Input -const -&>>;snapshot.value := input
+def task_jobque(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(SS)?>>;
+    input:auto(InputT);work:function<(input:InputT):auto(ValueT)>) {
+    var inscope snapshot <- default<tuple<value:InputT -const -&>>;snapshot.value := input
     return <- task_jobque_move(queue,snapshot.value,work)
 }
 
-def task_job_queue_clone(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(S)?>>) {
+def task_job_queue_clone(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(SS)?>>) {
     var state=ce_jobque_state(queue);unsafe {
         if(state.references==uint64(-1)) {panic("task jobque: references exhausted")}
         state.references++
         return <- (tag=TaskJobQueueTag(),owner <- ce_jobque_lease(state))
     }
 }
-def clone(var target:tuple<tag:TaskJobQueueTag;owner:iterator<auto(S)?>>;source:tuple<tag:TaskJobQueueTag;owner:iterator<S?>>) {
+def clone(var target:tuple<tag:TaskJobQueueTag;owner:iterator<auto(SS)?>>;source:tuple<tag:TaskJobQueueTag;owner:iterator<SS?>>) {
     var next <- task_job_queue_clone(source);delete target;target <- next
 }
 
@@ -162,7 +162,7 @@ def task_job_cancelled(sink:TaskJobSink) : bool {
 // Stream workers publish values with backpressure: while `capacity` values are
 // unread the worker sleeps 1 ms between checks. Returns false (value dropped)
 // once cancelled. The value type must match the stream's element type exactly.
-def task_job_emit(sink:TaskJobSink;value:auto(T)) : bool {
+def task_job_emit(sink:TaskJobSink;value:auto(TT)) : bool {
     if(sink.ch==null || sink.pending==null) {panic("task_job_emit: sink is not a stream")}
     while(sink.capacity>0 && (sink.pending |> get)>=sink.capacity) {
         if(task_job_cancelled(sink)) {return false}
@@ -170,14 +170,14 @@ def task_job_emit(sink:TaskJobSink;value:auto(T)) : bool {
     }
     if(task_job_cancelled(sink)) {return false}
     sink.pending |> inc
-    var inscope packet:tuple<error:string;item:T -const -&>
+    var inscope packet:tuple<error:string;item:TT -const -&>
     packet.item := value
     sink.ch |> push_clone(packet)
     return true
 }
 
 // ---- Cancellable single-result job ------------------------------------------
-def private ce_jobque_poll_sink(var op:auto(O)?) {unsafe {
+def private ce_jobque_poll_sink(var op:auto(OO)?) {unsafe {
     typedef JobValue=typedecl(invoke(op.work,op.input,default<TaskJobSink>)) -const -&
     if(!op.started) {
         let record=ce_jobque_allocate(op.state,true)
@@ -208,23 +208,23 @@ def private ce_jobque_poll_sink(var op:auto(O)?) {unsafe {
 }}
 // Like task_jobque, but work also receives a TaskJobSink: cancelling or timing out
 // the Task (or queue shutdown) makes task_job_cancelled(sink) true in the worker.
-def task_jobque_cancellable(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(S)?>>;
-    input:auto(Input);work:function<(input:Input;sink:TaskJobSink):auto(Value)>) {
-    static_assert(typeinfo ce_resumable_payload(default<Input -const -&>))
-    static_assert(typeinfo ce_resumable_payload(default<Value -const -&>))
+def task_jobque_cancellable(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(SS)?>>;
+    input:auto(InputT);work:function<(input:InputT;sink:TaskJobSink):auto(ValueT)>) {
+    static_assert(typeinfo ce_resumable_payload(default<InputT -const -&>))
+    static_assert(typeinfo ce_resumable_payload(default<ValueT -const -&>))
     var state=ce_jobque_state(queue)
     unsafe {
         if(state.closed) {panic("task jobque: queue is closed")}
         state.references++
         var lease <- ce_jobque_lease(state)
-        var inscope snapshot <- default<tuple<value:Input -const -&>>;snapshot.value := input
-        var op=new tuple<state:S?;lease:typedecl(lease);index:int;started:bool;input:Input -const -&;work:typedecl(work) -const -&>(state=state,lease <- lease,index=-1,input <- snapshot.value,work=work)
+        var inscope snapshot <- default<tuple<value:InputT -const -&>>;snapshot.value := input
+        var op=new tuple<state:SS?;lease:typedecl(lease);index:int;started:bool;input:InputT -const -&;work:typedecl(work) -const -&>(state=state,lease <- lease,index=-1,input <- snapshot.value,work=work)
         return <- task_from_poll(@(){return <- ce_jobque_poll_sink(op)},@(){ce_jobque_finish(op)})
     }
 }
 
 // ---- Stream of values from one worker ---------------------------------------
-def private ce_jobque_stream_stop(var op:auto(O)?) {unsafe {
+def private ce_jobque_stream_stop(var op:auto(OO)?) {unsafe {
     if(op.stopped) {return}
     op.stopped=true
     if(op.index>=0) {
@@ -233,8 +233,8 @@ def private ce_jobque_stream_stop(var op:auto(O)?) {unsafe {
         op.index=-1
     }
 }}
-def private ce_jobque_stream_lease(var op:auto(O)?;owner:bool=false) {
-    return <- generator<O?> capture(copy(op),copy(owner)) {
+def private ce_jobque_stream_lease(var op:auto(OO)?;owner:bool=false) {
+    return <- generator<OO?> capture(copy(op),copy(owner)) {
         while(true) {yield op}
         return false
     } finally {ce_sequence_finalize($ {unsafe {
@@ -246,14 +246,14 @@ def private ce_jobque_stream_lease(var op:auto(O)?;owner:bool=false) {
         }
     }})}
 }
-def private ce_jobque_stream_op(stream:tuple<tag:TaskJobStreamTag;owner:iterator<auto(O)?>>) : O? {
+def private ce_jobque_stream_op(stream:tuple<tag:TaskJobStreamTag;owner:iterator<auto(OO)?>>) : OO? {
     unsafe {
-        var lease=addr<iterator<O?>?>(stream.owner);var op:O?
+        var lease=addr<iterator<OO?>?>(stream.owner);var op:OO?
         if(!next(*lease,op)) {panic("task jobque stream: handle was moved or deleted")}
         return op
     }
 }
-def private ce_jobque_stream_start(var op:auto(O)?) {unsafe {
+def private ce_jobque_stream_start(var op:auto(OO)?) {unsafe {
     typedef Item=typedecl(op.witness) -const -&
     let record=ce_jobque_allocate(op.state,true)
     var ch=op.state.records[record].channel
@@ -276,7 +276,7 @@ def private ce_jobque_stream_start(var op:auto(O)?) {unsafe {
         ch |> notify_and_release
     }
 }}
-def private ce_jobque_stream_pop(var op:auto(O)?;var result:auto&) : bool {unsafe {
+def private ce_jobque_stream_pop(var op:auto(OO)?;var result:auto&) : bool {unsafe {
     typedef Item=typedecl(op.witness) -const -&
     var ch=op.state.records[op.index].channel
     var error="";var got=false
@@ -297,7 +297,7 @@ def private ce_jobque_stream_pop(var op:auto(O)?;var result:auto&) : bool {unsaf
     result <- move_ok(some_item)
     return true
 }}
-def private ce_jobque_next_poll(var op:auto(O)?) {unsafe {
+def private ce_jobque_next_poll(var op:auto(OO)?) {unsafe {
     typedef Item=typedecl(op.witness) -const -&
     var result:Result<Option<Item>;string>
     if(!empty(op.failure)) {result <- move_error(op.failure,type<Option<Item>>);return <- task_ready_move(result)}
@@ -318,18 +318,18 @@ def private ce_jobque_next_poll(var op:auto(O)?) {unsafe {
 // Cold stream: the worker starts on the first task_jobque_next poll. work(input,sink)
 // publishes values with task_job_emit(sink,value) and checks task_job_cancelled.
 // At most `capacity` values wait unread (0 = unbounded).
-def task_jobque_stream(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(S)?>>;unused:type<auto(T)>;
-    input:auto(Input);work:function<(input:Input;sink:TaskJobSink):void>;capacity:int=64) {
-    static_assert(typeinfo ce_resumable_payload(default<Input -const -&>))
-    static_assert(typeinfo ce_resumable_payload(default<T -const -&>))
+def task_jobque_stream(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(SS)?>>;unused:type<auto(TT)>;
+    input:auto(InputT);work:function<(input:InputT;sink:TaskJobSink):void>;capacity:int=64) {
+    static_assert(typeinfo ce_resumable_payload(default<InputT -const -&>))
+    static_assert(typeinfo ce_resumable_payload(default<TT -const -&>))
     if(capacity<0) {panic("task jobque stream: capacity must be non-negative")}
     var state=ce_jobque_state(queue)
     unsafe {
         if(state.closed) {panic("task jobque: queue is closed")}
         state.references++
         var lease <- ce_jobque_lease(state)
-        var inscope snapshot <- default<tuple<value:Input -const -&>>;snapshot.value := input
-        var op=new tuple<state:S?;lease:typedecl(lease);references:uint64;index:int;started:bool;stopped:bool;done:bool;failure:string;capacity:int;input:Input -const -&;work:typedecl(work) -const -&;witness:T -const -&>(state=state,lease <- lease,references=uint64(1),index=-1,capacity=capacity,input <- snapshot.value,work=work)
+        var inscope snapshot <- default<tuple<value:InputT -const -&>>;snapshot.value := input
+        var op=new tuple<state:SS?;lease:typedecl(lease);references:uint64;index:int;started:bool;stopped:bool;done:bool;failure:string;capacity:int;input:InputT -const -&;work:typedecl(work) -const -&;witness:TT -const -&>(state=state,lease <- lease,references=uint64(1),index=-1,capacity=capacity,input <- snapshot.value,work=work)
         return <- (tag=TaskJobStreamTag(),owner <- ce_jobque_stream_lease(op,true))
     }
 }
@@ -337,30 +337,30 @@ def task_jobque_stream(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(S)?>>
 // @@work) returns: T is what the worker emits, Input what it is given. The
 // name is the constructor's own result type, as with TaskScheduler<T>.
 [typemacro_function]
-def public TaskJobStream(macroArgument, passArgument : TypeDeclPtr; T, Input : TypeDeclPtr) : TypeDeclPtr {
+def public TaskJobStream(macroArgument, passArgument : TypeDeclPtr; TT, InputT : TypeDeclPtr) : TypeDeclPtr {
     if (passArgument != null) { return null }
     var named = new TypeDecl(baseType=Type.typeDecl, at=macroArgument.at)
-    named.typeMacroExpr |> push <| qmacro(task_jobque_stream(default<TaskJobQueue>, type<$t(T)>, default<$t(Input)>,
-        default<function<(input:$t(Input);sink:TaskJobSink):void>>))
+    named.typeMacroExpr |> push <| qmacro(task_jobque_stream(default<TaskJobQueue>, type<$t(TT)>, default<$t(InputT)>,
+        default<function<(input:$t(InputT);sink:TaskJobSink):void>>))
     return named
 }
 // Task<Result<Option<T>,string>>: the next value, none after the worker returned
 // (or after the stream was cancelled), err if the worker panicked.
-def task_jobque_next(stream:tuple<tag:TaskJobStreamTag;owner:iterator<auto(O)?>>) {
+def task_jobque_next(stream:tuple<tag:TaskJobStreamTag;owner:iterator<auto(OO)?>>) {
     var op=ce_jobque_stream_op(stream)
     unsafe {
         if(op.references==uint64(-1)) {panic("task jobque stream: references exhausted")}
         op.references++
         var lease <- ce_jobque_stream_lease(op)
-        var holder=new tuple<op:O?;lease:typedecl(lease)>(op=op,lease <- lease)
+        var holder=new tuple<op:OO?;lease:typedecl(lease)>(op=op,lease <- lease)
         return <- task_from_poll(@(){return <- ce_jobque_next_poll(holder.op)},@(){holder.op=null;delete holder.lease;delete holder})
     }
 }
 // Requests worker cancellation; later task_jobque_next calls return none.
-def task_jobque_stream_cancel(stream:tuple<tag:TaskJobStreamTag;owner:iterator<auto(O)?>>) {
+def task_jobque_stream_cancel(stream:tuple<tag:TaskJobStreamTag;owner:iterator<auto(OO)?>>) {
     var op=ce_jobque_stream_op(stream);ce_jobque_stream_stop(op)
 }
-def task_jobque_stream_done(stream:tuple<tag:TaskJobStreamTag;owner:iterator<auto(O)?>>) : bool {
+def task_jobque_stream_done(stream:tuple<tag:TaskJobStreamTag;owner:iterator<auto(OO)?>>) : bool {
     var op=ce_jobque_stream_op(stream);return op.done
 }
 def ce_dispose(var stream:tuple<tag:TaskJobStreamTag;owner:iterator<auto?>>) {sequence_close(stream.owner)}

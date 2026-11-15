@@ -32,10 +32,10 @@ def task_semaphore_acquire(semaphore:tuple<tag:TaskSemaphoreTag;channel:auto>) {
     } finally {ce_sequence_finalize($ {ce_task_parallel_close(waiting)})}
     return <- task_create(events)
 }
-def task_with_semaphore(semaphore:tuple<tag:TaskSemaphoreTag;channel:auto>;var factory:lambda<():auto(Child)>) {
+def task_with_semaphore(semaphore:tuple<tag:TaskSemaphoreTag;channel:auto>;var factory:lambda<():auto(ChildT)>) {
     var lease <- task_channel_clone(semaphore.channel)
     var waiting <- task_channel_receive(lease)
-    var child:Child -const -&
+    var child:ChildT -const -&
     typedef Value=typedecl(child.value) -const -&
     var claimed=false
     var events <- generator<tuple<tag:TaskEventTag;ready:bool;value:Value>> capture(<-lease,<-waiting,<-child,<-factory,copy(claimed)) {
@@ -64,10 +64,10 @@ def task_with_semaphore(semaphore:tuple<tag:TaskSemaphoreTag;channel:auto>;var f
 }
 
 // Retry only explicit Result.err; cancellation and native failures propagate.
-def task_retry(var factory:lambda<(attempt:int):auto(Child)>;max_attempts:int;delay_ms:int64=0l) {
+def task_retry(var factory:lambda<(attempt:int):auto(ChildT)>;max_attempts:int;delay_ms:int64=0l) {
     if(max_attempts<=0 || delay_ms<0l) {panic("task_retry: attempts must be positive and delay non-negative")}
     typedef Outcome=typedecl(invoke(factory,1).value) -const -&
-    var child:Child -const -&
+    var child:ChildT -const -&
     var pause:typedecl(task_delay_ms(delay_ms))
     var events <- generator<tuple<tag:TaskEventTag;ready:bool;value:Outcome>> capture(<-factory,<-child,<-pause,copy(max_attempts),copy(delay_ms)) {
         for(index in range(max_attempts)) {
@@ -99,7 +99,7 @@ def task_retry(var factory:lambda<(attempt:int):auto(Child)>;max_attempts:int;de
     return <- task_create(events)
 }
 
-def task_first_success(var children:array<auto(Child)>) {
+def task_first_success(var children:array<auto(ChildT)>) {
     typedef Outcome=typedecl(children[0].value) -const -&
     typedef Item=typedecl(children[0].value as ok) -const -&
     var done:array<bool>;done.resize(length(children))
@@ -132,11 +132,11 @@ def private ce_task_parallel_release(var children:array<auto>) {
 }
 
 // Factories are cold: queued inputs do not create a Task until a slot is free.
-def task_when_all_limited(var inputs:array<auto(Input)>;limit:int;var factory:lambda<(input:Input):auto(Child)>) {
+def task_when_all_limited(var inputs:array<auto(InputT)>;limit:int;var factory:lambda<(input:InputT):auto(ChildT)>) {
     if(limit<=0) {panic("task_when_all_limited: limit must be positive")}
     typedef Item=typedecl(invoke(factory,inputs[0]).value) -const -&
     var values:array<Item>;values.resize(length(inputs))
-    var children:array<Child -const -&>;children.resize(length(inputs))
+    var children:array<ChildT -const -&>;children.resize(length(inputs))
     var states:array<int>;states.resize(length(inputs))
     var events <- generator<tuple<tag:TaskEventTag;ready:bool;value:array<Item>>> capture(<-inputs,<-factory,<-children,<-states,<-values,copy(limit)) {
         var next_index=0;var active=0;var completed=0
@@ -164,11 +164,11 @@ def task_when_all_limited(var inputs:array<auto(Input)>;limit:int;var factory:la
 }
 
 // Factories are cold: queued inputs do not create a Task until a slot is free.
-def task_result_when_all_limited(var inputs:array<auto(Input)>;limit:int;var factory:lambda<(input:Input):auto(Child)>) {
+def task_result_when_all_limited(var inputs:array<auto(InputT)>;limit:int;var factory:lambda<(input:InputT):auto(ChildT)>) {
     if(limit<=0) {panic("task_result_when_all_limited: limit must be positive")}
     typedef Item=typedecl(invoke(factory,inputs[0]).value as ok) -const -&
     var values:array<Item>;values.resize(length(inputs))
-    var children:array<Child -const -&>;children.resize(length(inputs))
+    var children:array<ChildT -const -&>;children.resize(length(inputs))
     var states:array<int>;states.resize(length(inputs))
     var events <- generator<tuple<tag:TaskEventTag;ready:bool;value:Result<array<Item>;string>>> capture(<-inputs,<-factory,<-children,<-states,<-values,copy(limit)) {
         var next_index=0;var active=0;var completed=0
