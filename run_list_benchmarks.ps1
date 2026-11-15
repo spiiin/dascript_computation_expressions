@@ -63,7 +63,7 @@ $metadata = [ordered]@{
     CompilerSha256 = (Get-FileHash -LiteralPath $Daslang).Hash
     Processor = $env:PROCESSOR_IDENTIFIER
     OperatingSystem = [Environment]::OSVersion.VersionString
-    SourceHashes = @('benchmarks/benchmark_list.das','benchmarks/benchmark_workloads.das','benchmarks/list_benchmark_workloads.das','lib/computation_macro.das','lib/computation_builders.das','lib/computation_effects.das','lib/list_builder.das','lib/sequence_builder.das','lib/sequence_runtime.das','lib/builder_protocol.das','lib/computation_resources.das','lib/zip_runtime.das') |
+    SourceHashes = @('benchmarks/benchmark_list.das','benchmarks/benchmark_workloads.das','benchmarks/list_benchmark_workloads.das','lib/computation_macro.das','lib/computation_builders.das','examples/builders/computation_effects.das','lib/list_builder.das','lib/sequence_builder.das','lib/sequence_runtime.das','lib/builder_protocol.das','lib/computation_resources.das','lib/zip_runtime.das') |
         ForEach-Object { [pscustomobject]@{ File = $_; Sha256 = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot $_)).Hash } }
     Results = @($summary)
 }

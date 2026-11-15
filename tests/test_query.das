@@ -1,6 +1,6 @@
 options gen2
 require ../lib/computation_macro.das
-require ../lib/query_builder.das
+require ../examples/builders/query_builder.das
 require daslib/rtti
 var effects=""
 var released=0

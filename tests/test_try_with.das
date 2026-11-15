@@ -1,5 +1,7 @@
 options gen2
 require ../lib/computation.das
+require ../examples/builders/writer_result_builder.das
+require ../examples/builders/state_result_builder.das
 require daslib/rtti
 require daslib/strings_boost
 var handlers=0

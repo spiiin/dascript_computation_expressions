@@ -13,7 +13,7 @@ New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 $rows=[Collections.Generic.List[object]]::new()
 $modes=if($Mode -eq 'All'){@('Interpreter','Jit','AotGenerate')}else{@($Mode)}
 # This is an explicit cross-mode subset, not the full interpreter regression.
-$tests=@(Get-Content (Join-Path $PSScriptRoot 'mode_tests.json') -Raw | ConvertFrom-Json)
+$tests=@((Get-Content (Join-Path $PSScriptRoot 'mode_tests.json') -Raw | ConvertFrom-Json) | ForEach-Object {$_})
 Push-Location $PSScriptRoot
 try {
     foreach($currentMode in $modes) {

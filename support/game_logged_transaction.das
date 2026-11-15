@@ -1,7 +1,7 @@
 options gen2
 module game_logged_transaction public
 require ../lib/computation_macro.das public
-require ../lib/state_writer_result_builder.das public
+require ../examples/builders/state_writer_result_builder.das public
 
 struct LoggedHero {health:int=50; gold:int=30}
 

@@ -1,5 +1,7 @@
 options gen2
 require ../lib/computation.das
+require ./builders/writer_result_builder.das
+require ./builders/state_result_builder.das
 
 struct GameState { gold:int=10; experience:int=0 }
 [export]

@@ -1,5 +1,6 @@
 options gen2
 require ../lib/computation.das
+require ./builders/computation_effects.das
 
 def reward(amount : int) {
     return computation(WriterBuilder()) {

@@ -55,7 +55,7 @@ assert(custom.value==42)
 Служебные курсоры и устройство снимков не являются прикладным API.
 
 test_integration.ps1 проверяет новый экспорт вне исходного дерева: минимальный
-builder и smoke с State, ReaderResult, Validation, MoveResult и повторными
+builder и smoke с Parser, Search, Validation, MoveResult, Task и повторными
 deferred List. Тест не использует support или тестовые builders.
 
 Полный Task-контракт: [семантика builders](CE_SEMANTICS.md).

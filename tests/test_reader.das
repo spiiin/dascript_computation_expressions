@@ -1,6 +1,6 @@
 options gen2
 require ../lib/computation.das
-require ../lib/reader_builder.das
+require ../examples/builders/reader_builder.das
 
 var constructed = 0
 var cleaned = 0

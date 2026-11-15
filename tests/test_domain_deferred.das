@@ -2,7 +2,7 @@ options gen2
 require ../lib/computation_macro.das
 require ../lib/parser_builder.das
 require ../lib/search_builder.das
-require ../lib/query_builder.das
+require ../examples/builders/query_builder.das
 require ../lib/deferred_computation.das
 require daslib/rtti
 def check() {

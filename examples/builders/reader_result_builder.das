@@ -1,6 +1,6 @@
 options gen2
 module reader_result_builder public
-require ./computation_builders.das public
+require ../../lib/computation_builders.das public
 require ./reader_builder.das public
 
 struct ReaderResultContext {_ce_marker:uint8}

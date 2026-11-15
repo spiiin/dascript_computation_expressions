@@ -3,9 +3,6 @@ module state_result_builder public
 require ./computation_effects.das public
 
 struct StateResultContext {_ce_marker:uint8}
-def ce_state_gets(builder:tuple<kind:StateResultContext;initial:auto(S);state:S>; project:auto) {
-    return ce_return(builder,invoke(project,builder.state))
-}
 // initial is the transaction boundary, shared by all scopes of one computation.
 def StateResultBuilder(initial : auto(S)) : tuple<kind : StateResultContext; initial : S -const; state : S -const> {
     return (kind = StateResultContext(), initial = initial, state = initial)

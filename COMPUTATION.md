@@ -7,7 +7,8 @@
 Рабочий синхронный DSL на AST-макросах Daslang 0.6.5-RC2.
 Использует стандартные Result и Option: [переход и совместимость](CE_SEMANTICS.md).
 `computation` общий для builders; связывание записывается пайпом.
-StateBuilder и WriterBuilder описаны в [семантика builders](CE_SEMANTICS.md).
+StateBuilder и WriterBuilder — примеры builders из
+[examples/builders](examples/builders/README.md); их контракт описан в [семантика builders](CE_SEMANTICS.md).
 
 ```powershell
 cd C:\src\dascript_computation_expressions
@@ -375,7 +376,7 @@ ListBuilder использует другое значение Zero/Combine и �
 общий runtime последовательностей — в `sequence_runtime.das`.
 Новый builder выбирает стратегию через `ce_protocol` и определяет перегрузки
 операций; менять фасад или макрос не нужно. Пример независимого расширения:
-`require computation_macro` + `require reader_builder`.
+`require computation_macro` + `require reader_builder` из `examples/builders`.
 Контракт, ограничения и игровой пример: [BUILDER_PROTOCOL.md](BUILDER_PROTOCOL.md),
 `reader_demo.das`.
 

@@ -1,6 +1,6 @@
 options gen2
 module computation_effects public
-require ./computation_builders.das public
+require ../../lib/computation_builders.das public
 
 // Eager, scoped state: the macro copies the initial state into a mutable local.
 struct StateContext {_ce_marker:uint8}
@@ -11,13 +11,6 @@ def StateBuilder(initial : auto(S)) : tuple<kind : StateContext; state : S -cons
     return (kind = StateContext(), state = initial)
 }
 def state_get() { return StateGet() }
-// The CE macro supplies the current builder. Blocks never escape the operation.
-def ce_state_modify(builder:auto; update:auto) {
-    return state_put(invoke(update,builder.state))
-}
-def ce_state_gets(builder:tuple<kind:StateContext;state:auto(S)>; project:auto) {
-    return ce_return(builder,invoke(project,builder.state))
-}
 def state_put(value : auto(S)) : tuple<operation : StatePut; state : S -const> {
     return (operation = StatePut(), state = value)
 }

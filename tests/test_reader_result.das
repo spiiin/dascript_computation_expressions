@@ -1,6 +1,6 @@
 options gen2
 require ../lib/computation.das
-require ../lib/reader_result_builder.das
+require ../examples/builders/reader_result_builder.das
 require ../lib/deferred_computation.das
 require daslib/rtti
 

@@ -45,15 +45,6 @@ class CeResolvedSource : AstTypeInfoMacro {
     }
 }
 def ce_normalize_source(builder:string; source:ExpressionPtr) : ExpressionPtr {
-    if(source is ExprCall) {
-        let call=source as ExprCall
-        if((call.name=="state_modify" || call.name=="state_gets") && length(call.arguments)==1) {
-            var applied=qmacro(ce_state_modify($i(builder),$e(call.arguments[0])))
-            if(call.name=="state_gets") {applied=qmacro(ce_state_gets($i(builder),$e(call.arguments[0])))}
-            applied.at=source.at
-            return applied
-        }
-    }
     var result=qmacro(typeinfo ce_resolved_source(ce_source($i(builder),$e(source))))
     result.at=source.at
     // qmacro stamps the hook call, and the root of the source it substitutes,

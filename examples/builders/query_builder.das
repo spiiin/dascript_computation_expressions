@@ -1,6 +1,6 @@
 options gen2
 module query_builder public
-require ./list_builder.das public
+require ../../lib/list_builder.das public
 require math
 require daslib/rtti
 struct QueryContext {_ce_marker:uint8}

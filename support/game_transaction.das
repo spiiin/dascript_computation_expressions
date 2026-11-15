@@ -1,6 +1,7 @@
 options gen2
 module game_transaction public
 require ../lib/computation.das public
+require ../examples/builders/state_result_builder.das public
 struct AdventureState { health : int; gold : int; potions : int; turns : int }
 
 def check_alive(health : int) : Result<CeUnit;string> {

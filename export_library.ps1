@@ -3,7 +3,7 @@ $ErrorActionPreference='Stop'
 $Destination=[IO.Path]::GetFullPath($Destination)
 # Never overwrite an application checkout or an earlier export.
 if(Test-Path -LiteralPath $Destination){throw 'Destination must be a new directory.'}
-$modules=@(Get-Content (Join-Path $PSScriptRoot 'public_modules.json') -Raw | ConvertFrom-Json)
+$modules=@((Get-Content (Join-Path $PSScriptRoot 'public_modules.json') -Raw | ConvertFrom-Json) | ForEach-Object {$_})
 $actual=@(Get-ChildItem (Join-Path $PSScriptRoot 'lib') -File -Filter '*.das'|Select-Object -ExpandProperty Name)
 if(@(Compare-Object $modules $actual).Count){throw 'public_modules.json does not match lib/'}
 foreach($name in $modules) {

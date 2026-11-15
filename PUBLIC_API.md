@@ -14,9 +14,10 @@ options gen2
 require ./lib/computation.das
 ```
 
-Дополнительные подключения: `./lib/reader_builder.das`, `./lib/reader_result_builder.das`,
-`./lib/validation_builder.das`, `./lib/state_writer_result_builder.das`,
+Дополнительные подключения: `./lib/validation_builder.das`,
 `./lib/deferred_computation.das`, `./lib/coroutine_builder.das`, `./lib/coroutine_scheduler.das`.
+State, Writer, Reader и Query в библиотеку не входят: это примеры builders поверх
+публичного протокола, см. [examples/builders](examples/builders/README.md).
 Типизированные задачи: `./lib/task_builder.das`, см. [семантика builders](CE_SEMANTICS.md).
 Планировщик и таймауты: `./lib/task_scheduler.das`, см. [семантика builders](CE_SEMANTICS.md).
 Совместное ожидание: `./lib/task_combinators.das`, операции task_when_all,
@@ -30,12 +31,6 @@ task_result_when_all, task_race и [and_bind для Task](CE_SEMANTICS.md); см
 |---|---|
 | ResultBuilder / OptionBuilder | `Result<T;string>` (err/ok) / `Option<T>` (none/some) |
 | MoveResultBuilder / MoveOptionBuilder | Те же варианты с передаваемым владением |
-| StateBuilder(initial) | `(value, state)` |
-| WriterBuilder | `(value, log)` |
-| StateResultBuilder(initial) | `(result, state)`, откат state при Error |
-| WriterResultBuilder | `(result, log)`, журнал сохраняется при Error |
-| StateWriterResultBuilder(initial) | `(result, state, log)`, откат state и сохранение журнала при Error |
-| ReaderBuilder(environment) / ReaderResultBuilder(environment) | `(value)` / Result |
 | ValidationBuilder | valid/invalid с накоплением ошибок в and_bind |
 | ListBuilder(type<T>) | Владеющий array<T> |
 | SequenceBuilder(type<T>) | Ленивый iterator, для move-only элементов — owning slot |
@@ -46,7 +41,7 @@ task_result_when_all, task_race и [and_bind для Task](CE_SEMANTICS.md); см
 | AsyncSequenceBuilder(type<T>) | Асинхронный stream; next возвращает Task<Option<T>> |
 
 ListBuilder()/SequenceBuilder() выбирают int. Обычные Value CE выполняются
-немедленно; Sequence/Coroutine — при обходе/возобновлении. State/Reader и обычные
+немедленно; Sequence/Coroutine — при обходе/возобновлении. Обычные
 Result/Option используют копируемые данные. Для move-only нужны owning builders
 или соответствующий List/Sequence. По умолчанию нет сетевого async или потоков.
 Task поддерживает неблокирующее ожидание через callback-адаптер; сетевой транспорт
@@ -69,15 +64,6 @@ task_error, task_cancel, task_scope, task_from_poll, task_after_polls.
 | `move_ok(value[,type<E>])`, `move_some(value)` | Перемещение: одноаргументный move_ok — обёртка для Result<T,string>, остальные — стандартные функции |
 | `ce_move_some(value)` | Стандартный Option с обходом AOT-перемещения tuple; см. STANDARD_TYPES.md |
 | `move_error(message, type<T>)`, `move_none(type<T>)` | Неуспешные owning-результаты |
-| `state_get()`, `state_put(state)` | Описания чтения / замены состояния, выполняемые через bind |
-| `state_modify($(state:S) {return nextState})` | Преобразовать состояние, завершается bind |
-| `state_gets($(state:S) {return projection})` | Прочитать часть состояния, завершается bind |
-| `state_result(value, state)` | Готовый результат обычного State |
-| `state_result_ok(value,state)`, `state_result_error(message,type<T>,state)`, `state_result_value(result,state)` | Готовые StateResult |
-| `writer_value(value, log="")`, `tell(message)` | Значение с журналом / запись Unit в журнал |
-| `writer_result_ok(value,log="")`, `writer_result_error(message,type<T>,log="")`, `writer_result(result,log="")` | Готовые WriterResult |
-| `state_writer_result_ok(value,state,log="")`, `state_writer_result_error(message,type<T>,state,log="")`, `state_writer_result_value(result,state,log="")` | Готовые StateWriterResult |
-| `reader_ask()`, `reader_value(value)` | Окружение / готовый результат Reader |
 | `validation_ok(value)`, `validation_error(message,type<T>)`, `left |> validation_zip(right)` | Проверки и объединение независимых ошибок |
 | `deferred(builder,data) $(snapshot) {...}`, `deferred(builder) {...}` | Владеющий снимок для повторных запусков |
 | `run_deferred(task)` | Новый запуск; task передаётся изменяемым владельцем |
@@ -114,8 +100,7 @@ handles и stack blocks; каждый run клонирует рабочие да
 `resource |> use_resource`, `try_finally(body,cleanup)`, `try_with(body,handler)`
 раскрываются макросом. Поддержка зависит от builder. and_bind вычисляет фабрики
 достигнутой группы слева направо; у Task затем кооперативно опрашивает детей. Не запускает
-потоки; Error/None не являются исключениями. StateResult откатывает только поле
-state, не внешние эффекты или объекты по указателям.
+потоки; Error/None не являются исключениями.
 
 `identity_builder.das` и `main.das` в экспортированном примере показывают
 минимальный CeValueProtocol с ce_bind/ce_unwrap/ce_return/ce_zero/ce_combine.
@@ -315,17 +300,15 @@ task_result_when_all (пара и массив), task_race и task_result_race.
 task_event_close, task_event_subscriber_count, task_event_stats. Broadcast по активным
 подпискам, копируемый T, Task<Result<T>>. Контракт: [семантика builders](CE_SEMANTICS.md).
 
-## Parser, Search и Query
+## Parser и Search
 
-Отдельные модули: `./lib/parser_builder.das`, `./lib/search_builder.das`,
-`./lib/query_builder.das`. Протокол и примеры: [семантика builders](CE_SEMANTICS.md).
+Отдельные модули: `./lib/parser_builder.das`, `./lib/search_builder.das`.
+Протокол и примеры: [семантика builders](CE_SEMANTICS.md).
 
 - `ParserBuilder(text=...)`: `parser_literal`, `parser_int`, `parser_spaces`,
   `parser_eof`, `parser_choice`, `parser_call(@@grammar)`; результат parsed/failure.
 - `SearchBuilder(type<T>)`: `search_choose` потребляет массив,
   `search_guard` отсекает ветвь, `search_once` / `search_cut` оставляют первое решение источника.
-- `QueryBuilder(type<T>)`: `query_where`, `query_select`, `query_join`;
-  стабильный inner join и накопление массива, без подключения СУБД.
 
 Новые builders работают с копируемыми значениями. Результаты Search нужно
 закрывать через `sequence_each`, `sequence_close` или владеющую область.
@@ -339,16 +322,7 @@ Search-комбинаторы: `source |> search_take(n)` ограничивае
 `left |> search_append(right)` последовательно объединяет альтернативы, владея обоими iterator.
 Контракт и пример: [семантика builders](CE_SEMANTICS.md).
 
-Query-операции: `source |> query_order_by(key,descending=false)`, `source |> query_group_by(key)`,
-`source |> query_distinct()` / `query_distinct(key)`. Стабильный порядок, ключ вычисляется один раз на строку.
-Группы владеют вложенными массивами; внутри CE: `var group & = ... |> bind`.
-Контракт и пример: [семантика builders](CE_SEMANTICS.md).
-
-Для блока в конце: `source |> query_order_by(descending) <| key`;
-это перегрузка `(source, descending, key)`, прежняя сигнатура сохранена.
-
-В примерах блоки `query_where`, `query_select`, `query_group_by` и `query_distinct(key)`
-передаются через `source |> query_operation <| $(row:Row) {...}`; прежние вызовы со скобками также поддерживаются.
+QueryBuilder и его операции — пример builder, см. [examples/builders](examples/builders/README.md).
 
 
 Task concurrency: [семантика builders](CE_SEMANTICS.md).

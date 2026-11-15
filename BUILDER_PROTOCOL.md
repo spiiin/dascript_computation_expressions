@@ -9,7 +9,7 @@
 
 ```das
 require ./lib/computation_macro.das
-require ./lib/reader_builder.das
+require ./examples/builders/reader_builder.das
 
 let answer = computation(ReaderBuilder(7)) {
     let environment = reader_ask() |> bind
@@ -21,8 +21,10 @@ assert(answer.value == 42)
 `computation.das` — совместимый фасад: подключает макрос и прежние стандартные
 builders. Можно оставить `require computation` и дополнительно подключить свой
 модуль. Для минимального набора зависимостей используйте `computation_macro`.
-ReaderBuilder намеренно не включён в фасад: `reader_demo.das` показывает расширение
-только через два импорта. Он требует лишь `builder_protocol`.
+ReaderBuilder в библиотеку не входит: это пример из
+[examples/builders](examples/builders/README.md), как и State, Writer и Query.
+`reader_demo.das` показывает расширение только через два импорта; сам builder
+требует лишь `builder_protocol`.
 
 ## Выбор стратегии
 
@@ -55,7 +57,7 @@ ReaderBuilder намеренно не включён в фасад: `reader_demo
 
 Ниже `B` — тип builder, `M<T>` — условное обозначение результата с полезным
 значением T, а не буквальный синтаксис daScript. Реальные сигнатуры показаны
-в `reader_builder.das` и `list_builder.das`.
+в `examples/builders/reader_builder.das` и `lib/list_builder.das`.
 
 | Операция | Назначение |
 | --- | --- |
@@ -386,14 +388,14 @@ Sequence удерживает ресурс в heap-ячейке до закры�
 
 ## ReaderResultBuilder
 
-`reader_result_builder.das` объединяет ReaderAsk и обычный Result через
+`examples/builders/reader_result_builder.das` объединяет ReaderAsk и обычный Result через
 CeValueProtocol. Реализует базовые операции, MergeSources и BindReturn;
 For/While используют общий fallback. Изменения ядра или фасада не требуются.
 Контракт и пример: [семантика builders](CE_SEMANTICS.md).
 
 ## StateWriterResultBuilder
 
-`state_writer_result_builder.das` объединяет состояние, строковый журнал и Result
+`examples/builders/state_writer_result_builder.das` объединяет состояние, строковый журнал и Result
 через CeValueProtocol. Откат относится к начальному состоянию всего CE; журнал
 не откатывается. Циклы и BindReturn используют общий fallback, ресурсные операции
 — общий протокол. Подробности: [семантика builders](CE_SEMANTICS.md).

@@ -74,7 +74,6 @@ try {
     Check 'examples/deferred_move_collections_demo.das' $true 'deferred move-only collections demo OK'
     Check 'examples/move_collections_demo.das' $true 'move-only collections demo OK'
     Check 'examples/move_ce_demo.das' $true 'move-only CE demo OK'
-    Check 'examples/state_operations_demo.das' $true 'State operations demo OK'
     Check 'examples/computation_demo.das' $true 'computation demo OK'
     Check 'examples/computation_control_demo.das' $true 'control flow demo OK'
     Check 'examples/state_demo.das' $true 'state demo OK'
@@ -186,9 +185,7 @@ try {
         Check 'tests/test_task_pointer.das' $false 'task: payload must own its data'
         & (Join-Path $PSScriptRoot 'test_diagnostics.ps1') -Daslang $Daslang
         & (Join-Path $PSScriptRoot 'test_integration.ps1') -Daslang $Daslang
-        Check 'tests/test_state_operations_failures.das' $true 'State operation failure checks OK'
         Check 'tests/test_composition_laws.das' $true 'Composition laws OK'
-        Check 'tests/test_state_operations.das' $true 'State operations OK'
         Check 'tests/test_list_array_finalizer.das' $true 'List custom array finalizer checks OK'
         Check 'tests/test_list_fusion.das' $true 'List fusion effects and ownership OK'
         Check 'tests/test_list_benchmarks.das' $true 'List benchmark equivalence OK'

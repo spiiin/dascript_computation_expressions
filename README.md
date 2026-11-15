@@ -1,7 +1,8 @@
 # Computation expressions for Daslang
 
 F#-подобные computation expressions на AST-макросах Daslang: Result/Option,
-State/Writer, List/Sequence, Task/AsyncSequence и Parser/Search/Query.
+Validation, List/Sequence, Task/AsyncSequence и Parser/Search. State, Writer,
+Reader и Query — примеры собственных builders в [examples/builders](examples/builders/README.md).
 Типы операций проверяются при компиляции; ресурсы, отмена и move-only значения
 поддерживаются протоколом builders.
 
@@ -49,14 +50,14 @@ $env:DASLANG_EXE = & ./.github/scripts/install-daslang.ps1 -Destination ./.work/
 | Задача | Запускаемый пример |
 |---|---|
 | Ошибки и отсутствующие значения | [Result/Option](examples/computation_demo.das) |
-| Состояние, журнал и откат | [State/Writer/Result](examples/state_writer_result_demo.das) |
+| Состояние, журнал и откат (пример builder) | [State/Writer/Result](examples/state_writer_result_demo.das) |
 | Управление ресурсами | [use_resource и try_finally](examples/resources_demo.das) |
 | Ленивые последовательности | [Sequence](examples/sequence_demo.das) |
 | Асинхронные задачи, каналы и отмена | [Task toolkit](examples/task_toolkit_demo.das) |
 | Асинхронные последовательности | [AsyncSequence](examples/async_sequence_demo.das) |
 | Разбор текста | [Parser](examples/parser_demo.das) |
 | Перебор решений | [Search](examples/search_demo.das) |
-| Запросы к коллекциям | [Query](examples/query_full_demo.das) |
+| Запросы к коллекциям (пример builder) | [Query](examples/query_full_demo.das) |
 | Собственный builder | [Минимальное приложение](integration_example/main.das) |
 
 ## Проверки
@@ -69,8 +70,8 @@ $env:DASLANG_EXE = & ./.github/scripts/install-daslang.ps1 -Destination ./.work/
 ./run_aot.ps1
 ```
 
-Основной runner выполняет 311 проверок файлов, диагностику, экспорт и проверки
-раскрытия оптимизаций. Набор `mode_tests.json` содержит 77 тестов и примеров;
+Основной runner выполняет 308 проверок файлов, диагностику, экспорт и проверки
+раскрытия оптимизаций. Набор `mode_tests.json` содержит 76 тестов и примеров;
 строгий AOT-хост исполняет 68 из них. Генерация C++ отдельно не означает успех AOT runtime.
 Тесты TCP/HTTP/WebSocket используют локальные серверы; GLFW-тест создаёт скрытое окно.
 

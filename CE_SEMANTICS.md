@@ -1,6 +1,7 @@
 # Возможности и семантика computation expressions
 
-Короткие операции State: [публичный API](PUBLIC_API.md). Раздельные проверки режимов и законы композиции: [RELIABILITY.md](RELIABILITY.md).
+State, Writer, Reader и Query — примеры builders, не часть библиотеки:
+[examples/builders](examples/builders/README.md). Раздельные проверки режимов и законы композиции: [RELIABILITY.md](RELIABILITY.md).
 
 Этот документ фиксирует контракт текущей реализации. Сигнатуры конкретного
 builder определяют допустимые источники; общая запись `|> bind` не делает

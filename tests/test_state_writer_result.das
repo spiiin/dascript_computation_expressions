@@ -1,6 +1,7 @@
 options gen2
 require ../support/game_logged_transaction.das
 require ../lib/computation.das
+require ../examples/builders/computation_effects.das
 require ../lib/deferred_computation.das
 require daslib/rtti
 var after=0

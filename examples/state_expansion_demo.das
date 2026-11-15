@@ -1,5 +1,6 @@
 options gen2
 require ../lib/computation.das
+require ./builders/computation_effects.das
 [export]
 def main() {
     let result=computation(StateBuilder(5)) {

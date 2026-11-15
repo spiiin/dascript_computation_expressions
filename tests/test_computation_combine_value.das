@@ -1,5 +1,6 @@
 options gen2
 require ../lib/computation.das
+require ../examples/builders/computation_effects.das
 [export]
 def main() {
     // A builder with continuations: Combine takes a Unit step, so a branch that

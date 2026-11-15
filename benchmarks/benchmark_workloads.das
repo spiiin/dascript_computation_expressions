@@ -1,6 +1,7 @@
 options gen2
 module benchmark_workloads public
 require ../lib/computation.das public
+require ../examples/builders/computation_effects.das public
 
 def private checked(value:int) {
     if (value%7==0) {return result_error("invalid",type<int>)}

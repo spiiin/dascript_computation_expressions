@@ -1,5 +1,6 @@
 options gen2
 require ../lib/computation.das
+require ../examples/builders/computation_effects.das
 require ../lib/deferred_computation.das
 struct Config {
     name:string

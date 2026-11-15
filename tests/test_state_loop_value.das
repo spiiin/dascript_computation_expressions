@@ -1,5 +1,6 @@
 options gen2
 require ../lib/computation.das
+require ../examples/builders/computation_effects.das
 [export]
 def main() {
     let invalid = computation(StateBuilder(0)) {
