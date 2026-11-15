@@ -13,6 +13,26 @@ def ce_unique_name(prefix : string; at : LineInfo) : string {
     return "{make_unique_private_name(prefix, at)}_{ce_unique_serial}"
 }
 
+[macro_interface]
+class CeMatchBindingFinder : AstVisitor {
+    name:string
+    found:bool
+    def override preVisitExprTag(expr:ExprTag?) {
+        if(expr.name=="v" && expr.subexpr is ExprVar
+            && (expr.subexpr as ExprVar).name==name) {found=true}
+    }
+}
+
+// A $v(name) pattern is a lexical binding for its guard and arm body, not a
+// reference to an outer CE local. Keep it intact during both ownership passes.
+def ce_match_binds(pattern:ExpressionPtr; name:string) : bool {
+    var finder=new CeMatchBindingFinder(name=name)
+    make_visitor(*finder) $(adapter) {visit(pattern,adapter)}
+    let found=finder.found
+    unsafe {delete finder}
+    return found
+}
+
 // Native AOT generator fields must have unique names even for locals declared
 // in different lexical loops. Respect shadowing when rewriting their tail.
 [macro_interface]
@@ -29,6 +49,11 @@ class CeTaskLocalRename : AstVisitor {
         for(arg in blk.arguments) {if(arg.name==original) {hidden=true}}
     }
     def override visitExprBlock(var blk:ExprBlock?) : ExpressionPtr {self.restore();return blk}
+    def override preVisitExprIfThenElse(expr:ExprIfThenElse?) {
+        self.save()
+        if(ce_match_binds(expr.cond,original)) {hidden=true}
+    }
+    def override visitExprIfThenElse(var expr:ExprIfThenElse?) : ExpressionPtr {self.restore();return expr}
     def override visitExprLetVariable(expr:ExprLet?;var arg:VariablePtr;lastArg:bool) : VariablePtr {
         if(arg.name==original) {hidden=true}
         return arg
@@ -115,6 +140,34 @@ class ResumablePayload : AstTypeInfoMacro {
         }
         return <- new ExprConstBool(at=expr.at,value=true)
     }
+}
+
+// Keep pattern matching in daslib: only arm bodies are CE scopes. Expanding
+// match here would require inferred subject types and duplicate pattern rules.
+def ce_is_match_statement(node:ExpressionPtr) : bool {
+    if(!(node is ExprCallMacro)) {return false}
+    let name=string((node as ExprCallMacro).name)
+    return name=="match" || name=="match::match"
+}
+
+def ce_match_arms(node:ExpressionPtr; var error:string&) : ExpressionPtr {
+    let call=node as ExprCallMacro
+    if(length(call.arguments)!=2 || !(call.arguments[1] is ExprMakeBlock)) {
+        error="computation: match expects a subject and an immediate arm block"
+        return null
+    }
+    var arms=(call.arguments[1] as ExprMakeBlock)._block as ExprBlock
+    if(!empty(arms.arguments) || !empty(arms.finalList)) {
+        error="computation: match arm block cannot have arguments or native finally"
+        return null
+    }
+    for(arm in arms.list) {
+        if(!(arm is ExprIfThenElse) || (arm as ExprIfThenElse).if_false!=null) {
+            error="computation: match expects pattern arms without else"
+            return null
+        }
+    }
+    return arms
 }
 
 // A resumable builder supplies events, await adapters and return conversion.
@@ -206,6 +259,15 @@ def ce_resumable_scope(node:ExpressionPtr; builder:string; var error:string&;
             } elif(ret.returnFlags.moveSemantics) {
                 output |> push <| qmacro_expr() {yield <- ce_await_return_move($i(builder),$e(ret.subexpr))}
             } else {output |> push <| qmacro_expr() {yield <- ce_await_return($i(builder),$e(ret.subexpr))}}
+        } elif(ce_is_match_statement(stmt)) {
+            let arms=ce_match_arms(stmt,error)
+            if(!empty(error)) {return blk}
+            for(arm in (arms as ExprBlock).list) {
+                var branch=arm as ExprIfThenElse
+                branch.if_true=ce_resumable_scope(branch.if_true,builder,error,await_source,control)
+                if(!empty(error)) {return blk}
+            }
+            output |> push <| stmt
         } elif(stmt is ExprIfThenElse) {
             var branch=stmt as ExprIfThenElse
             branch.if_true=ce_resumable_scope(branch.if_true,builder,error,await_source,control)
@@ -355,7 +417,7 @@ def ce_resumable_scope(node:ExpressionPtr; builder:string; var error:string&;
         // A structured statement may have signalled break/continue in a nested
         // await/resource generator. Keep lexical declarations in the same scope
         // and guard the whole remaining continuation, including source factories.
-        if(!empty(control) && index+1<length(blk.list) && (stmt is ExprIfThenElse || stmt is ExprBlock || stmt is ExprFor || stmt is ExprWhile
+        if(!empty(control) && index+1<length(blk.list) && (ce_is_match_statement(stmt) || stmt is ExprIfThenElse || stmt is ExprBlock || stmt is ExprFor || stmt is ExprWhile
             || (stmt is ExprCall && ((stmt as ExprCall).name=="try_finally" || (stmt as ExprCall).name=="try_with")))) {
             var tail:array<ExpressionPtr>
             for(i in range(index+1,length(blk.list))) {tail |> push <| clone_expression(blk.list[i])}
