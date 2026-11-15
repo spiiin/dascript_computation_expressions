@@ -12,12 +12,12 @@ var events = ""
 struct Door { id : int }
 struct Token { value : int }
 
-def step(value : int) : $Result<int;string> {
+def step(value : int) : Result<int;string> {
     evaluated++
     if (value < 0) { return result_error("negative {value}", type<int>) }
     return result_ok(value)
 }
-def maybe(value : int) : $Option<int> {
+def maybe(value : int) : Option<int> {
     evaluated++
     if (value < 0) { return none(type<int>) }
     return some(value)

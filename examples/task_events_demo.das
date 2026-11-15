@@ -4,7 +4,7 @@ require ../lib/task_scheduler.das
 require ../lib/task_events.das
 
 // A UI event bus lives outside the suspended computation.
-var actions:typedecl(task_event_source(type<string>))
+var actions:TaskEventSource<string>
 
 def on_confirm_clicked() {task_event_emit(actions,"confirm")}
 // A business choice completes normally; closing the UI cancels its Task below.
@@ -20,7 +20,7 @@ def confirmation_dialog() {
 def main() {
     actions <- task_event_source(type<string>)
     var inscope token <- cancellation_token()
-    var inscope scheduler <- task_scheduler(type<$Result<string;string>>)
+    var inscope scheduler <- task_scheduler(type<Result<string;string>>)
     let dialog=task_spawn(scheduler,task_with_cancellation(confirmation_dialog(),token),TaskTimeout(after_ms=5000))
     verify(task_tick(scheduler,0)==1)
     verify(task_event_subscriber_count(actions)==1)

@@ -14,7 +14,7 @@ var private scheduler_live=false
 var private reader_live=false
 var private background_live=false
 var private events:typedecl(task_event_source(type<string>))
-var private scheduler:typedecl(task_scheduler(type<$Result<string;string>>))
+var private scheduler:typedecl(task_scheduler(type<Result<string;string>>))
 var private token:CancellationToken
 var private reader:TaskId
 var private background:TaskId
@@ -148,7 +148,7 @@ def glfw_keyboard_open(hidden:bool=false;timeout:int64=15000l;interval:int=500) 
         demo_window=glfwCreateWindow(1100,100,"Task keyboard",null,null)
         if(demo_window==null) {panic("glfwCreateWindow failed")}
         events <- task_event_source(type<string>);events_live=true
-        scheduler <- task_scheduler(type<$Result<string;string>>);scheduler_live=true
+        scheduler <- task_scheduler(type<Result<string;string>>);scheduler_live=true
         start_reader()
         background=task_spawn(scheduler,heartbeat());background_live=true
         // Native callbacks do not own script lambdas. Keep them until chain_clear.

@@ -9,7 +9,7 @@ require daslib/strings_convert
 require strings
 require math
 
-var input_lines:typedecl(task_event_source(type<string>))
+var input_lines:TaskEventSource<string>
 var input_buffer=""
 var input_eof=false
 var quit_requested=false
@@ -88,7 +88,7 @@ def main() {
     funbuffered(fstdin());fbinary(fstdin())
     input_lines <- task_event_source(type<string>)
     var inscope token <- cancellation_token()
-    var inscope scheduler <- task_scheduler(type<$Result<string;string>>)
+    var inscope scheduler <- task_scheduler(type<Result<string;string>>)
     let reader=task_spawn(scheduler,task_with_cancellation(read_user_input(),token),TaskTimeout(after_ms=int64(timeout_ms)))
     let background=task_spawn(scheduler,background_work(interval_ms))
     let started=ref_time_ticks()

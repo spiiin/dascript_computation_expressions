@@ -15,16 +15,16 @@ def source() { sources++; return range(5) }
 def condition(n:int) { conditions++; return n<5 }
 def step(builder:ResultBuilder; i:int) {
     attempted++
-    if (i==2) { return variant type<$Result<int;string>>(err="stop") }
-    return variant type<$Result<int;string>>(ok=i)
+    if (i==2) { return variant type<Result<int;string>>(err="stop") }
+    return variant type<Result<int;string>>(ok=i)
 }
 def step(builder:OptionBuilder; i:int) {
     attempted++
-    if (i==2) { return default<$Option<int>> }
-    return variant type<$Option<int>>(some=i)
+    if (i==2) { return default<Option<int>> }
+    return variant type<Option<int>>(some=i)
 }
-def failed(value:$Result<auto;string>) { return value is err }
-def failed(value:$Option<auto>) { return value is none }
+def failed(value:Result<auto;string>) { return value is err }
+def failed(value:Option<auto>) { return value is none }
 def reset() { sources=0; conditions=0; attempted=0; completed=0; after=0 }
 
 def stops(builder:auto) {
@@ -120,7 +120,7 @@ def temporary_lifetime() {
     let before=heap_bytes_allocated()
     for (round in range(10)) {
         let r=computation(ResultBuilder()) {
-            for (v in temporary()) { variant type<$Result<int;string>>(err="stop") |> bind }
+            for (v in temporary()) { variant type<Result<int;string>>(err="stop") |> bind }
         }
         assert(r is err)
     }
@@ -154,7 +154,7 @@ def main() {
     // User errors win over budget errors and do not evaluate another guard.
     reset()
     let userError=computation(BoundedResultBuilder(limit=10)) {
-        while (condition(0)) { variant type<$Result<int;string>>(err="user") |> bind }
+        while (condition(0)) { variant type<Result<int;string>>(err="user") |> bind }
     }
     assert(userError is err && userError as err=="user" && conditions==1)
     let empty=computation(BoundedResultBuilder(limit=0)) {

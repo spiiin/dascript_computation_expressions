@@ -183,6 +183,38 @@ def ce_resumable_merge_source(node:ExpressionPtr; builder:string; var error:stri
     }))
 }
 
+// ---- Source positions --------------------------------------------------------
+// qmacro gives a generated node its position in this file, so a type error in
+// generated code would point here. Every node that is not from the user's file
+// gets the position of the statement being lowered; user code keeps its own.
+// A typedecl(expr) keeps its expression inside the type, out of the visitor's
+// reach, so declared types are walked explicitly.
+[macro_interface]
+class CeRestamp : AstVisitor {
+    @safe_when_uninitialized at : LineInfo
+    def declared(var variable : VariablePtr) {
+        if (variable.at.fileInfo != at.fileInfo) { variable.at = at }
+        if (variable._type == null) { return }
+        if (variable._type.at.fileInfo != at.fileInfo) { variable._type.at = at }
+        for (inner in variable._type.typeMacroExpr) { ce_restamp(inner, at) }
+    }
+    def override preVisitExpression(var expr : ExpressionPtr) : void {
+        if (expr.at.fileInfo != at.fileInfo) { expr.at = at }
+    }
+    def override preVisitExprBlockArgument(blk : ExprBlock?; var arg : VariablePtr; lastArg : bool) : void {
+        self.declared(arg)
+    }
+    def override preVisitExprLetVariable(expr : ExprLet?; var arg : VariablePtr; lastArg : bool) : void {
+        self.declared(arg)
+    }
+}
+def ce_restamp(var expr : ExpressionPtr; at : LineInfo) {
+    if (expr == null || at.fileInfo == null) { return }
+    var visitor = new CeRestamp(at=at)
+    make_visitor(*visitor) $(adapter) { visit(expr, adapter) }
+    unsafe { delete visitor }
+}
+
 // ---- Deferred stages ---------------------------------------------------------
 // A stage is this same call macro under another name. It waits until its probe
 // arguments are typed and then emits exactly one variant, so a continuation is
@@ -1198,7 +1230,6 @@ def private ce_direct_evaluate(node : ExpressionPtr; builder : string; at : Line
                 let $i(merged) = typeinfo ce_checked_merge(ce_merge_origin(ce_merge_sources($i(builder), $i(left), $i(right)), $i(builder), $v(location)))
             }
         }
-        force_at(declaration, at)
         output |> push <| declaration
         return merged
     }
@@ -1211,8 +1242,6 @@ def private ce_direct_evaluate(node : ExpressionPtr; builder : string; at : Line
     } else {
         resolved = qmacro_expr() { let $i(source) = typeinfo ce_resolved_source(ce_source($i(builder), $i(raw))) }
     }
-    force_at(evaluated, at)
-    force_at(resolved, at)
     output |> push <| evaluated
     output |> push <| resolved
     return source
@@ -1294,7 +1323,6 @@ def private ce_direct_check(builder, name, witness : string; unit : bool; at : L
             if (ce_direct_failed($i(builder), $i(name))) { return ce_direct_failure($i(builder), $i(name), $i(witness)) }
         }
     }
-    force_at(check, at)
     return check
 }
 // The user's declaration, initialized with the value of the checked source.
@@ -1302,7 +1330,6 @@ def private ce_direct_declaration(stmt : ExpressionPtr; builder, source, raw : s
     var declaration = clone_expression(stmt)
     var variable = (declaration as ExprLet).variables[0]
     var value = qmacro(ce_unwrap($i(builder), $i(source)))
-    force_at(value, stmt.at)
     variable.init = value
     if (!empty(raw) && (variable._type == null || variable._type.baseType == Type.autoinfer)) {
         // Typed from the unresolved source; see ce_direct_evaluate.
@@ -1315,130 +1342,142 @@ def private ce_direct_declaration(stmt : ExpressionPtr; builder, source, raw : s
 }
 // `top` scopes are the body of their own block and end in Zero when control can
 // fall out; `tail` is true while the last statement is also the block's last.
+// One statement of a direct scope. True when it ends the scope: it returned,
+// the rest became a resource's continuation, or an error was reported.
+def private ce_direct_statement(blk : ExprBlock?; index : int; builder, witness : string; tail : bool;
+                                var output : array<ExpressionPtr>; var used : bool&; var error : string&) : bool {
+    let count = length(blk.list)
+    var stmt = clone_expression(blk.list[index])
+    let last = index == count-1
+    if (stmt is ExprFor) {stmt=ce_normalize_for(builder,stmt)}
+    if (stmt is ExprReturn) {
+        let ret = stmt as ExprReturn
+        if (!last || ret.subexpr == null) {
+            error = "computation: return must be the final statement of its scope and have a value"
+            return true
+        }
+        var returned : ExpressionPtr
+        if (ret.subexpr is ExprCall && (ret.subexpr as ExprCall).name == "return_from") {
+            let call = ret.subexpr as ExprCall
+            if (length(call.arguments) != 1) {
+                error = "computation: expected 'return expression |> return_from'"
+                return true
+            }
+            var raw : string
+            let forwarded = ce_direct_evaluate(call.arguments[0], builder, stmt.at, false, output, raw, error)
+            if (!empty(error)) { return true }
+            returned = qmacro_expr() { return ce_return_from($i(builder), $i(forwarded)) }
+        } else {
+            returned = qmacro_expr() { return ce_return($i(builder), $e(ret.subexpr)) }
+        }
+        returned.at = stmt.at
+        output |> push <| returned
+        return true
+    }
+    var binding : ExpressionPtr
+    if (stmt is ExprLet) {
+        if (length((stmt as ExprLet).variables) != 1) {
+            error = "computation: declare one variable per statement"
+            return true
+        }
+        binding = (stmt as ExprLet).variables[0].init
+    } elif (stmt is ExprCall) {
+        binding = stmt
+    }
+    if (binding != null && binding is ExprCall && (binding as ExprCall).name == "bind") {
+        let call = binding as ExprCall
+        if (length(call.arguments) != 1) {
+            error = "computation: expected 'expression |> bind'"
+            return true
+        }
+        var raw : string
+        let source = ce_direct_evaluate(call.arguments[0], builder, stmt.at, false, output, raw, error)
+        if (!empty(error)) { return true }
+        output |> push <| ce_direct_check(builder, source, witness, false, stmt.at)
+        if (stmt is ExprLet) { output |> push <| ce_direct_declaration(stmt, builder, source, raw) }
+        used = true
+        return false
+    }
+    // A scoped resource is acquired only when this declaration is reached.
+    if (binding != null && binding is ExprCall && (binding as ExprCall).name == "use_resource") {
+        let call = binding as ExprCall
+        if (!ce_validate_use_resource(stmt, call, error)) { return true }
+        // The rest of this scope is the resource's continuation, so nothing
+        // is left to lower here. In a branch that is not the block's tail the
+        // continuation is a step, and control goes on after the branch.
+        var rest <- ce_lower(blk, index+1, builder, false, error, false, true)
+        if (!empty(error)) { return true }
+        let scoped = ce_lower_use_resource(stmt, call, rest, builder)
+        if (tail) {
+            output |> push <| qmacro_expr() { return $e(scoped) }
+        } else {
+            let step = ce_unique_name("__ce_step", stmt.at)
+            output |> push <| qmacro_expr() { let $i(step) = $e(scoped) }
+            output |> push <| ce_direct_check(builder, step, witness, true, stmt.at)
+            used = true
+        }
+        return true
+    }
+    if (stmt is ExprIfThenElse) {
+        let original = stmt as ExprIfThenElse
+        var branch = clone_expression(stmt)
+        (branch as ExprIfThenElse).if_true = ce_direct_inline(original.if_true, builder, witness, tail && last, used, error)
+        if (original.if_false != null) {
+            (branch as ExprIfThenElse).if_false = ce_direct_inline(original.if_false, builder, witness, tail && last, used, error)
+        }
+        if (!empty(error)) { return true }
+        output |> push <| branch
+        return false
+    }
+    if (stmt is ExprBlock) {
+        output |> push <| ce_direct_inline(stmt, builder, witness, tail && last, used, error)
+        if (!empty(error)) { return true }
+        return false
+    }
+    var computation : ExpressionPtr
+    if (stmt is ExprCall && (stmt as ExprCall).name == "try_with") {
+        computation = ce_lower_try_with(stmt as ExprCall, builder, false, false, true, error)
+    } elif (stmt is ExprCall && (stmt as ExprCall).name == "try_finally") {
+        computation = ce_lower_try_finally(stmt as ExprCall, builder, false, false, true, error)
+    } elif (stmt is ExprFor || stmt is ExprWhile) {
+        let original_body = stmt is ExprFor ? (stmt as ExprFor).body : (stmt as ExprWhile).body
+        var body = ce_scope(original_body, builder, false, error, false, true)
+        computation = ce_loop_stage(stmt, body, builder, false, false)
+    }
+    if (!empty(error)) { return true }
+    if (computation != null) {
+        if (tail && last) {
+            output |> push <| qmacro_expr() { return $e(computation) }
+            return true
+        }
+        let step = ce_unique_name("__ce_step", stmt.at)
+        output |> push <| qmacro_expr() { let $i(step) = $e(computation) }
+        output |> push <| ce_direct_check(builder, step, witness, true, stmt.at)
+        used = true
+        return false
+    }
+    if (!(stmt is ExprLet) && !(stmt is ExprCall) && !(stmt is ExprCallMacro)
+            && !(stmt is ExprCopy) && !(stmt is ExprMove)
+            && !(stmt is ExprOp1) && !(stmt is ExprOp2) && !(stmt is ExprAssert)) {
+        error = "computation: unsupported statement {stmt.__rtti}"
+        return true
+    }
+    output |> push <| stmt
+    return false
+}
 def private ce_direct_lower(blk : ExprBlock?; start : int; builder, witness : string; top, tail : bool;
                             var used : bool&; var error : string&) : array<ExpressionPtr> {
     var output : array<ExpressionPtr>
-    let count = length(blk.list)
-    for (index in range(start, count)) {
-        var stmt = clone_expression(blk.list[index])
-        let last = index == count-1
-        if (stmt is ExprFor) {stmt=ce_normalize_for(builder,stmt)}
-        if (stmt is ExprReturn) {
-            let ret = stmt as ExprReturn
-            if (!last || ret.subexpr == null) {
-                error = "computation: return must be the final statement of its scope and have a value"
-                return <- output
-            }
-            var returned : ExpressionPtr
-            if (ret.subexpr is ExprCall && (ret.subexpr as ExprCall).name == "return_from") {
-                let call = ret.subexpr as ExprCall
-                if (length(call.arguments) != 1) {
-                    error = "computation: expected 'return expression |> return_from'"
-                    return <- output
-                }
-                var raw : string
-                let forwarded = ce_direct_evaluate(call.arguments[0], builder, stmt.at, false, output, raw, error)
-                if (!empty(error)) { return <- output }
-                returned = qmacro_expr() { return ce_return_from($i(builder), $i(forwarded)) }
-            } else {
-                returned = qmacro_expr() { return ce_return($i(builder), $e(ret.subexpr)) }
-            }
-            returned.at = stmt.at
-            output |> push <| returned
-            return <- output
-        }
-        var binding : ExpressionPtr
-        if (stmt is ExprLet) {
-            if (length((stmt as ExprLet).variables) != 1) {
-                error = "computation: declare one variable per statement"
-                return <- output
-            }
-            binding = (stmt as ExprLet).variables[0].init
-        } elif (stmt is ExprCall) {
-            binding = stmt
-        }
-        if (binding != null && binding is ExprCall && (binding as ExprCall).name == "bind") {
-            let call = binding as ExprCall
-            if (length(call.arguments) != 1) {
-                error = "computation: expected 'expression |> bind'"
-                return <- output
-            }
-            var raw : string
-            let source = ce_direct_evaluate(call.arguments[0], builder, stmt.at, false, output, raw, error)
-            if (!empty(error)) { return <- output }
-            output |> push <| ce_direct_check(builder, source, witness, false, stmt.at)
-            if (stmt is ExprLet) { output |> push <| ce_direct_declaration(stmt, builder, source, raw) }
-            used = true
-            continue
-        }
-        // A scoped resource is acquired only when this declaration is reached.
-        if (binding != null && binding is ExprCall && (binding as ExprCall).name == "use_resource") {
-            let call = binding as ExprCall
-            if (!ce_validate_use_resource(stmt, call, error)) { return <- output }
-            // The rest of this scope is the resource's continuation, so nothing
-            // is left to lower here. In a branch that is not the block's tail the
-            // continuation is a step, and control goes on after the branch.
-            var rest <- ce_lower(blk, index+1, builder, false, error, false, true)
-            if (!empty(error)) { return <- output }
-            let scoped = ce_lower_use_resource(stmt, call, rest, builder)
-            if (tail) {
-                output |> push <| qmacro_expr() { return $e(scoped) }
-            } else {
-                let step = ce_unique_name("__ce_step", stmt.at)
-                output |> push <| qmacro_expr() { let $i(step) = $e(scoped) }
-                output |> push <| ce_direct_check(builder, step, witness, true, stmt.at)
-                used = true
-            }
-            return <- output
-        }
-        if (stmt is ExprIfThenElse) {
-            let original = stmt as ExprIfThenElse
-            var branch = clone_expression(stmt)
-            (branch as ExprIfThenElse).if_true = ce_direct_inline(original.if_true, builder, witness, tail && last, used, error)
-            if (original.if_false != null) {
-                (branch as ExprIfThenElse).if_false = ce_direct_inline(original.if_false, builder, witness, tail && last, used, error)
-            }
-            if (!empty(error)) { return <- output }
-            output |> push <| branch
-            continue
-        }
-        if (stmt is ExprBlock) {
-            output |> push <| ce_direct_inline(stmt, builder, witness, tail && last, used, error)
-            if (!empty(error)) { return <- output }
-            continue
-        }
-        var computation : ExpressionPtr
-        if (stmt is ExprCall && (stmt as ExprCall).name == "try_with") {
-            computation = ce_lower_try_with(stmt as ExprCall, builder, false, false, true, error)
-        } elif (stmt is ExprCall && (stmt as ExprCall).name == "try_finally") {
-            computation = ce_lower_try_finally(stmt as ExprCall, builder, false, false, true, error)
-        } elif (stmt is ExprFor || stmt is ExprWhile) {
-            let original_body = stmt is ExprFor ? (stmt as ExprFor).body : (stmt as ExprWhile).body
-            var body = ce_scope(original_body, builder, false, error, false, true)
-            computation = ce_loop_stage(stmt, body, builder, false, false)
-        }
-        if (!empty(error)) { return <- output }
-        if (computation != null) {
-            if (tail && last) {
-                output |> push <| qmacro_expr() { return $e(computation) }
-                return <- output
-            }
-            let step = ce_unique_name("__ce_step", stmt.at)
-            output |> push <| qmacro_expr() { let $i(step) = $e(computation) }
-            output |> push <| ce_direct_check(builder, step, witness, true, stmt.at)
-            used = true
-            continue
-        }
-        if (!(stmt is ExprLet) && !(stmt is ExprCall) && !(stmt is ExprCallMacro)
-                && !(stmt is ExprCopy) && !(stmt is ExprMove)
-                && !(stmt is ExprOp1) && !(stmt is ExprOp2) && !(stmt is ExprAssert)) {
-            error = "computation: unsupported statement {stmt.__rtti}"
-            return <- output
-        }
-        output |> push <| stmt
+    for (index in range(start, length(blk.list))) {
+        let first = length(output)
+        let done = ce_direct_statement(blk, index, builder, witness, tail, output, used, error)
+        for (emitted in range(first, length(output))) { ce_restamp(output[emitted], blk.list[index].at) }
+        if (done) { return <- output }
     }
     if (top && (empty(output) || !ce_direct_returns(output[length(output)-1]))) {
-        output |> push <| qmacro_expr() { return ce_zero($i(builder)) }
+        var zero = qmacro_expr() { return ce_zero($i(builder)) }
+        ce_restamp(zero, blk.at)
+        output |> push <| zero
     }
     return <- output
 }
@@ -1460,6 +1499,7 @@ def private ce_direct_scope(blk : ExprBlock?; start : int; builder : string; var
         var declared = qmacro_expr() {
             var $i(witness) : typedecl(invoke($ { $b(replica); }))?
         }
+        ce_restamp(declared, blk.at)
         output |> emplace(declared, 0)
     }
     return <- output
@@ -1508,206 +1548,218 @@ def ce_lower(blk : ExprBlock?; start : int; builder : string; collect_mode : boo
     }
     return <- output
 }
+// One statement of a continuation-passing scope. True when it ends the scope:
+// the rest was lowered into its continuation, or an error was reported.
+def private ce_lower_statement(blk : ExprBlock?; index : int; builder : string; collect_mode : bool;
+                               var output : array<ExpressionPtr>; var error : string&; owned : bool) : bool {
+    var stmt = clone_expression(blk.list[index])
+    if (stmt is ExprFor) {stmt=ce_normalize_for(builder,stmt)}
+    if (collect_mode && (stmt is ExprYield || (stmt is ExprCall && (stmt as ExprCall).name == "yield_from"))) {
+        var value : ExpressionPtr
+        if (stmt is ExprYield) {
+            if ((stmt as ExprYield).returnFlags.moveSemantics) {
+                value=qmacro(ce_return_move($i(builder),$e((stmt as ExprYield).subexpr)))
+            } else {value = qmacro(ce_return($i(builder), $e((stmt as ExprYield).subexpr)))}
+        } else {
+            let call = stmt as ExprCall
+            if (length(call.arguments)!=1) {
+                error = "computation: expected expression |> yield_from"
+                return true
+            }
+            value = ce_return_from_source(builder,call.arguments[0],true,owned)
+        }
+        var rest <- ce_lower(blk, index+1, builder, collect_mode, error, owned)
+        let first=ce_unique_name("__ce_yield_result",stmt.at)
+        var append=qmacro($(var $i(first):typedecl($e(value))) {
+            return <- ce_combine($i(builder),$i(first),$ { $b(rest); })
+        })
+        value.at=stmt.at
+        var combined=ce_source_apply(value,append,true)
+        output |> push <| qmacro_expr() { return $e(combined) }
+        return true
+    }
+    if (stmt is ExprReturn) {
+        let ret = stmt as ExprReturn
+        if (index != length(blk.list)-1 || ret.subexpr == null) {
+            error = "computation: return must be the final statement of its scope and have a value"
+            return true
+        }
+        if (ret.subexpr is ExprCall && (ret.subexpr as ExprCall).name == "return_from") {
+            let call = ret.subexpr as ExprCall
+            if (length(call.arguments) != 1) {
+                error = "computation: expected 'return expression |> return_from'"
+                return true
+            }
+            let forwarded=ce_return_from_source(builder,call.arguments[0],collect_mode,owned)
+            output |> push <| qmacro_expr() {return $e(forwarded)}
+        } elif (owned && ret.returnFlags.moveSemantics) {
+            output |> push <| qmacro_expr() {return ce_return_move($i(builder),$e(ret.subexpr))}
+        } else {
+            if(owned) {
+                var check=qmacro(static_assert(typeinfo can_copy($e(ret.subexpr)),"owned CE: value must be moved; use 'return <- value'"))
+                check.at=stmt.at
+                output |> push <| check
+            }
+            output |> push <| qmacro_expr() {
+                return ce_return($i(builder), $e(ret.subexpr))
+            }
+        }
+        return true
+    }
+    var binding : ExpressionPtr
+    if (stmt is ExprLet) {
+        let decl = stmt as ExprLet
+        if (length(decl.variables) != 1) {
+            error = "computation: declare one variable per statement"
+            return true
+        }
+        binding = clone_expression(decl.variables[0].init)
+    } elif (stmt is ExprCall) {
+        binding = clone_expression(stmt)
+    }
+    if (binding != null && binding is ExprCall && (binding as ExprCall).name == "bind") {
+        let call = binding as ExprCall
+        if (length(call.arguments) != 1) {
+            error = "computation: expected 'expression |> bind'"
+            return true
+        }
+        // Explicit mutable-reference bind can consume move-only inputs even
+        // when the collection's output element is copyable.
+        let borrow_bind=collect_mode && stmt is ExprLet && (stmt as ExprLet).variables[0]._type.flags.ref && !(stmt as ExprLet).variables[0]._type.flags.constant
+        let mutable_bind=owned || borrow_bind
+        if (owned && stmt is ExprLet) {
+            let variable=(stmt as ExprLet).variables[0]
+            if (variable.flags.init_via_move || variable.flags.init_via_clone || variable.flags.inScope) {
+                error="owned CE: bind borrows its payload; use 'var value & = source |> bind'"
+                return true
+            }
+        }
+        var rest <- ce_lower(blk, index+1, builder, collect_mode, error, owned)
+        if (!empty(error)) { return true }
+        var source = ce_merge_source(call.arguments[0], builder, error)
+        if (!empty(error)) { return true }
+        let argument = ce_unique_name("__ce_value", stmt.at)
+        if (stmt is ExprLet) {
+            var declaration = clone_expression(stmt)
+            (declaration as ExprLet).variables[0].init = qmacro($i(argument))
+            if (mutable_bind) {(declaration as ExprLet).variables[0].init.genFlags.alwaysSafe=true}
+            rest |> emplace(declaration, 0)
+        }
+        // Only adjacent bind + final ordinary return. Preserve the original
+        // declaration (including its annotation) inside the mapping block.
+        var fused = false
+        if (!mutable_bind && index+2 == length(blk.list) && blk.list[index+1] is ExprReturn) {
+            let ret = blk.list[index+1] as ExprReturn
+            if (ret.subexpr != null && !ret.returnFlags.moveSemantics && !ret.returnFlags.returnReference) {
+                fused = !(ret.subexpr is ExprCall && (ret.subexpr as ExprCall).name == "return_from")
+            }
+        }
+        // The source is lowered once its type is known: the rest of the scope
+        // travels as payload and is emitted exactly once.
+        var payload : array<ExpressionPtr>
+        payload |> push <| qmacro($ { $b(rest); })
+        if (fused) {
+            var mapped : array<ExpressionPtr>
+            if (stmt is ExprLet) {
+                var declaration = clone_expression(stmt)
+                (declaration as ExprLet).variables[0].init = qmacro($i(argument))
+                mapped |> push <| declaration
+            }
+            mapped |> push <| clone_expression(blk.list[index+1])
+            payload |> push <| qmacro($ { $b(mapped); })
+        } else {
+            payload |> push <| new ExprConstBool(at=stmt.at, value=false)
+        }
+        payload |> push <| new ExprConstString(at=stmt.at, value:=argument)
+        payload |> push <| new ExprConstString(at=stmt.at, value:=builder)
+        payload |> push <| new ExprConstBool(at=stmt.at, value=collect_mode)
+        payload |> push <| new ExprConstBool(at=stmt.at, value=owned)
+        payload |> push <| new ExprConstBool(at=stmt.at, value=borrow_bind)
+        var staged : ExpressionPtr
+        if (call.arguments[0] is ExprCall && (call.arguments[0] as ExprCall).name == "and_bind") {
+            staged = ce_merge_apply(call.arguments[0], builder, null, collect_mode, error, payload, mutable_bind)
+            if (!empty(error)) { return true }
+        } else {
+            var probes : array<ExpressionPtr>
+            probes |> push <| source
+            staged = ce_stage("bind", stmt.at, probes, payload)
+        }
+        output |> push <| qmacro_expr() { return $e(staged) }
+        return true
+    }
+    // A scoped resource is acquired only when this declaration is reached.
+    if (binding != null && binding is ExprCall && (binding as ExprCall).name == "use_resource") {
+        let call = binding as ExprCall
+        if (!ce_validate_use_resource(stmt, call, error)) { return true }
+        var rest <- ce_lower(blk, index+1, builder, collect_mode, error, owned)
+        if (!empty(error)) { return true }
+        let scoped = ce_lower_use_resource(stmt, call, rest, builder)
+        output |> push <| qmacro_expr() { return $e(scoped) }
+        return true
+    }
+    var computation : ExpressionPtr
+    if (stmt is ExprCall && (stmt as ExprCall).name == "try_with") {
+        computation = ce_lower_try_with(stmt as ExprCall, builder, collect_mode, owned, false, error)
+        if (!empty(error)) { return true }
+    }
+    if (stmt is ExprCall && (stmt as ExprCall).name == "try_finally") {
+        computation = ce_lower_try_finally(stmt as ExprCall, builder, collect_mode, owned, false, error)
+        if (!empty(error)) { return true }
+    }
+    if (stmt is ExprIfThenElse) {
+        var branch = clone_expression(stmt)
+        let original = stmt as ExprIfThenElse
+        (branch as ExprIfThenElse).if_true = ce_scope(original.if_true, builder, collect_mode, error, owned)
+        (branch as ExprIfThenElse).if_false = ce_scope(original.if_false, builder, collect_mode, error, owned)
+        computation = qmacro(ce_delay($i(builder), $ { $e(branch); }))
+    } elif (stmt is ExprFor || stmt is ExprWhile) {
+        let original_body = stmt is ExprFor ? (stmt as ExprFor).body : (stmt as ExprWhile).body
+        var body = ce_scope(original_body, builder, collect_mode, error, owned)
+        computation = ce_loop_stage(stmt, body, builder, collect_mode, owned)
+    } elif (stmt is ExprBlock) {
+        var scope = ce_scope(stmt, builder, collect_mode, error, owned)
+        computation = qmacro(ce_delay($i(builder), $ { $e(scope); }))
+    }
+    if (computation != null) {
+        if (!empty(error)) { return true }
+        if (index == length(blk.list)-1) {
+            output |> push <| qmacro_expr() { return $e(computation) }
+        } else {
+            var rest <- ce_lower(blk, index+1, builder, collect_mode, error, owned)
+            var combined=qmacro(ce_combine($i(builder), $e(computation), $ { $b(rest); }))
+            if (collect_mode) {
+                let first=ce_unique_name("__ce_scope_result",stmt.at)
+                var append=qmacro($(var $i(first):typedecl($e(computation))) {
+                    return <- ce_combine($i(builder),$i(first),$ { $b(rest); })
+                })
+                computation.at=stmt.at
+                combined=ce_source_apply(computation,append,true)
+            }
+            output |> push <| qmacro_expr() { return $e(combined) }
+        }
+        return true
+    }
+    if (!(stmt is ExprLet) && !(stmt is ExprCall) && !(stmt is ExprCallMacro)
+            && !(stmt is ExprCopy) && !(stmt is ExprMove)
+            && !(stmt is ExprOp1) && !(stmt is ExprOp2) && !(stmt is ExprAssert)) {
+        error = "computation: unsupported statement {stmt.__rtti}"
+        return true
+    }
+    output |> push <| clone_expression(stmt)
+    return false
+}
 def ce_lower_impl(blk : ExprBlock?; start : int; builder : string; collect_mode : bool;
              var error : string&; owned:bool=false) : array<ExpressionPtr> {
     var output : array<ExpressionPtr>
     for (index in range(start, length(blk.list))) {
-        var stmt = clone_expression(blk.list[index])
-        if (stmt is ExprFor) {stmt=ce_normalize_for(builder,stmt)}
-        if (collect_mode && (stmt is ExprYield || (stmt is ExprCall && (stmt as ExprCall).name == "yield_from"))) {
-            var value : ExpressionPtr
-            if (stmt is ExprYield) {
-                if ((stmt as ExprYield).returnFlags.moveSemantics) {
-                    value=qmacro(ce_return_move($i(builder),$e((stmt as ExprYield).subexpr)))
-                } else {value = qmacro(ce_return($i(builder), $e((stmt as ExprYield).subexpr)))}
-            } else {
-                let call = stmt as ExprCall
-                if (length(call.arguments)!=1) {
-                    error = "computation: expected expression |> yield_from"
-                    return <- output
-                }
-                value = ce_return_from_source(builder,call.arguments[0],true,owned)
-            }
-            var rest <- ce_lower(blk, index+1, builder, collect_mode, error, owned)
-            let first=ce_unique_name("__ce_yield_result",stmt.at)
-            var append=qmacro($(var $i(first):typedecl($e(value))) {
-                return <- ce_combine($i(builder),$i(first),$ { $b(rest); })
-            })
-            value.at=stmt.at
-            var combined=ce_source_apply(value,append,true)
-            output |> push <| qmacro_expr() { return $e(combined) }
-            return <- output
-        }
-        if (stmt is ExprReturn) {
-            let ret = stmt as ExprReturn
-            if (index != length(blk.list)-1 || ret.subexpr == null) {
-                error = "computation: return must be the final statement of its scope and have a value"
-                return <- output
-            }
-            if (ret.subexpr is ExprCall && (ret.subexpr as ExprCall).name == "return_from") {
-                let call = ret.subexpr as ExprCall
-                if (length(call.arguments) != 1) {
-                    error = "computation: expected 'return expression |> return_from'"
-                    return <- output
-                }
-                let forwarded=ce_return_from_source(builder,call.arguments[0],collect_mode,owned)
-                output |> push <| qmacro_expr() {return $e(forwarded)}
-            } elif (owned && ret.returnFlags.moveSemantics) {
-                output |> push <| qmacro_expr() {return ce_return_move($i(builder),$e(ret.subexpr))}
-            } else {
-                if(owned) {
-                    var check=qmacro(static_assert(typeinfo can_copy($e(ret.subexpr)),"owned CE: value must be moved; use 'return <- value'"))
-                    check.at=stmt.at
-                    output |> push <| check
-                }
-                output |> push <| qmacro_expr() {
-                    return ce_return($i(builder), $e(ret.subexpr))
-                }
-            }
-            return <- output
-        }
-        var binding : ExpressionPtr
-        if (stmt is ExprLet) {
-            let decl = stmt as ExprLet
-            if (length(decl.variables) != 1) {
-                error = "computation: declare one variable per statement"
-                return <- output
-            }
-            binding = clone_expression(decl.variables[0].init)
-        } elif (stmt is ExprCall) {
-            binding = clone_expression(stmt)
-        }
-        if (binding != null && binding is ExprCall && (binding as ExprCall).name == "bind") {
-            let call = binding as ExprCall
-            if (length(call.arguments) != 1) {
-                error = "computation: expected 'expression |> bind'"
-                return <- output
-            }
-            // Explicit mutable-reference bind can consume move-only inputs even
-            // when the collection's output element is copyable.
-            let borrow_bind=collect_mode && stmt is ExprLet && (stmt as ExprLet).variables[0]._type.flags.ref && !(stmt as ExprLet).variables[0]._type.flags.constant
-            let mutable_bind=owned || borrow_bind
-            if (owned && stmt is ExprLet) {
-                let variable=(stmt as ExprLet).variables[0]
-                if (variable.flags.init_via_move || variable.flags.init_via_clone || variable.flags.inScope) {
-                    error="owned CE: bind borrows its payload; use 'var value & = source |> bind'"
-                    return <- output
-                }
-            }
-            var rest <- ce_lower(blk, index+1, builder, collect_mode, error, owned)
-            if (!empty(error)) { return <- output }
-            var source = ce_merge_source(call.arguments[0], builder, error)
-            if (!empty(error)) { return <- output }
-            let argument = ce_unique_name("__ce_value", stmt.at)
-            if (stmt is ExprLet) {
-                var declaration = clone_expression(stmt)
-                (declaration as ExprLet).variables[0].init = qmacro($i(argument))
-                if (mutable_bind) {(declaration as ExprLet).variables[0].init.genFlags.alwaysSafe=true}
-                rest |> emplace(declaration, 0)
-            }
-            // Only adjacent bind + final ordinary return. Preserve the original
-            // declaration (including its annotation) inside the mapping block.
-            var fused = false
-            if (!mutable_bind && index+2 == length(blk.list) && blk.list[index+1] is ExprReturn) {
-                let ret = blk.list[index+1] as ExprReturn
-                if (ret.subexpr != null && !ret.returnFlags.moveSemantics && !ret.returnFlags.returnReference) {
-                    fused = !(ret.subexpr is ExprCall && (ret.subexpr as ExprCall).name == "return_from")
-                }
-            }
-            // The source is lowered once its type is known: the rest of the scope
-            // travels as payload and is emitted exactly once.
-            var payload : array<ExpressionPtr>
-            payload |> push <| qmacro($ { $b(rest); })
-            if (fused) {
-                var mapped : array<ExpressionPtr>
-                if (stmt is ExprLet) {
-                    var declaration = clone_expression(stmt)
-                    (declaration as ExprLet).variables[0].init = qmacro($i(argument))
-                    mapped |> push <| declaration
-                }
-                mapped |> push <| clone_expression(blk.list[index+1])
-                payload |> push <| qmacro($ { $b(mapped); })
-            } else {
-                payload |> push <| new ExprConstBool(at=stmt.at, value=false)
-            }
-            payload |> push <| new ExprConstString(at=stmt.at, value:=argument)
-            payload |> push <| new ExprConstString(at=stmt.at, value:=builder)
-            payload |> push <| new ExprConstBool(at=stmt.at, value=collect_mode)
-            payload |> push <| new ExprConstBool(at=stmt.at, value=owned)
-            payload |> push <| new ExprConstBool(at=stmt.at, value=borrow_bind)
-            var staged : ExpressionPtr
-            if (call.arguments[0] is ExprCall && (call.arguments[0] as ExprCall).name == "and_bind") {
-                staged = ce_merge_apply(call.arguments[0], builder, null, collect_mode, error, payload, mutable_bind)
-                if (!empty(error)) { return <- output }
-            } else {
-                var probes : array<ExpressionPtr>
-                probes |> push <| source
-                staged = ce_stage("bind", stmt.at, probes, payload)
-            }
-            output |> push <| qmacro_expr() { return $e(staged) }
-            return <- output
-        }
-        // A scoped resource is acquired only when this declaration is reached.
-        if (binding != null && binding is ExprCall && (binding as ExprCall).name == "use_resource") {
-            let call = binding as ExprCall
-            if (!ce_validate_use_resource(stmt, call, error)) { return <- output }
-            var rest <- ce_lower(blk, index+1, builder, collect_mode, error, owned)
-            if (!empty(error)) { return <- output }
-            let scoped = ce_lower_use_resource(stmt, call, rest, builder)
-            output |> push <| qmacro_expr() { return $e(scoped) }
-            return <- output
-        }
-        var computation : ExpressionPtr
-        if (stmt is ExprCall && (stmt as ExprCall).name == "try_with") {
-            computation = ce_lower_try_with(stmt as ExprCall, builder, collect_mode, owned, false, error)
-            if (!empty(error)) { return <- output }
-        }
-        if (stmt is ExprCall && (stmt as ExprCall).name == "try_finally") {
-            computation = ce_lower_try_finally(stmt as ExprCall, builder, collect_mode, owned, false, error)
-            if (!empty(error)) { return <- output }
-        }
-        if (stmt is ExprIfThenElse) {
-            var branch = clone_expression(stmt)
-            let original = stmt as ExprIfThenElse
-            (branch as ExprIfThenElse).if_true = ce_scope(original.if_true, builder, collect_mode, error, owned)
-            (branch as ExprIfThenElse).if_false = ce_scope(original.if_false, builder, collect_mode, error, owned)
-            computation = qmacro(ce_delay($i(builder), $ { $e(branch); }))
-        } elif (stmt is ExprFor || stmt is ExprWhile) {
-            let original_body = stmt is ExprFor ? (stmt as ExprFor).body : (stmt as ExprWhile).body
-            var body = ce_scope(original_body, builder, collect_mode, error, owned)
-            computation = ce_loop_stage(stmt, body, builder, collect_mode, owned)
-        } elif (stmt is ExprBlock) {
-            var scope = ce_scope(stmt, builder, collect_mode, error, owned)
-            computation = qmacro(ce_delay($i(builder), $ { $e(scope); }))
-        }
-        if (computation != null) {
-            if (!empty(error)) { return <- output }
-            if (index == length(blk.list)-1) {
-                output |> push <| qmacro_expr() { return $e(computation) }
-            } else {
-                var rest <- ce_lower(blk, index+1, builder, collect_mode, error, owned)
-                var combined=qmacro(ce_combine($i(builder), $e(computation), $ { $b(rest); }))
-                if (collect_mode) {
-                    let first=ce_unique_name("__ce_scope_result",stmt.at)
-                    var append=qmacro($(var $i(first):typedecl($e(computation))) {
-                        return <- ce_combine($i(builder),$i(first),$ { $b(rest); })
-                    })
-                    computation.at=stmt.at
-                    combined=ce_source_apply(computation,append,true)
-                }
-                output |> push <| qmacro_expr() { return $e(combined) }
-            }
-            return <- output
-        }
-        if (!(stmt is ExprLet) && !(stmt is ExprCall) && !(stmt is ExprCallMacro)
-                && !(stmt is ExprCopy) && !(stmt is ExprMove)
-                && !(stmt is ExprOp1) && !(stmt is ExprOp2) && !(stmt is ExprAssert)) {
-            error = "computation: unsupported statement {stmt.__rtti}"
-            return <- output
-        }
-        output |> push <| clone_expression(stmt)
+        let first = length(output)
+        let done = ce_lower_statement(blk, index, builder, collect_mode, output, error, owned)
+        for (emitted in range(first, length(output))) { ce_restamp(output[emitted], blk.list[index].at) }
+        if (done) { return <- output }
     }
-    output |> push <| qmacro_expr() { return ce_zero($i(builder)) }
+    var zero = qmacro_expr() { return ce_zero($i(builder)) }
+    ce_restamp(zero, blk.at)
+    output |> push <| zero
     return <- output
 }
 
@@ -1770,6 +1822,7 @@ class ComputationMacro : AstCallMacro {
                 macro_error(prog, expr.arguments[0].at, stage_error)
                 return null
             }
+            ce_restamp(staged, expr.arguments[0].at)
             return staged
         }
         if (length(expr.arguments)==2 && expr.name=="computation" && expr.arguments[1] is ExprMakeBlock) {
@@ -1870,6 +1923,7 @@ class ComputationMacro : AstCallMacro {
         })
         var result = qmacro(invoke($e(scope), $e(expr.arguments[0])))
         result.at = expr.at
+        ce_restamp(result, expr.at)
         return result
     }
 }

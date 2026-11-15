@@ -1,8 +1,19 @@
 options gen2
 module task_channel public
 require ./task_builder.das public
+require daslib/templates
+require daslib/templates_boost
+require daslib/typemacro_boost
 
 struct TaskChannelTag {_ce_marker:uint8}
+// `TaskChannel<T>` names the handle that task_channel(type<T>, capacity)
+// returns. The state layout is repeated in task_channel; its declared result
+// type keeps the two in step.
+[template_tuple(T)]
+struct template TaskChannel {
+    tag : TaskChannelTag
+    owner : iterator<tuple<references:uint64;closed:bool;error:string;capacity:int;serial:uint64;queue:array<T>;senders:array<uint64>;readers:array<uint64>>?>
+}
 
 def private ce_channel_lease(var state:auto(S)?;owner:bool=false) {
     return <- generator<S?> capture(copy(state),copy(owner)) {
@@ -21,7 +32,7 @@ def private ce_channel_state(channel:tuple<tag:TaskChannelTag;owner:iterator<aut
         return state
     }
 }
-def task_channel(unused:type<auto(T)>;capacity:int) {
+def task_channel(unused:type<auto(T)>;capacity:int) : TaskChannel<T -const -&> {
     static_assert(typeinfo ce_resumable_payload(default<T -const -&>))
     if(capacity<=0) {panic("task channel: capacity must be positive")}
     unsafe {
@@ -76,7 +87,7 @@ def private ce_channel_send_poll(var op:auto(O)?) {unsafe {
         ce_channel_remove(state.senders,op.id);op.id=uint64(0)
         return task_ready(result_ok(CeUnit()))
     }
-    return task_pending(type<$Result<CeUnit;string>>)
+    return task_pending(type<Result<CeUnit;string>>)
 }}
 def private ce_channel_finish(var op:auto(O)?;sender:bool) {unsafe {
     if(sender) {ce_channel_remove(op.state.senders,op.id)} else {ce_channel_remove(op.state.readers,op.id)}
@@ -97,7 +108,7 @@ def task_channel_send(channel:tuple<tag:TaskChannelTag;owner:iterator<auto(S)?>>
 def private ce_channel_receive_poll(var op:auto(O)?) {unsafe {
     var state=op.state
     typedef Item=typedecl(state.queue[0]) -const -&
-    if(!empty(state.error)) {var error <- move_error(state.error,type<$Option<Item>>);return <- task_ready_move(error)}
+    if(!empty(state.error)) {var error <- move_error(state.error,type<Option<Item>>);return <- task_ready_move(error)}
     if(op.id==uint64(0)) {op.id=ce_channel_register(state,false)}
     if(state.readers[0]==op.id) {
         if(!empty(state.queue)) {
@@ -107,7 +118,7 @@ def private ce_channel_receive_poll(var op:auto(O)?) {unsafe {
         }
         if(state.closed) {var item=none(type<Item>);var result <- move_ok(item);return <- task_ready_move(result)}
     }
-    return <- task_pending(type<$Result<$Option<Item>;string>>)
+    return <- task_pending(type<Result<Option<Item>;string>>)
 }}
 def task_channel_receive(channel:tuple<tag:TaskChannelTag;owner:iterator<auto(S)?>>) {
     var lease <- task_channel_clone(channel);var state=ce_channel_state(channel)
@@ -129,7 +140,7 @@ def clone(var target:tuple<tag:TaskChannelTag;owner:iterator<auto(S)?>>;source:t
 // reports err. Every channel must share the element type T.
 def private ce_channel_select_poll(var op:auto(O)?) {unsafe {
     typedef Item=typedecl(op.states[0].queue[0]) -const -&
-    typedef Choice=tuple<index:int;value:$Option<Item>>
+    typedef Choice=tuple<index:int;value:Option<Item>>
     let count=length(op.states)
     if(!op.started) {
         op.started=true
@@ -161,7 +172,7 @@ def private ce_channel_select_poll(var op:auto(O)?) {unsafe {
             }
         }
     }
-    return <- task_pending(type<$Result<Choice;string>>)
+    return <- task_pending(type<Result<Choice;string>>)
 }}
 def private ce_channel_select_release(var op:auto(O)?) {unsafe {
     for(i in range(length(op.states))) {

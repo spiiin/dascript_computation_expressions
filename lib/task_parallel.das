@@ -17,16 +17,16 @@ def task_semaphore_release(semaphore:tuple<tag:TaskSemaphoreTag;channel:auto>) {
 }
 def task_semaphore_acquire(semaphore:tuple<tag:TaskSemaphoreTag;channel:auto>) {
     var waiting <- task_channel_receive(semaphore.channel)
-    var events <- generator<tuple<tag:TaskEventTag;ready:bool;value:$Result<CeUnit;string>>> capture(<-waiting) {
+    var events <- generator<tuple<tag:TaskEventTag;ready:bool;value:Result<CeUnit;string>>> capture(<-waiting) {
         while(true) {
             let status=task_poll(waiting)
             if(status==TaskStatus.Failed) {panic(task_error(waiting))}
-            if(status==TaskStatus.Cancelled) {ce_task_cancelled();yield task_pending(type<$Result<CeUnit;string>>);return false}
+            if(status==TaskStatus.Cancelled) {ce_task_cancelled();yield task_pending(type<Result<CeUnit;string>>);return false}
             if(status==TaskStatus.Succeeded) {
                 if(waiting.value is err || (waiting.value as ok) is none) {yield task_ready(result_error("semaphore is closed",type<CeUnit>));return false}
                 yield task_ready(result_ok(CeUnit()));return false
             }
-            yield task_pending(type<$Result<CeUnit;string>>)
+            yield task_pending(type<Result<CeUnit;string>>)
         }
         return false
     } finally {ce_sequence_finalize($ {ce_task_parallel_close(waiting)})}
@@ -170,7 +170,7 @@ def task_result_when_all_limited(var inputs:array<auto(Input)>;limit:int;var fac
     var values:array<Item>;values.resize(length(inputs))
     var children:array<Child -const -&>;children.resize(length(inputs))
     var states:array<int>;states.resize(length(inputs))
-    var events <- generator<tuple<tag:TaskEventTag;ready:bool;value:$Result<array<Item>;string>>> capture(<-inputs,<-factory,<-children,<-states,<-values,copy(limit)) {
+    var events <- generator<tuple<tag:TaskEventTag;ready:bool;value:Result<array<Item>;string>>> capture(<-inputs,<-factory,<-children,<-states,<-values,copy(limit)) {
         var next_index=0;var active=0;var completed=0
         while(completed<length(inputs)) {
             while(active<limit && next_index<length(inputs)) {
@@ -181,7 +181,7 @@ def task_result_when_all_limited(var inputs:array<auto(Input)>;limit:int;var fac
                 if(states[i]!=1) {continue}
                 let status=task_poll(children[i])
                 if(status==TaskStatus.Failed) {panic(task_error(children[i]))}
-                if(status==TaskStatus.Cancelled) {ce_task_cancelled();yield <- task_pending(type<$Result<array<Item>;string>>);return false}
+                if(status==TaskStatus.Cancelled) {ce_task_cancelled();yield <- task_pending(type<Result<array<Item>;string>>);return false}
                 if(status==TaskStatus.Succeeded) {
                     if(children[i].value is err) {
                         var error <- move_error(children[i].value as err,type<array<Item>>)
@@ -191,7 +191,7 @@ def task_result_when_all_limited(var inputs:array<auto(Input)>;limit:int;var fac
                     delete children[i];states[i]=2;active--;completed++
                 }
             }
-            if(completed<length(inputs)) {yield <- task_pending(type<$Result<array<Item>;string>>)}
+            if(completed<length(inputs)) {yield <- task_pending(type<Result<array<Item>;string>>)}
         }
         var result <- move_ok(values);yield <- task_ready_move(result)
         return false

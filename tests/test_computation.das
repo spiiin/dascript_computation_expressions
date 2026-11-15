@@ -14,12 +14,12 @@ def record(var counts : Counts; step : int) {
     elif (step == 2) { counts.second++ }
     else { counts.third++ }
 }
-def result_step(var counts : Counts; step, fail_at : int) : $Result<int;string> {
+def result_step(var counts : Counts; step, fail_at : int) : Result<int;string> {
     record(counts, step)
     if (step == fail_at) { return result_error("failure at {step}", type<int>) }
     return result_ok(step)
 }
-def option_step(var counts : Counts; step, fail_at : int) : $Option<int> {
+def option_step(var counts : Counts; step, fail_at : int) : Option<int> {
     record(counts, step)
     if (step == fail_at) { return none(type<int>) }
     return some(step)

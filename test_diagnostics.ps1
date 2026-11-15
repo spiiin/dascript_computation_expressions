@@ -7,7 +7,11 @@ $cases=@(
     @{File='test_and_bind_unsupported.das';Message='and_bind is unsupported for builder';Marker='and_bind';ExactErrors=1},
     @{File='test_task_and_bind_unsupported.das';Message='and_bind is unsupported for builder';Marker='and_bind';ExactErrors=1},
     @{File='test_and_bind_mixed.das';Message='and_bind is unsupported for builder';Marker='and_bind';ExactErrors=1},
-    @{File='test_move_copy.das';Message="value must be moved; use 'return <- value'";Marker='return items';ExactErrors=0}
+    @{File='test_move_copy.das';Message="value must be moved; use 'return <- value'";Marker='return items';ExactErrors=0},
+    # A source of the wrong type is reported at the bind, not inside the macro.
+    @{File='test_computation_mixed.das';Message='ce_unwrap';Marker='|> bind';ExactErrors=0},
+    @{File='test_writer_mixed.das';Message='ce_unwrap';Marker='|> bind';ExactErrors=0},
+    @{File='test_list_mixed.das';Message='ce_unwrap';Marker='|> bind';ExactErrors=0}
 )
 Push-Location $PSScriptRoot
 try {

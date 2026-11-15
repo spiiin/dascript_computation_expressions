@@ -1,7 +1,7 @@
 # Публичный API computation expressions
 
 Проверенный SDK — Daslang v0.6.5-RC2 со стандартной daslib. SDK не включён в экспорт.
-Result и Option теперь являются стандартными `$Result<T;string>` / `$Option<T>`.
+Result и Option теперь являются стандартными `Result<T;string>` / `Option<T>`.
 Миграция и правила владения: [семантика builders](CE_SEMANTICS.md).
 Необязательный `./lib/task_hv.das` требует установленный `dashv/dashv_boost`.
 API: `hv_websocket`, `ws_connect`, `ws_send_text`, `ws_receive_text`,
@@ -28,7 +28,7 @@ task_result_when_all, task_race и [and_bind для Task](CE_SEMANTICS.md); см
 
 | Builder | Результат |
 |---|---|
-| ResultBuilder / OptionBuilder | `$Result<T;string>` (err/ok) / `$Option<T>` (none/some) |
+| ResultBuilder / OptionBuilder | `Result<T;string>` (err/ok) / `Option<T>` (none/some) |
 | MoveResultBuilder / MoveOptionBuilder | Те же варианты с передаваемым владением |
 | StateBuilder(initial) | `(value, state)` |
 | WriterBuilder | `(value, log)` |
@@ -133,6 +133,29 @@ state, не внешние эффекты или объекты по указа�
 task_delay_ms(duration_ms) возвращает Task<CeUnit>, ожидающую now_ms текущего task_tick. Срок начинается при первом poll задержки; TaskResultBuilder также принимает Task<CeUnit> через bind. Модуль task_delay.das включён в task_scheduler.das. Контракт часов, отмена и пример: [семантика builders](CE_SEMANTICS.md).
 
 task_when_all(tasks) потребляет массив Task с одинаковым копируемым T и возвращает владеющую задачу коллекции. Bind: var results & = task_when_all(make_jobs()) |> bind. task_value возвращает clone массива; прямая регистрация — task_scheduler(type<array<T>>). Поддержаны token, timeout и task_scope. Подробности: [семантика builders](CE_SEMANTICS.md).
+
+## Имена типов Task
+
+Задачи и их handles — именованные кортежи, и у основных есть имена, чтобы
+объявить глобальную переменную, поле или параметр без `typedecl(вызов())`:
+
+| Имя | Что возвращает такое значение |
+| --- | --- |
+| `Task<T>` | `computation(TaskBuilder(type<T>))`; для TaskResultBuilder это `Task<Result<T;string>>` |
+| `TaskEvent<T>` | Один шаг задачи |
+| `TaskChannel<T>` | `task_channel(type<T>, capacity)` |
+| `TaskProgress<T>` | `task_progress(type<T>)` |
+| `TaskEventSource<T>` | `task_event_source(type<T>)` |
+| `TaskJobQueue` | `task_job_queue()` |
+
+```das
+var inbox : TaskChannel<string>
+def total(var tasks : array<Task<int>>) : int { ... }
+```
+
+Имя — тот же структурный тип, что и значение конструктора, поэтому старый код
+с `typedecl(...)` остаётся совместимым. У scheduler, runtime, потока jobque и
+AsyncSequence имён пока нет: там по-прежнему нужен `typedecl`.
 
 ## Полный Task API
 

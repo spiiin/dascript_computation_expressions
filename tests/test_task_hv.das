@@ -56,7 +56,7 @@ def balanced() {
     verify(stats.created==stats.released && stats.clients_started==stats.clients_stopped)
 }
 def echo_checks() {
-    var inscope scheduler <- task_scheduler(type<$Result<string;string>>)
+    var inscope scheduler <- task_scheduler(type<Result<string;string>>)
     let before=hv_websocket_stats()
     let id=task_spawn(scheduler,echo())
     verify(hv_websocket_stats().clients_started==before.clients_started)
@@ -69,7 +69,7 @@ def cancellation_checks() {
     continued=0
     {
         var inscope token <- cancellation_token()
-        var inscope scheduler <- task_scheduler(type<$Result<string;string>>)
+        var inscope scheduler <- task_scheduler(type<Result<string;string>>)
         let id=task_spawn(scheduler,task_with_cancellation(waiting("handshake_cancel",true),token))
         seen(scheduler,"handshake_cancel")
         verify(task_status(scheduler,id)==TaskStatus.Waiting)
@@ -79,7 +79,7 @@ def cancellation_checks() {
     balanced();receiving=0
     {
         var inscope token <- cancellation_token()
-        var inscope scheduler <- task_scheduler(type<$Result<string;string>>)
+        var inscope scheduler <- task_scheduler(type<Result<string;string>>)
         let id=task_spawn(scheduler,task_with_cancellation(waiting("silent_cancel"),token))
         await_receiving(scheduler)
         cancellation_cancel(token);drive(scheduler,id)
@@ -90,7 +90,7 @@ def cancellation_checks() {
 def timeout_checks() {
     continued=0
     {
-        var inscope scheduler <- task_scheduler(type<$Result<string;string>>)
+        var inscope scheduler <- task_scheduler(type<Result<string;string>>)
         let id=task_spawn(scheduler,waiting("handshake_timeout",true),TaskTimeout(after_ms=5))
         seen(scheduler,"handshake_timeout")
         verify(task_status(scheduler,id)==TaskStatus.Waiting)
@@ -99,7 +99,7 @@ def timeout_checks() {
     }
     balanced();receiving=0
     {
-        var inscope scheduler <- task_scheduler(type<$Result<string;string>>)
+        var inscope scheduler <- task_scheduler(type<Result<string;string>>)
         let id=task_spawn(scheduler,waiting("silent_timeout"),TaskTimeout(after_ms=5))
         await_receiving(scheduler);tick(scheduler,5l)
         verify(task_timed_out(scheduler,id) && task_status(scheduler,id)==TaskStatus.Cancelled && continued==0)
@@ -146,7 +146,7 @@ def failure(path:string;config:HvWebSocketConfig=HvWebSocketConfig()) {
 def pending_owner_checks() {
     {
         var socket <- hv_websocket()
-        var inscope scheduler <- task_scheduler(type<$Result<CeUnit;string>>)
+        var inscope scheduler <- task_scheduler(type<Result<CeUnit;string>>)
         let id=task_spawn(scheduler,ws_connect(socket,url("handshake_owner")))
         seen(scheduler,"handshake_owner")
         // The operation keeps its data alive, but deleting the owner closes transport.
@@ -157,7 +157,7 @@ def pending_owner_checks() {
     balanced()
     {
         var inscope socket <- hv_websocket()
-        var inscope scheduler <- task_scheduler(type<$Result<CeUnit;string>>)
+        var inscope scheduler <- task_scheduler(type<Result<CeUnit;string>>)
         let id=task_spawn(scheduler,ws_connect(socket,url("handshake_busy")))
         seen(scheduler,"handshake_busy")
         var inscope other <- ws_send_text(socket,"too early")
@@ -173,14 +173,14 @@ def pending_owner_checks() {
 def error_checks() {
     continued=0
     for(path in fixed_array("peer_close","binary","oversize")) {
-        var inscope scheduler <- task_scheduler(type<$Result<string;string>>)
+        var inscope scheduler <- task_scheduler(type<Result<string;string>>)
         let id=task_spawn(scheduler,failure(path,HvWebSocketConfig(max_message_bytes=16)))
         drive(scheduler,id)
         verify(task_status(scheduler,id)==TaskStatus.Succeeded && task_value(scheduler,id) is err && continued==0)
     }
     balanced()
     {
-        var inscope scheduler <- task_scheduler(type<$Result<string;string>>)
+        var inscope scheduler <- task_scheduler(type<Result<string;string>>)
         var job <- computation(TaskResultBuilder(type<string>)) {
             var socket & = hv_websocket() |> use_resource
             ws_connect(socket,url("fault")) |> bind

@@ -8,17 +8,17 @@ struct ResultBuilder {_ce_marker:uint8}
 struct OptionBuilder {_ce_marker:uint8}
 
 // Used in typedecl by the macro; it is not executed to obtain a bound value.
-def ce_unwrap(builder : ResultBuilder; value : $Result<auto(T);string>) : T {
+def ce_unwrap(builder : ResultBuilder; value : Result<auto(T);string>) : T {
     return value as ok
 }
-def ce_unwrap(builder : OptionBuilder; value : $Option<auto(T)>) : T {
+def ce_unwrap(builder : OptionBuilder; value : Option<auto(T)>) : T {
     return value as some
 }
 
-def result_ok(value : auto(T)) : $Result<T -const -&;string> {
+def result_ok(value : auto(T)) : Result<T -const -&;string> {
     return <- result::ok(value,type<string>)
 }
-def result_error(message : string; unused : type<auto(T)>) : $Result<T -const -&;string> {
+def result_error(message : string; unused : type<auto(T)>) : Result<T -const -&;string> {
     return <- result::err(message,type<T>)
 }
 
@@ -29,19 +29,19 @@ def ce_return(builder : OptionBuilder; value : auto(T)) {
     return some(value)
 }
 
-def ce_return_from(builder : ResultBuilder; value : $Result<auto(T);string>) {
+def ce_return_from(builder : ResultBuilder; value : Result<auto(T);string>) {
     return value
 }
-def ce_return_from(builder : OptionBuilder; value : $Option<auto(T)>) {
+def ce_return_from(builder : OptionBuilder; value : Option<auto(T)>) {
     return value
 }
 
-def ce_bind(builder : ResultBuilder; value : $Result<auto(T);string>;
+def ce_bind(builder : ResultBuilder; value : Result<auto(T);string>;
             next : block<(item : T) : auto(R)>) : R {
     if (value is err) { return variant type<R>(err=value as err) }
     return invoke(next, value as ok)
 }
-def ce_bind(builder : OptionBuilder; value : $Option<auto(T)>;
+def ce_bind(builder : OptionBuilder; value : Option<auto(T)>;
             next : block<(item : T) : auto(R)>) : R {
     if (value is none) { return default<R> }
     return invoke(next, value as some)
@@ -49,36 +49,36 @@ def ce_bind(builder : OptionBuilder; value : $Option<auto(T)>;
 
 // Unit is a successful computation with no useful payload (not None/Error).
 
-def ce_zero(builder : ResultBuilder) { return variant type<$Result<CeUnit;string>>(ok=CeUnit()) }
-def ce_zero(builder : OptionBuilder) { return variant type<$Option<CeUnit>>(some=CeUnit()) }
+def ce_zero(builder : ResultBuilder) { return variant type<Result<CeUnit;string>>(ok=CeUnit()) }
+def ce_zero(builder : OptionBuilder) { return variant type<Option<CeUnit>>(some=CeUnit()) }
 
 // Synchronous builders force the thunk here; no block escapes its stack frame.
 
-def ce_combine(builder : ResultBuilder; first : $Result<CeUnit;string>;
+def ce_combine(builder : ResultBuilder; first : Result<CeUnit;string>;
                next : block<() : auto(R)>) : R {
     if (first is err) { return variant type<R>(err=first as err) }
     return ce_delay(builder, next)
 }
-def ce_combine(builder : OptionBuilder; first : $Option<CeUnit>;
+def ce_combine(builder : OptionBuilder; first : Option<CeUnit>;
                next : block<() : auto(R)>) : R {
     if (first is none) { return default<R> }
     return ce_delay(builder, next)
 }
 // These signatures require each loop iteration to compute Unit.
-def ce_loop_failed(builder : ResultBuilder; step : $Result<CeUnit;string>) : bool {
+def ce_loop_failed(builder : ResultBuilder; step : Result<CeUnit;string>) : bool {
     return step is err
 }
-def ce_loop_failed(builder : OptionBuilder; step : $Option<CeUnit>) : bool {
+def ce_loop_failed(builder : OptionBuilder; step : Option<CeUnit>) : bool {
     return step is none
 }
 
 
 // Fold loop effects. Result/Option keep their first failure; Writer appends logs.
-def ce_loop_append(builder : ResultBuilder; first, step : $Result<CeUnit;string>) {
+def ce_loop_append(builder : ResultBuilder; first, step : Result<CeUnit;string>) {
     if (first is err) { return first }
     return step
 }
-def ce_loop_append(builder : OptionBuilder; first, step : $Option<CeUnit>) {
+def ce_loop_append(builder : OptionBuilder; first, step : Option<CeUnit>) {
     if (first is none) { return first }
     return step
 }
@@ -87,68 +87,68 @@ def ce_protocol(builder : ResultBuilder) { return CeDirectProtocol() }
 def ce_protocol(builder : OptionBuilder) { return CeDirectProtocol() }
 
 // Direct lowering: a failed source leaves the scope as the scope's own type.
-def ce_direct_failed(builder : ResultBuilder; source : $Result<auto(T);string>) : bool {
+def ce_direct_failed(builder : ResultBuilder; source : Result<auto(T);string>) : bool {
     return source is err
 }
-def ce_direct_failed(builder : OptionBuilder; source : $Option<auto(T)>) : bool {
+def ce_direct_failed(builder : OptionBuilder; source : Option<auto(T)>) : bool {
     return source is none
 }
-def ce_direct_failure(builder : ResultBuilder; source : $Result<auto(T);string>; witness : auto(R)?) : R {
+def ce_direct_failure(builder : ResultBuilder; source : Result<auto(T);string>; witness : auto(R)?) : R {
     return variant type<R>(err=source as err)
 }
-def ce_direct_failure(builder : OptionBuilder; source : $Option<auto(T)>; witness : auto(R)?) : R {
+def ce_direct_failure(builder : OptionBuilder; source : Option<auto(T)>; witness : auto(R)?) : R {
     return default<R>
 }
 
 
-def ce_merge_sources(builder : ResultBuilder; left : $Result<auto;string>;
-                     right : $Result<auto;string>) {
+def ce_merge_sources(builder : ResultBuilder; left : Result<auto;string>;
+                     right : Result<auto;string>) {
     unsafe {
-        if(left is err) {return typeinfo ce_canonical(variant type<$Result<typedecl(ce_source_pair(left as ok,right as ok));string>>(err=left as err))}
-        if(right is err) {return typeinfo ce_canonical(variant type<$Result<typedecl(ce_source_pair(left as ok,right as ok));string>>(err=right as err))}
+        if(left is err) {return typeinfo ce_canonical(variant type<Result<typedecl(ce_source_pair(left as ok,right as ok));string>>(err=left as err))}
+        if(right is err) {return typeinfo ce_canonical(variant type<Result<typedecl(ce_source_pair(left as ok,right as ok));string>>(err=right as err))}
         return typeinfo ce_canonical(result_ok(ce_source_pair(left as ok,right as ok)))
     }
 }
-def ce_merge_sources(builder : OptionBuilder; left : $Option<auto>;
-                     right : $Option<auto>) {
+def ce_merge_sources(builder : OptionBuilder; left : Option<auto>;
+                     right : Option<auto>) {
     unsafe {
-        if(left is none || right is none) {return typeinfo ce_canonical(default<$Option<typedecl(ce_source_pair(left as some,right as some))>>)}
+        if(left is none || right is none) {return typeinfo ce_canonical(default<Option<typedecl(ce_source_pair(left as some,right as some))>>)}
         return typeinfo ce_canonical(some(ce_source_pair(left as some,right as some)))
     }
 }
 
-def ce_bind_return(builder : ResultBuilder; source : $Result<auto(T);string>;
+def ce_bind_return(builder : ResultBuilder; source : Result<auto(T);string>;
                    mapper : block<(value:T):auto(U)>) : typedecl(ce_return(builder, default<U>)) {
     if (source is err) { return variant type<typedecl(ce_return(builder, default<U>))>(err=source as err) }
     return variant type<typedecl(ce_return(builder, default<U>))>(ok=invoke(mapper, source as ok))
 }
-def ce_bind_return(builder : OptionBuilder; source : $Option<auto(T)>;
+def ce_bind_return(builder : OptionBuilder; source : Option<auto(T)>;
                    mapper : block<(value:T):auto(U)>) : typedecl(ce_return(builder, default<U>)) {
     if (source is none) { return default<typedecl(ce_return(builder, default<U>))> }
     return variant type<typedecl(ce_return(builder, default<U>))>(some=invoke(mapper, source as some))
 }
 
 
-def ce_bind2_return(builder:ResultBuilder; left:$Result<auto(A);string>; right:$Result<auto(B);string>;
+def ce_bind2_return(builder:ResultBuilder; left:Result<auto(A);string>; right:Result<auto(B);string>;
                     mapper:block<(pair:tuple<first:A -const -&;second:B -const -&>):auto(U)>) : typedecl(ce_return(builder,default<U>)) {
     if (left is err) { return variant type<typedecl(ce_return(builder,default<U>))>(err=left as err) }
     if (right is err) { return variant type<typedecl(ce_return(builder,default<U>))>(err=right as err) }
     return variant type<typedecl(ce_return(builder,default<U>))>(ok=invoke(mapper,ce_source_pair(left as ok,right as ok)))
 }
-def ce_bind2_return(builder:OptionBuilder; left:$Option<auto(A)>; right:$Option<auto(B)>;
+def ce_bind2_return(builder:OptionBuilder; left:Option<auto(A)>; right:Option<auto(B)>;
                     mapper:block<(pair:tuple<first:A -const -&;second:B -const -&>):auto(U)>) : typedecl(ce_return(builder,default<U>)) {
     if (left is none || right is none) { return default<typedecl(ce_return(builder,default<U>))> }
     return variant type<typedecl(ce_return(builder,default<U>))>(some=invoke(mapper,ce_source_pair(left as some,right as some)))
 }
 
 // Grouped bind: the continuation already returns an outcome.
-def ce_bind2(builder:ResultBuilder; left:$Result<auto(A);string>; right:$Result<auto(B);string>;
+def ce_bind2(builder:ResultBuilder; left:Result<auto(A);string>; right:Result<auto(B);string>;
                     mapper:block<(pair:tuple<first:A -const -&;second:B -const -&>):auto(R)>) : R {
     if (left is err) { return variant type<R>(err=left as err) }
     if (right is err) { return variant type<R>(err=right as err) }
     return invoke(mapper,ce_source_pair(left as ok,right as ok))
 }
-def ce_bind2(builder:OptionBuilder; left:$Option<auto(A)>; right:$Option<auto(B)>;
+def ce_bind2(builder:OptionBuilder; left:Option<auto(A)>; right:Option<auto(B)>;
                     mapper:block<(pair:tuple<first:A -const -&;second:B -const -&>):auto(R)>) : R {
     if (left is none || right is none) { return default<R> }
     return invoke(mapper,ce_source_pair(left as some,right as some))
@@ -221,7 +221,7 @@ def ce_for(builder:ResultBuilder; var source:array<auto> ==const; body:auto) { r
 def ce_for(builder:ResultBuilder; var source:auto[] ==const; body:auto) { return ce_for_mutable_array(builder,source,body) }
 def ce_for(builder:ResultBuilder; var source:iterator<auto>; body:auto) { return ce_for_iterator(builder,source,body) }
 
-def ce_while(builder:ResultBuilder; condition:block<():bool>; body:block<():$Result<CeUnit;string>>) {
+def ce_while(builder:ResultBuilder; condition:block<():bool>; body:block<():Result<CeUnit;string>>) {
     var result=ce_zero(builder)
     while (invoke(condition)) {
         result=ce_loop_append(builder,result,invoke(body))
@@ -236,7 +236,7 @@ def ce_for(builder:OptionBuilder; var source:array<auto> ==const; body:auto) { r
 def ce_for(builder:OptionBuilder; var source:auto[] ==const; body:auto) { return ce_for_mutable_array(builder,source,body) }
 def ce_for(builder:OptionBuilder; var source:iterator<auto>; body:auto) { return ce_for_iterator(builder,source,body) }
 
-def ce_while(builder:OptionBuilder; condition:block<():bool>; body:block<():$Option<CeUnit>>) {
+def ce_while(builder:OptionBuilder; condition:block<():bool>; body:block<():Option<CeUnit>>) {
     var result=ce_zero(builder)
     while (invoke(condition)) {
         result=ce_loop_append(builder,result,invoke(body))
@@ -246,9 +246,9 @@ def ce_while(builder:OptionBuilder; condition:block<():bool>; body:block<():$Opt
 }
 
 def ce_for_zip(builder:ResultBuilder; arity:int;
-               traverse:block<(visit:block<(body:block<():$Result<CeUnit;string>>):bool>):void>) {
+               traverse:block<(visit:block<(body:block<():Result<CeUnit;string>>):bool>):void>) {
     var result=ce_zero(builder)
-    invoke(traverse, $(body:block<():$Result<CeUnit;string>>) {
+    invoke(traverse, $(body:block<():Result<CeUnit;string>>) {
         result=invoke(body)
         return !ce_loop_failed(builder,result)
     })
@@ -256,9 +256,77 @@ def ce_for_zip(builder:ResultBuilder; arity:int;
 }
 
 def ce_for_zip(builder:OptionBuilder; arity:int;
-               traverse:block<(visit:block<(body:block<():$Option<CeUnit>>):bool>):void>) {
+               traverse:block<(visit:block<(body:block<():Option<CeUnit>>):bool>):void>) {
     var result=ce_zero(builder)
-    invoke(traverse, $(body:block<():$Option<CeUnit>>) {
+    invoke(traverse, $(body:block<():Option<CeUnit>>) {
+        result=invoke(body)
+        return !ce_loop_failed(builder,result)
+    })
+    return result
+}
+
+// Result with any copyable error type: ResultBuilder(type<E>). `return value`
+// says nothing about the error type, so the builder carries it. ResultBuilder()
+// is the same computation with string errors.
+struct ResultErrorContext {_ce_marker:uint8}
+def ResultBuilder(unused : type<auto(E)>) {
+    static_assert(typeinfo can_copy(type<E>), "ResultBuilder(type<E>): the error type must be copyable")
+    var marker : E -const -&?
+    return (kind=ResultErrorContext(), error=marker)
+}
+def ce_protocol(builder : tuple<kind:ResultErrorContext;error:auto(E)?>) { return CeDirectProtocol() }
+def ce_unwrap(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; value : Result<auto(T);E>) : T {
+    return value as ok
+}
+def ce_return(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; value : auto(T)) {
+    return <- result::ok(value, type<E>)
+}
+def ce_return_from(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; value : Result<auto(T);E>) {
+    return value
+}
+def ce_zero(builder : tuple<kind:ResultErrorContext;error:auto(E)?>) {
+    return variant type<Result<CeUnit;E>>(ok=CeUnit())
+}
+def ce_direct_failed(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; source : Result<auto(T);E>) : bool {
+    return source is err
+}
+def ce_direct_failure(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; source : Result<auto(T);E>;
+                      witness : auto(R)?) : R {
+    return variant type<R>(err=source as err)
+}
+def ce_loop_failed(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; step : Result<CeUnit;E>) : bool {
+    return step is err
+}
+def ce_loop_append(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; first, step : Result<CeUnit;E>) {
+    if (first is err) { return first }
+    return step
+}
+def ce_merge_sources(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; left : Result<auto;E>;
+                     right : Result<auto;E>) {
+    unsafe {
+        if(left is err) {return typeinfo ce_canonical(variant type<Result<typedecl(ce_source_pair(left as ok,right as ok));E>>(err=left as err))}
+        if(right is err) {return typeinfo ce_canonical(variant type<Result<typedecl(ce_source_pair(left as ok,right as ok));E>>(err=right as err))}
+        return typeinfo ce_canonical(result::ok(ce_source_pair(left as ok,right as ok), type<E>))
+    }
+}
+// The source expression runs once; a failed body stops before the next item.
+def ce_for(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; source:auto; body:auto) { return ce_for_values(builder,source,body) }
+def ce_for(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; var source:array<auto> ==const; body:auto) { return ce_for_mutable_array(builder,source,body) }
+def ce_for(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; var source:auto[] ==const; body:auto) { return ce_for_mutable_array(builder,source,body) }
+def ce_for(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; var source:iterator<auto>; body:auto) { return ce_for_iterator(builder,source,body) }
+def ce_while(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; condition:block<():bool>;
+             body:block<():Result<CeUnit;E>>) {
+    var result=ce_zero(builder)
+    while (invoke(condition)) {
+        result=ce_loop_append(builder,result,invoke(body))
+        if (ce_loop_failed(builder,result)) { return result }
+    }
+    return result
+}
+def ce_for_zip(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; arity:int;
+               traverse:block<(visit:block<(body:block<():Result<CeUnit;E>>):bool>):void>) {
+    var result=ce_zero(builder)
+    invoke(traverse, $(body:block<():Result<CeUnit;E>>) {
         result=invoke(body)
         return !ce_loop_failed(builder,result)
     })
