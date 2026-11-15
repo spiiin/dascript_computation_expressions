@@ -19,11 +19,11 @@ TaskBuilder и TaskResultBuilder предоставляют cold single-shot з�
 | ParserBuilder(text=...) | parsed(value, position, committed) / failure(ParseDiagnostic) | Нет: шаги зависят от позиции | Да / да / да | Да | Да | Да: owning массивы, var items & / return <- |
 | SearchBuilder(type<T>) | Ленивый depth-first iterator | Нет | Да / да / да | Да, до закрытия iterator | Да | Нет |
 | QueryBuilder(type<T>) | array<T>, запрос в памяти | Да: все пары | Да / да / да | Да | Да | Нет |
-| ResultBuilder | `Result<T;string>` (`err / ok`) | Да: Result | Да / да / да | Да | Да | Нет; использовать MoveResult |
+| ResultBuilder | `Result<T;string>` (`err / ok`) | Да: Result | Да / да / да, break/continue | Да | Да | Нет; использовать MoveResult |
 | TaskBuilder(type<T>) | Task<T>, cold single-shot | Да: Task | Да: native/async / да / native и async zip, break/continue | Да | Да | Да: owning bind/return |
 | TaskResultBuilder(type<T>) | Task<Result<T>>, cold single-shot | Да: Result и Unit | Да: native/async / да / native и async zip, break/continue | Да | Да | Да: owning bind/return |
-| OptionBuilder | `Option<T>` (`none / some`) | Да: Option | Да / да / да | Да | Да | Нет; использовать MoveOption |
-| ValidationBuilder | `valid:T / invalid:…` | Да: накопление ошибок | Да / да / да | Да | Да | Нет |
+| OptionBuilder | `Option<T>` (`none / some`) | Да: Option | Да / да / да, break/continue | Да | Да | Нет; использовать MoveOption |
+| ValidationBuilder | `valid:T / invalid:…` | Да: накопление ошибок | Да / да / да, break/continue | Да | Да | Нет |
 | StateBuilder(initial) | `(value:T, state:S)` | Нет | Да / да / да | Да | Да | Нет; состояние также копируемое |
 | WriterBuilder | `(value:T, log:string)` | Нет | Да / да / да | Да | Да | Нет |
 | StateResultBuilder(initial) | `(result:Result<T>, state:S)` | Нет | Да / да / да | Да | Да | Нет; состояние также копируемое |
@@ -145,7 +145,10 @@ List может накопить ноль элементов отдельног�
 При отсутствии hook работает общий fallback, если builder реализовал нужные
 операции протокола. Sequence/Coroutine используют генераторные циклы; eager
 hooks не изменяют их семантику. Произвольные native break/continue не являются
-общим контрактом Value CE. Break внешнего потребляющего цикла Sequence означает
+общим контрактом Value CE. Исключение — Result, Option и Validation: их циклы
+нативные, тело раскрывается в область самой computation, поэтому `break`,
+`continue` и ранний `return` работают, а hooks циклов не вызываются.
+Break внешнего потребляющего цикла Sequence означает
 досрочное прекращение обхода; для освобождения нужен корректный владелец/закрытие.
 
 ## State: что именно откатывается

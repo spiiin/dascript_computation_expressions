@@ -5,6 +5,9 @@ require daslib/rtti
 
 struct CeZipReadOnly {_ce_marker:uint8}
 struct CeZipMutable {_ce_marker:uint8}
+// A mutable collection: its elements are writable even where each() yields
+// constant references, as it does for a fixed array.
+struct CeZipWritable {_ce_marker:uint8}
 
 // Reference iterators write an address, value iterators write the value itself.
 def private ce_zip_pack(var source:iterator<auto(T)>; mode:auto) {
@@ -27,7 +30,7 @@ def ce_zip_cursor(source:auto ==const) {
 def ce_zip_cursor(var source:auto ==const) {
     unsafe {
         var stream <- each(source)
-        return <- ce_zip_pack(stream,CeZipMutable())
+        return <- ce_zip_pack(stream,CeZipWritable())
     }
 }
 def ce_zip_next(var cursor:tuple<stream:iterator<auto(T)>;slot:auto;mode:auto>) : bool {
@@ -41,6 +44,21 @@ def ce_zip_close(var cursor:tuple<stream:iterator<auto>;slot:auto;mode:auto>; va
 }
 
 def ce_zip_exception() : string {return "{this_context().last_exception}"}
+
+// A loop that walks an array by index holds the lock itself, so that it can
+// give the lock back when the body panics. A fixed array has no lock.
+def ce_loop_lock(source:auto ==const) {
+    static_if (typeinfo is_array(source)) { __builtin_array_lock_mutable(source) }
+}
+def ce_loop_lock(var source:auto ==const) {
+    static_if (typeinfo is_array(source)) { __builtin_array_lock(source) }
+}
+def ce_loop_unlock(source:auto ==const) {
+    static_if (typeinfo is_array(source)) { __builtin_array_unlock_mutable(source) }
+}
+def ce_loop_unlock(var source:auto ==const) {
+    static_if (typeinfo is_array(source)) { __builtin_array_unlock(source) }
+}
 
 // Protect an iterator used as a nested Sequence source, preserving ref elements.
 def ce_sequence_input(var source:iterator<auto(T)>) : iterator<T> {

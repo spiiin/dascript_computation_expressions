@@ -650,7 +650,50 @@ def private ce_loop_for_fallback(original : ExprFor?; sources : array<Expression
     loop = ce_loop_source_scopes(sources, loop, names, at)
     return ce_loop_fallback(builder, accumulated, loop, collect_mode)
 }
-def ce_loop_stage(stmt, body : ExpressionPtr; builder : string; collect_mode, owned : bool) : ExpressionPtr {
+// `inlined`: the body is a direct scope's own statements, not a computation to
+// hand to a hook. Only a for needs the stage then, to type its sources.
+// One array or fixed array, walked by index with the body inline. A native
+// `for` would hold the array's lock itself and keep it if the body panics.
+def private ce_loop_indexed(original : ExprFor?; source, body : ExpressionPtr; at : LineInfo) : ExpressionPtr {
+    let name = ce_unique_name("__ce_loop_array", at)
+    let index = ce_unique_name("__ce_loop_index", at)
+    let message = ce_unique_name("__ce_loop_error", at)
+    var element = qmacro($i(name)[$i(index)])
+    element.genFlags.alwaysSafe = true
+    var alias = qmacro_expr() { var $i(string(original.iterators[0])) & = $e(element) } as ExprLet
+    alias.variables[0]._type.flags.removeConstant = false
+    alias.variables[0]._type.flags.constant = false
+    var statements : array<ExpressionPtr>
+    statements |> push <| alias
+    for (statement in (body as ExprBlock).list) { statements |> push <| clone_expression(statement) }
+    var next : ExpressionPtr
+    if (source._type.isConst) {
+        next = qmacro($($i(name) : typedecl($e(source))) {
+            var $i(message) = ""
+            ce_loop_lock($i(name))
+            try {
+                for ($i(index) in range(length($i(name)))) { $b(statements); }
+            } recover { $i(message) = ce_zip_exception() }
+            ce_loop_unlock($i(name))
+            if (!empty($i(message))) { panic($i(message)) }
+            return true
+        })
+    } else {
+        next = qmacro($(var $i(name) : typedecl($e(source))) {
+            var $i(message) = ""
+            ce_loop_lock($i(name))
+            try {
+                for ($i(index) in range(length($i(name)))) { $b(statements); }
+            } recover { $i(message) = ce_zip_exception() }
+            ce_loop_unlock($i(name))
+            if (!empty($i(message))) { panic($i(message)) }
+            return true
+        })
+    }
+    ce_stage_retype_argument(next, source._type)
+    return ce_stage_apply_emit(source, next, false, at)
+}
+def ce_loop_stage(stmt, body : ExpressionPtr; builder : string; collect_mode, owned : bool; inlined : bool = false) : ExpressionPtr {
     var skeleton = clone_expression(stmt)
     if (skeleton is ExprFor) { (skeleton as ExprFor).body = qmacro_block() {} }
     else { (skeleton as ExprWhile).body = qmacro_block() {} }
@@ -660,6 +703,7 @@ def ce_loop_stage(stmt, body : ExpressionPtr; builder : string; collect_mode, ow
     payload |> push <| new ExprConstString(at=stmt.at, value:=builder)
     payload |> push <| new ExprConstBool(at=stmt.at, value=collect_mode)
     payload |> push <| new ExprConstBool(at=stmt.at, value=owned)
+    payload |> push <| new ExprConstBool(at=stmt.at, value=inlined)
     var probes : array<ExpressionPtr>
     if (stmt is ExprWhile) {
         let iteration = ce_loop_iteration(builder, ce_loop_zero_body(builder, collect_mode), collect_mode)
@@ -669,7 +713,7 @@ def ce_loop_stage(stmt, body : ExpressionPtr; builder : string; collect_mode, ow
     let original = stmt as ExprFor
     let arity = length(original.sources)
     for (source in original.sources) { probes |> push <| clone_expression(source) }
-    if (arity > 1) {
+    if (arity > 1 && !inlined) {
         let visitor = ce_unique_name("__ce_zip_probe", stmt.at)
         probes |> push <| qmacro(ce_for_zip($i(builder), $v(arity),
             $($i(visitor):block<(body:block<():typedecl(ce_zero($i(builder)))>):bool>) { return; }))
@@ -707,6 +751,32 @@ def private ce_stage_for(var expr : ExprCallMacro?; var error : string&) : Expre
     }
     let builder = ce_stage_text(expr, 2)
     let collect_mode = ce_stage_flag(expr, 3)
+    if (ce_stage_flag(expr, 5)) {
+        var ranges = true
+        for (source in sources) {
+            if (!source._type.isRange) { ranges = false }
+        }
+        if (ranges) {
+            // A range owns nothing, so a panic leaves nothing behind: the loop
+            // is the user's own `for` with the lowered body.
+            var plain = clone_expression(original) as ExprFor
+            for (index in range(arity)) { plain.sources[index] = clone_expression(sources[index]) }
+            plain.body = ce_stage_statement(expr, 1)
+            return plain
+        }
+        let only = sources[0]._type
+        if (arity == 1 && (only.isGoodArrayType || only.baseType == Type.tFixedArray)) {
+            return ce_loop_indexed(original, sources[0], ce_stage_statement(expr, 1), ce_stage_at(expr))
+        }
+        // The traversal itself is the loop: its cursors still close when a
+        // source or the body panics, and the body runs in the enclosing scope.
+        var names : array<string>
+        for (index in range(arity)) {
+            names |> push(ce_unique_name("__ce_loop_source_{index}", ce_stage_at(expr)))
+        }
+        var loop = ce_zip_traversal(original, names, null, "", ce_stage_statement(expr, 1))
+        return ce_loop_source_scopes(sources, loop, names, ce_stage_at(expr))
+    }
     if (arity == 1) {
         // The hook is probed with the callback shape this source selects, so a
         // second stage follows; it carries the same payload.
@@ -923,6 +993,12 @@ class CeZipValue : AstTypeInfoMacro {
             var constantAccess=qmacro(reinterpret<typedecl($e(access)) const&>($e(access)))
             constantAccess.genFlags.alwaysSafe=true
             return constantAccess
+        }
+        if (mode.structType.name=="CeZipWritable" && mode.structType._module.name=="zip_runtime"
+                && element.flags.ref && element.flags.constant) {
+            var writableAccess=qmacro(reinterpret<typedecl($e(access)) -const &>($e(access)))
+            writableAccess.genFlags.alwaysSafe=true
+            return writableAccess
         }
         return access
     }
@@ -1155,9 +1231,16 @@ def private ce_lower_use_resource(stmt : ExpressionPtr; call : ExprCall?; var re
 // ---- Direct lowering ---------------------------------------------------------
 // A builder that only short-circuits (CeDirectProtocol) needs no continuations.
 // Its scope stays one block: a bind evaluates the source, returns the failure
-// converted to the scope's result type, or declares the value. `if` and nested
-// blocks stay native, so a branch may return early. Loops, try_with,
-// try_finally and use_resource still go through the builder's operations.
+// converted to the scope's result type, or declares the value. `if`, nested
+// blocks and loops stay native, so a branch may return early and a loop may
+// break or continue. try_with, try_finally and use_resource still go through
+// the builder's operations.
+//
+// A `for` keeps the traversal that owns its cursors, so a panic in a source or
+// in the body still closes them; its body is the scope's own statements. A
+// return there would skip that cleanup, and a return inside try/recover is not
+// reliable under JIT, so inside a loop the scope's result is parked in an
+// outcome slot and the loop is left with break.
 //
 // The result type is not known where a failure returns: it is the type of the
 // scope's last statement. `witness` is a null pointer to that type; it is typed
@@ -1310,20 +1393,39 @@ def private ce_direct_replica(blk : ExprBlock?; start : int; builder : string) :
     output |> push <| terminal
     return <- output
 }
+// What a scope needs declared in front of its statements.
+struct private CeDirectState {
+    witness : bool      // a failure is converted to the result type
+    loops : bool        // a loop may park the result and leave
+}
+def private ce_direct_outcome(witness : string) : string { return "{witness}_outcome" }
+def private ce_direct_left(witness : string) : string { return "{witness}_left" }
+// Leave the scope with `value`: return it, or inside a loop park it and break.
+def private ce_direct_leave(var value : ExpressionPtr; witness : string; looped : bool) : ExpressionPtr {
+    if (!looped) { return qmacro_expr() { return $e(value) } }
+    return qmacro_block() {
+        $i(ce_direct_outcome(witness)) <- $e(value)
+        $i(ce_direct_left(witness)) = true
+        break
+    }
+}
+// After a loop: keep leaving if its body parked the result.
+def private ce_direct_resume(witness : string; looped : bool) : ExpressionPtr {
+    if (looped) { return qmacro_expr() { if ($i(ce_direct_left(witness))) { break } } }
+    return qmacro_expr() { if ($i(ce_direct_left(witness))) { return <- $i(ce_direct_outcome(witness)) } }
+}
 // Leave the scope with the failure of `name`, converted to the result type.
 // A step between statements (`unit`) must produce Unit, as Combine requires.
-def private ce_direct_check(builder, name, witness : string; unit : bool; at : LineInfo) : ExpressionPtr {
-    var check : ExpressionPtr
+def private ce_direct_check(builder, name, witness : string; unit, looped : bool) : ExpressionPtr {
+    var leave = ce_direct_leave(qmacro(ce_direct_failure($i(builder), $i(name), $i(witness))), witness, looped)
     if (unit) {
-        check = qmacro_expr() {
-            if (ce_loop_failed($i(builder), $i(name))) { return ce_direct_failure($i(builder), $i(name), $i(witness)) }
-        }
-    } else {
-        check = qmacro_expr() {
-            if (ce_direct_failed($i(builder), $i(name))) { return ce_direct_failure($i(builder), $i(name), $i(witness)) }
+        return qmacro_expr() {
+            if (ce_loop_failed($i(builder), $i(name))) { $e(leave) }
         }
     }
-    return check
+    return qmacro_expr() {
+        if (ce_direct_failed($i(builder), $i(name))) { $e(leave) }
+    }
 }
 // The user's declaration, initialized with the value of the checked source.
 def private ce_direct_declaration(stmt : ExpressionPtr; builder, source, raw : string) : ExpressionPtr {
@@ -1344,8 +1446,8 @@ def private ce_direct_declaration(stmt : ExpressionPtr; builder, source, raw : s
 // fall out; `tail` is true while the last statement is also the block's last.
 // One statement of a direct scope. True when it ends the scope: it returned,
 // the rest became a resource's continuation, or an error was reported.
-def private ce_direct_statement(blk : ExprBlock?; index : int; builder, witness : string; tail : bool;
-                                var output : array<ExpressionPtr>; var used : bool&; var error : string&) : bool {
+def private ce_direct_statement(blk : ExprBlock?; index : int; builder, witness : string; tail, looped : bool;
+                                var output : array<ExpressionPtr>; var state : CeDirectState&; var error : string&) : bool {
     let count = length(blk.list)
     var stmt = clone_expression(blk.list[index])
     let last = index == count-1
@@ -1366,13 +1468,21 @@ def private ce_direct_statement(blk : ExprBlock?; index : int; builder, witness 
             var raw : string
             let forwarded = ce_direct_evaluate(call.arguments[0], builder, stmt.at, false, output, raw, error)
             if (!empty(error)) { return true }
-            returned = qmacro_expr() { return ce_return_from($i(builder), $i(forwarded)) }
+            returned = ce_direct_leave(qmacro(ce_return_from($i(builder), $i(forwarded))), witness, looped)
         } else {
-            returned = qmacro_expr() { return ce_return($i(builder), $e(ret.subexpr)) }
+            returned = ce_direct_leave(qmacro(ce_return($i(builder), $e(ret.subexpr))), witness, looped)
         }
         returned.at = stmt.at
         output |> push <| returned
         return true
+    }
+    if (stmt is ExprBreak || stmt is ExprContinue) {
+        if (!looped) {
+            error = "computation: break and continue need a loop in the same scope"
+            return true
+        }
+        output |> push <| stmt
+        return false
     }
     var binding : ExpressionPtr
     if (stmt is ExprLet) {
@@ -1393,9 +1503,9 @@ def private ce_direct_statement(blk : ExprBlock?; index : int; builder, witness 
         var raw : string
         let source = ce_direct_evaluate(call.arguments[0], builder, stmt.at, false, output, raw, error)
         if (!empty(error)) { return true }
-        output |> push <| ce_direct_check(builder, source, witness, false, stmt.at)
+        output |> push <| ce_direct_check(builder, source, witness, false, looped)
         if (stmt is ExprLet) { output |> push <| ce_direct_declaration(stmt, builder, source, raw) }
-        used = true
+        state.witness = true
         return false
     }
     // A scoped resource is acquired only when this declaration is reached.
@@ -1413,25 +1523,41 @@ def private ce_direct_statement(blk : ExprBlock?; index : int; builder, witness 
         } else {
             let step = ce_unique_name("__ce_step", stmt.at)
             output |> push <| qmacro_expr() { let $i(step) = $e(scoped) }
-            output |> push <| ce_direct_check(builder, step, witness, true, stmt.at)
-            used = true
+            output |> push <| ce_direct_check(builder, step, witness, true, looped)
+            state.witness = true
         }
         return true
     }
     if (stmt is ExprIfThenElse) {
         let original = stmt as ExprIfThenElse
         var branch = clone_expression(stmt)
-        (branch as ExprIfThenElse).if_true = ce_direct_inline(original.if_true, builder, witness, tail && last, used, error)
+        (branch as ExprIfThenElse).if_true = ce_direct_inline(original.if_true, builder, witness, tail && last, looped, state, error)
         if (original.if_false != null) {
-            (branch as ExprIfThenElse).if_false = ce_direct_inline(original.if_false, builder, witness, tail && last, used, error)
+            (branch as ExprIfThenElse).if_false = ce_direct_inline(original.if_false, builder, witness, tail && last, looped, state, error)
         }
         if (!empty(error)) { return true }
         output |> push <| branch
         return false
     }
     if (stmt is ExprBlock) {
-        output |> push <| ce_direct_inline(stmt, builder, witness, tail && last, used, error)
+        output |> push <| ce_direct_inline(stmt, builder, witness, tail && last, looped, state, error)
         if (!empty(error)) { return true }
+        return false
+    }
+    // A loop runs its body in this scope. Control goes on after it, so nothing
+    // in the body is the block's tail.
+    if (stmt is ExprFor || stmt is ExprWhile) {
+        let original_body = stmt is ExprFor ? (stmt as ExprFor).body : (stmt as ExprWhile).body
+        var body = ce_direct_inline(original_body, builder, witness, false, true, state, error)
+        if (!empty(error)) { return true }
+        if (stmt is ExprWhile) {
+            (stmt as ExprWhile).body = body
+            output |> push <| stmt
+        } else {
+            output |> push <| ce_loop_stage(stmt, body, builder, false, false, true)
+        }
+        output |> push <| ce_direct_resume(witness, looped)
+        state.loops = true
         return false
     }
     var computation : ExpressionPtr
@@ -1439,10 +1565,6 @@ def private ce_direct_statement(blk : ExprBlock?; index : int; builder, witness 
         computation = ce_lower_try_with(stmt as ExprCall, builder, false, false, true, error)
     } elif (stmt is ExprCall && (stmt as ExprCall).name == "try_finally") {
         computation = ce_lower_try_finally(stmt as ExprCall, builder, false, false, true, error)
-    } elif (stmt is ExprFor || stmt is ExprWhile) {
-        let original_body = stmt is ExprFor ? (stmt as ExprFor).body : (stmt as ExprWhile).body
-        var body = ce_scope(original_body, builder, false, error, false, true)
-        computation = ce_loop_stage(stmt, body, builder, false, false)
     }
     if (!empty(error)) { return true }
     if (computation != null) {
@@ -1452,8 +1574,8 @@ def private ce_direct_statement(blk : ExprBlock?; index : int; builder, witness 
         }
         let step = ce_unique_name("__ce_step", stmt.at)
         output |> push <| qmacro_expr() { let $i(step) = $e(computation) }
-        output |> push <| ce_direct_check(builder, step, witness, true, stmt.at)
-        used = true
+        output |> push <| ce_direct_check(builder, step, witness, true, looped)
+        state.witness = true
         return false
     }
     if (!(stmt is ExprLet) && !(stmt is ExprCall) && !(stmt is ExprCallMacro)
@@ -1465,12 +1587,12 @@ def private ce_direct_statement(blk : ExprBlock?; index : int; builder, witness 
     output |> push <| stmt
     return false
 }
-def private ce_direct_lower(blk : ExprBlock?; start : int; builder, witness : string; top, tail : bool;
-                            var used : bool&; var error : string&) : array<ExpressionPtr> {
+def private ce_direct_lower(blk : ExprBlock?; start : int; builder, witness : string; top, tail, looped : bool;
+                            var state : CeDirectState&; var error : string&) : array<ExpressionPtr> {
     var output : array<ExpressionPtr>
     for (index in range(start, length(blk.list))) {
         let first = length(output)
-        let done = ce_direct_statement(blk, index, builder, witness, tail, output, used, error)
+        let done = ce_direct_statement(blk, index, builder, witness, tail, looped, output, state, error)
         for (emitted in range(first, length(output))) { ce_restamp(output[emitted], blk.list[index].at) }
         if (done) { return <- output }
     }
@@ -1481,20 +1603,28 @@ def private ce_direct_lower(blk : ExprBlock?; start : int; builder, witness : st
     }
     return <- output
 }
-def private ce_direct_inline(node : ExpressionPtr; builder, witness : string; tail : bool;
-                             var used : bool&; var error : string&) : ExpressionPtr {
+def private ce_direct_inline(node : ExpressionPtr; builder, witness : string; tail, looped : bool;
+                             var state : CeDirectState&; var error : string&) : ExpressionPtr {
     var source = ce_direct_block(node)
     if (!empty(source.finalList)) {
         error = "computation: use try_finally(body, cleanup) instead of a native finally on a CE scope"
     }
-    var body <- ce_direct_lower(source, 0, builder, witness, false, tail, used, error)
+    var body <- ce_direct_lower(source, 0, builder, witness, false, tail, looped, state, error)
     return qmacro_block() { $b(body); }
 }
 def private ce_direct_scope(blk : ExprBlock?; start : int; builder : string; var error : string&) : array<ExpressionPtr> {
     let witness = ce_unique_name("__ce_result", blk.at)
-    var used = false
-    var output <- ce_direct_lower(blk, start, builder, witness, true, true, used, error)
-    if (used && empty(error)) {
+    var state : CeDirectState
+    var output <- ce_direct_lower(blk, start, builder, witness, true, true, false, state, error)
+    if ((state.witness || state.loops) && empty(error)) {
+        if (state.loops) {
+            var flag = qmacro_expr() { var $i(ce_direct_left(witness)) = false }
+            var slot = qmacro_expr() { var $i(ce_direct_outcome(witness)) : typedecl(*$i(witness)) }
+            ce_restamp(flag, blk.at)
+            ce_restamp(slot, blk.at)
+            output |> emplace(flag, 0)
+            output |> emplace(slot, 0)
+        }
         var replica <- ce_direct_replica(blk, start, builder)
         var declared = qmacro_expr() {
             var $i(witness) : typedecl(invoke($ { $b(replica); }))?
