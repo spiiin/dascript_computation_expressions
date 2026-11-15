@@ -94,7 +94,7 @@ def private ce_progress_wait_poll(var op:auto(O)?) {unsafe {
     }
     if(state.version>op.after) {var result <- move_ok(some(state.value));return <- task_ready_move(result)}
     if(state.closed) {var result <- move_ok(none(type<Item>));return <- task_ready_move(result)}
-    return <- task_pending(type<$Result<$Option<Item>;string>>)
+    return <- task_pending(type<Result<Option<Item>;string>>)
 }}
 def private ce_progress_finish(var op:auto(O)?) {unsafe {op.state=null;delete op.lease;delete op}}
 def private ce_progress_wait(progress:tuple<tag:TaskProgressTag;owner:iterator<auto(S)?>>;fixed:bool;after:uint64) {

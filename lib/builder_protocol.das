@@ -15,7 +15,7 @@ struct CeUnit {_ce_marker:uint8}
 
 // Standard Option representation, with a separate field move for the SDK AOT
 // tuple-in-variant initializer bug. Arrays and tuple/struct payloads stay owned.
-def ce_move_some(var value:auto(T)) : $Option<T -const -&> {
+def ce_move_some(var value:auto(T)) : Option<T -const -&> {
     var vacant=default<T -const -&>
     var result <- option::move_some(vacant)
     result as some <- value

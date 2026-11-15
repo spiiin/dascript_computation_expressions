@@ -67,7 +67,7 @@ def checks() {
         task_poll(protected);task_cancel(protected)
         verify(protected.status==TaskStatus.Failed && task_channel_count(sem.channel)==1)
         var inscope retry <- task_retry(@(attempt:int) {
-            return <- task_from_poll(@(){return task_pending(type<$Result<int;string>>)},@(){panic("cleanup failed")})
+            return <- task_from_poll(@(){return task_pending(type<Result<int;string>>)},@(){panic("cleanup failed")})
         },2)
         task_poll(retry);task_cancel(retry);verify(retry.status==TaskStatus.Failed)
     }

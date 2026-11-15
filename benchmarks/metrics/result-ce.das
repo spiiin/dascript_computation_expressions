@@ -1,8 +1,8 @@
 options gen2
 require ../../lib/computation.das
 def checked(n:int) {
-    if(n%7==0){return variant type<$Result<int;string>>(err="invalid")}
-    return variant type<$Result<int;string>>(ok=n+1)
+    if(n%7==0){return variant type<Result<int;string>>(err="invalid")}
+    return variant type<Result<int;string>>(ok=n+1)
 }
 def work(seed:int) : int64 {
     let result=computation(ResultBuilder()) {

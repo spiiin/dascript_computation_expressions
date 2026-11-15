@@ -11,8 +11,8 @@ var steps=0
 struct Settings {n:int}
 
 def checks() {
-    verify(default<$Result<int;string>> is err)
-    verify(default<$Option<int>> is none)
+    verify(default<Result<int;string>> is err)
+    verify(default<Option<int>> is none)
     let success=computation(ResultBuilder()) {
         let n=ok(20,type<string>) |> bind
         return n+22

@@ -154,4 +154,4 @@ def main() {
     assert(caught && order=="1" && calls==0)
     print("bind2 value checks OK\n")
 }
-def explode() : $Result<int;string> { panic("source failed"); return result_ok(0) }
+def explode() : Result<int;string> { panic("source failed"); return result_ok(0) }

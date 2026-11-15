@@ -8,7 +8,7 @@ def main() {
     var processed=0
     let patrol=computation(BoundedResultBuilder(limit=3)) {
         for (enemy in range(10)) {
-            let damage=variant type<$Result<int;string>>(ok=enemy+1) |> bind
+            let damage=variant type<Result<int;string>>(ok=enemy+1) |> bind
             processed+=damage
         }
         return processed
@@ -18,7 +18,7 @@ def main() {
     var turns=0
     let battle=computation(BoundedResultBuilder(limit=5)) {
         while (turns<3) {
-            variant type<$Result<bool;string>>(ok=true) |> bind
+            variant type<Result<bool;string>>(ok=true) |> bind
             turns++
         }
         return turns

@@ -31,7 +31,7 @@ let outcome = computation(ResultBuilder()) {
 }
 ```
 
-`checked_number` из демо возвращает `$Result<int;string>`.
+`checked_number` из демо возвращает `Result<int;string>`.
 При `ok` извлекается значение и выполняется продолжение. При `error`
 ошибка возвращается сразу; последующие выражения не вычисляются.
 `return value` упаковывается в успешный Result.
@@ -50,13 +50,13 @@ result_error("not found", type<int>)
 
 ### Другой тип ошибки
 
-`ResultBuilder()` работает с `$Result<T;string>`. Для другого копируемого типа
+`ResultBuilder()` работает с `Result<T;string>`. Для другого копируемого типа
 ошибки передайте его builder:
 
 ```das
 let loaded = computation(ResultBuilder(type<LoadError>)) {
-    let id = find(1) |> bind      // find возвращает $Result<int;LoadError>
-    return id * 2                 // результат: $Result<int;LoadError>
+    let id = find(1) |> bind      // find возвращает Result<int;LoadError>
+    return id * 2                 // результат: Result<int;LoadError>
 }
 ```
 
@@ -74,7 +74,7 @@ let greeting = computation(OptionBuilder()) {
 }
 ```
 
-Option представлен `$Option<T>`. Значим тег `none`,
+Option представлен `Option<T>`. Значим тег `none`,
 а его bool-поле — техническая заглушка. Создавайте отсутствие через
 `none(type<T>)`. При отсутствии значения продолжение не вызывается.
 

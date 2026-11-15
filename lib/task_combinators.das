@@ -72,7 +72,7 @@ def private task_pair_shape(policy:TaskAllPolicy; left:auto(A);right:auto(B)) {
     return <- (first <- default<A -const -&>,second <- default<B -const -&>)
 }
 def private task_pair_shape(policy:TaskResultAllPolicy;
-    left:$Result<auto(A);string>;right:$Result<auto(B);string>) {
+    left:Result<auto(A);string>;right:Result<auto(B);string>) {
     var pair <- (first <- default<A -const -&>,second <- default<B -const -&>)
     return <- move_ok(pair)
 }
@@ -81,15 +81,15 @@ def private task_pair_value(policy:TaskAllPolicy; var left:auto; var right:auto)
     return <- (first <- left,second <- right)
 }
 def private task_pair_value(policy:TaskResultAllPolicy;
-    var left:$Result<auto(A);string>; var right:$Result<auto(B);string>) {
+    var left:Result<auto(A);string>; var right:Result<auto(B);string>) {
     var pair <- (first <- left as ok,second <- right as ok)
     return <- move_ok(pair)
 }
 
 def private task_pair_stops(policy:TaskAllPolicy; value:auto) {return false}
-def private task_pair_stops(policy:TaskResultAllPolicy; value:$Result<auto(T);string>) {return value is err}
+def private task_pair_stops(policy:TaskResultAllPolicy; value:Result<auto(T);string>) {return value is err}
 def private task_pair_error(policy:TaskAllPolicy; value:auto; unused:type<auto(T)>) {var result:T -const -&;return <- result}
-def private task_pair_error(policy:TaskResultAllPolicy; value:$Result<auto(T);string>; unused:type<auto(R)>) {
+def private task_pair_error(policy:TaskResultAllPolicy; value:Result<auto(T);string>; unused:type<auto(R)>) {
     var result:R -const -& = variant type<R -const -&>(err=value as err)
     return <- result
 }
@@ -169,10 +169,10 @@ def task_result_when_all(var left:auto(L); var right:auto(R)) {
 def private ce_task_result_source(var source:auto) {return <- source}
 def private ce_task_result_source(var source:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:CeUnit>>;status:TaskStatus;value:CeUnit;error:string;polling:bool>) {
     var stream <- ce_await_source(TaskBuilder(type<CeUnit>),source)
-    var events <- generator<tuple<tag:TaskEventTag;ready:bool;value:$Result<CeUnit;string>>> capture(<-stream) {
+    var events <- generator<tuple<tag:TaskEventTag;ready:bool;value:Result<CeUnit;string>>> capture(<-stream) {
         for(event in stream) {
             if(event.ready) {yield task_ready(result_ok(CeUnit()));return false}
-            yield task_pending(type<$Result<CeUnit;string>>)
+            yield task_pending(type<Result<CeUnit;string>>)
         }
         return false
     } finally {ce_sequence_finalize($ {sequence_close(stream)})}
@@ -195,14 +195,14 @@ def private ce_task_result_array(var children:array<auto(C)>) {
     var values:array<ResultItem>
     var done:array<bool>
     values.resize(length(children));done.resize(length(children))
-    var events <- generator<tuple<tag:TaskEventTag;ready:bool;value:$Result<array<ResultItem>;string>>> capture(<-children,<-values,<-done) {
+    var events <- generator<tuple<tag:TaskEventTag;ready:bool;value:Result<array<ResultItem>;string>>> capture(<-children,<-values,<-done) {
         while(true) {
             var complete=true
             for(i in range(length(children))) {
                 if(done[i]) {continue}
                 let status=task_poll(children[i])
                 if(!task_check_child(status,task_error(children[i]))) {
-                    yield <- task_pending(type<$Result<array<ResultItem>;string>>);return false
+                    yield <- task_pending(type<Result<array<ResultItem>;string>>);return false
                 }
                 if(status==TaskStatus.Succeeded) {
                     if(children[i].value is err) {
@@ -214,7 +214,7 @@ def private ce_task_result_array(var children:array<auto(C)>) {
                 } else {complete=false}
             }
             if(complete) {var result <- move_ok(values);yield <- task_ready_move(result);return false}
-            yield <- task_pending(type<$Result<array<ResultItem>;string>>)
+            yield <- task_pending(type<Result<array<ResultItem>;string>>)
         }
         return false
     } finally {ce_sequence_finalize($ {task_release_array(children);delete values;delete done})}
@@ -237,11 +237,11 @@ def task_result_race(var left:auto;var right:auto) {
     typedef RaceValue=typedecl(a.value as ok) -const -&
     typedef RacePayload=tuple<index:int;value:RaceValue>
     var raced <- task_race(a,b)
-    var events <- generator<tuple<tag:TaskEventTag;ready:bool;value:$Result<RacePayload;string>>> capture(<-raced) {
+    var events <- generator<tuple<tag:TaskEventTag;ready:bool;value:Result<RacePayload;string>>> capture(<-raced) {
         while(true) {
             let status=task_poll(raced)
             if(!task_check_child(status,task_error(raced))) {
-                yield <- task_pending(type<$Result<RacePayload;string>>);return false
+                yield <- task_pending(type<Result<RacePayload;string>>);return false
             }
             if(status==TaskStatus.Succeeded) {
                 if(raced.value.value is err) {
@@ -252,7 +252,7 @@ def task_result_race(var left:auto;var right:auto) {
                 var result <- move_ok(pair)
                 yield <- task_ready_move(result);return false
             }
-            yield <- task_pending(type<$Result<RacePayload;string>>)
+            yield <- task_pending(type<Result<RacePayload;string>>)
         }
         return false
     } finally {ce_sequence_finalize($ {let error=task_release_child(raced);if(!empty(error)){ce_task_cleanup_error(error)}})}

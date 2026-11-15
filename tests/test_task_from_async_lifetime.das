@@ -28,7 +28,7 @@ def borrowed_value(buffer:Buffer?; fail:bool) : int {
     after++
 }
 [async]
-def borrowed_error(buffer:Buffer?) : $Result<int;string> {
+def borrowed_error(buffer:Buffer?) : Result<int;string> {
     await_next_frame()
     yield result_error("resource denied",type<int>)
     after++

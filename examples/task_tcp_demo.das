@@ -23,7 +23,7 @@ def drive(var scheduler:auto;id:TaskId;started:int64) {
 [export]
 def main() {
     port=to_int(get_env_variable("CE_TASK_TCP_PORT"))
-    var inscope scheduler <- task_scheduler(type<$Result<string;string>>)
+    var inscope scheduler <- task_scheduler(type<Result<string;string>>)
     let started=ref_time_ticks()
     let good=task_spawn(scheduler,read_line("ok\n"))
     drive(scheduler,good,started)

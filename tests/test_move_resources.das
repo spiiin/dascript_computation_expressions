@@ -16,7 +16,7 @@ def eager() {
         assert(result as ok==4 && source.id==0 && length(source.data)==0)
         let none=computation(OptionBuilder()) {
             var buffer & = acquire_buffer(2) |> use_resource
-            default<$Option<int>> |> bind
+            default<Option<int>> |> bind
             assert(false)
             return 1
         }
