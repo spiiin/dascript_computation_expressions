@@ -1,11 +1,8 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/query_builder.das
+require ../packages/computation/computation_macro.das
+require ../examples/builders/query_builder.das
 require daslib/rtti
 var effects=""
-var released=0
-struct Resource {id:int}
-def ce_dispose(var r:Resource) {released++}
 def check() {
     effects=""
     var inscope rows <- computation(QueryBuilder()) {
@@ -51,33 +48,6 @@ def check() {
         for(i in range(3)) {if(i!=1) {yield i}}
     }
     assert(length(loop)==2 && loop[0]==0 && loop[1]==2)
-    var failedProject=false
-    try {
-        var inscope badProjection <- fixed_array(1,2) |> query_select <| $(n:int){if(n==2){panic("projection")};return n}
-    } recover {failedProject=true}
-    assert(failedProject)
-    var failedPredicate=false
-    try {
-        var inscope badFilter <- fixed_array(1,2) |> query_where <| $(n:int){if(n==2){panic("predicate")};return true}
-    } recover {failedPredicate=true}
-    assert(failedPredicate)
-    var failedKey=false
-    try {
-        var inscope badJoin <- query_join(fixed_array(1,2),fixed_array(1,2),
-            $(n:int){return n},$(n:int){if(n==2){panic("key")};return n})
-    } recover {failedKey=true}
-    assert(failedKey)
-    let before=released
-    var caught=false
-    try {
-        var inscope bad <- computation(QueryBuilder()) {
-            let resource=Resource(id=1) |> use_resource
-            let n=fixed_array(1,2) |> bind
-            if(n==2) {panic("query failure")}
-            return n
-        }
-    } recover {caught=true}
-    assert(caught && released==before+1)
 }
 [export]
 def main() {

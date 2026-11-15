@@ -1,25 +1,49 @@
-param([Parameter(Mandatory)][string]$Destination)
+param([Parameter(Mandatory)][string]$Destination,[string[]]$Packages=@('computation','computation_task'))
 $ErrorActionPreference='Stop'
 $Destination=[IO.Path]::GetFullPath($Destination)
 # Never overwrite an application checkout or an earlier export.
 if(Test-Path -LiteralPath $Destination){throw 'Destination must be a new directory.'}
-$modules=@(Get-Content (Join-Path $PSScriptRoot 'public_modules.json') -Raw | ConvertFrom-Json)
-$actual=@(Get-ChildItem (Join-Path $PSScriptRoot 'lib') -File -Filter '*.das'|Select-Object -ExpandProperty Name)
-if(@(Compare-Object $modules $actual).Count){throw 'public_modules.json does not match lib/'}
-foreach($name in $modules) {
-    if([IO.Path]::GetFileName($name) -ne $name -or -not(Test-Path -LiteralPath (Join-Path $PSScriptRoot ("lib/"+$name)))){throw "Invalid module: $name"}
+foreach($package in $Packages){if($package -notin @('computation','computation_task')){throw "Unknown package: $package"}}
+if('computation' -notin $Packages){throw 'The computation package is required: computation_task builds on it.'}
+# A package's .das_module names exactly the modules in its folder.
+function Get-CePackageModules([string]$Package) {
+    $folder=Join-Path $PSScriptRoot "packages/$Package"
+    $actual=@(Get-ChildItem $folder -File -Filter '*.das'|ForEach-Object {$_.BaseName}|Sort-Object)
+    $descriptor=[IO.File]::ReadAllText((Join-Path $folder '.das_module'))
+    $list=[regex]::Match($descriptor,'(?s)_modules = \[(.*?)\]')
+    if(-not $list.Success){throw "packages/$Package/.das_module has no module list"}
+    $declared=@([regex]::Matches($list.Groups[1].Value,'"(\w+)"')|ForEach-Object {$_.Groups[1].Value}|Sort-Object)
+    if(@(Compare-Object $declared $actual).Count){throw "packages/$Package/.das_module does not match the folder"}
+    return $actual
 }
-# Verify that the distribution contains the transitive local require closure.
-foreach($name in $modules) {
-    foreach($match in [regex]::Matches([IO.File]::ReadAllText((Join-Path $PSScriptRoot ("lib/"+$name))),'(?m)^require\s+([\w./]+)')) {
-        $dependency=$match.Groups[1].Value
-        if($dependency.StartsWith('daslib/') -or $dependency -eq 'strings' -or $dependency -eq 'math' -or $dependency -eq 'dashv/dashv_boost'){continue}
-        $dependency=[IO.Path]::GetFileNameWithoutExtension($dependency)+'.das'
-        if($dependency -notin $modules){throw "Missing public dependency: $dependency (from $name)"}
+$modules=[ordered]@{}
+foreach($package in $Packages){$modules[$package]=@(Get-CePackageModules $package)}
+# The export contains the whole local require closure: a module requires its
+# own package by ./name.das and the other one by ../package/name.das.
+foreach($package in $Packages) {
+    foreach($name in $modules[$package]) {
+        $source=[IO.File]::ReadAllText((Join-Path $PSScriptRoot "packages/$package/$name.das"))
+        foreach($match in [regex]::Matches($source,'(?m)^require\s+(\.\.?/[\w./]+)')) {
+            $dependency=$match.Groups[1].Value
+            $owner=$package
+            if($dependency -match '^\.\./(\w+)/(\w+)\.das$'){$owner=$Matches[1];$dependency=$Matches[2]}
+            elseif($dependency -match '^\./(\w+)\.das$'){$dependency=$Matches[1]}
+            else{throw "Unexpected local require in ${package}/${name}: $dependency"}
+            if($owner -notin $Packages -or $dependency -notin $modules[$owner]){throw "Missing dependency: $owner/$dependency (from $package/$name)"}
+        }
     }
 }
-New-Item -ItemType Directory -Path (Join-Path $Destination 'lib') -Force | Out-Null
-foreach($name in $modules){Copy-Item -LiteralPath (Join-Path $PSScriptRoot ("lib/"+$name)) -Destination (Join-Path $Destination 'lib')}
+# The layout an application uses: packages side by side in its modules/ folder.
+$rows=@()
+foreach($package in $Packages) {
+    $target=Join-Path $Destination "modules/$package"
+    New-Item -ItemType Directory -Path $target -Force | Out-Null
+    foreach($name in $modules[$package]){Copy-Item -LiteralPath (Join-Path $PSScriptRoot "packages/$package/$name.das") -Destination $target}
+    foreach($name in @('.das_module','.das_package')){Copy-Item -LiteralPath (Join-Path $PSScriptRoot "packages/$package/$name") -Destination $target}
+    foreach($name in $modules[$package]) {
+        $rows+=[pscustomobject]@{File="modules/$package/$name.das";Sha256=(Get-FileHash -LiteralPath (Join-Path $target "$name.das")).Hash}
+    }
+}
 foreach($name in @('main.das','identity_builder.das')){
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot "integration_example/$name") -Destination $Destination
 }
@@ -45,6 +69,5 @@ foreach($document in Get-ChildItem -LiteralPath $Destination -Filter '*.md' -Fil
     })
     [IO.File]::WriteAllText($document.FullName,$content)
 }
-$modules | ForEach-Object {[pscustomobject]@{File="lib/$_";Sha256=(Get-FileHash -LiteralPath (Join-Path $Destination "lib/$_")).Hash}} |
-    ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Destination 'manifest.json')
-Write-Host "Exported $($modules.Count) library modules and a standalone integration example to $Destination"
+$rows | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Destination 'manifest.json')
+Write-Host "Exported $($rows.Count) modules of $($Packages -join ', ') and a standalone integration example to $Destination"

@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 var cleaned_health=0
 struct EnemyState {health:int;hits:int}
 [export]

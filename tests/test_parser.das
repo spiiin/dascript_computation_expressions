@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/parser_builder.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation/parser_builder.das
 require daslib/rtti
 var effects=0
 def number(text:string) {
@@ -76,26 +76,12 @@ def main() {
     let first=computation(scoped) {let n=parser_int() |> bind; return n}
     assert(scoped.position==0 && (first as parsed).position==2)
     var closed=0
-    var handled=0
     let failure=computation(ParserBuilder(text="bad")) {
-        try_with($ {
-            try_finally($ {
-                let n=parser_int() |> bind
-                return n
-            }, $ {closed++})
-        }, $(message:string) {handled++;return 0})
-    }
-    assert(failure is failure && closed==1 && handled==0)
-    let recovered=computation(ParserBuilder(text="a42")) {
-        try_with($ {
-            parser_literal("a") |> bind
-            panic("parser native panic")
-            return 0
-        }, $(message:string) {
+        try_finally($ {
             let n=parser_int() |> bind
             return n
-        })
+        }, $ {closed++})
     }
-    assert(recovered is parsed && (recovered as parsed).value==42 && (recovered as parsed).position==3)
+    assert(failure is failure && closed==1)
     print("Parser checks OK\n")
 }

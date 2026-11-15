@@ -1,7 +1,7 @@
 options gen2
-require ../lib/computation.das
-require ../lib/task_runtime.das
-require ../lib/task_progress.das
+require ../packages/computation/computation.das
+require ../packages/computation_task/task_runtime.das
+require ../packages/computation_task/task_progress.das
 require daslib/rtti
 
 struct LoadProgress {done:int;total:int}

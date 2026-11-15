@@ -8,8 +8,8 @@
 или регистрировать имя типа в макросе не нужно.
 
 ```das
-require ./lib/computation_macro.das
-require ./lib/reader_builder.das
+require ./packages/computation/computation_macro.das
+require ./examples/builders/reader_builder.das
 
 let answer = computation(ReaderBuilder(7)) {
     let environment = reader_ask() |> bind
@@ -21,8 +21,10 @@ assert(answer.value == 42)
 `computation.das` — совместимый фасад: подключает макрос и прежние стандартные
 builders. Можно оставить `require computation` и дополнительно подключить свой
 модуль. Для минимального набора зависимостей используйте `computation_macro`.
-ReaderBuilder намеренно не включён в фасад: `reader_demo.das` показывает расширение
-только через два импорта. Он требует лишь `builder_protocol`.
+ReaderBuilder в библиотеку не входит: это пример из
+[examples/builders](examples/builders/README.md), как и State, Writer и Query.
+`reader_demo.das` показывает расширение только через два импорта; сам builder
+требует лишь `builder_protocol`.
 
 ## Выбор стратегии
 
@@ -55,7 +57,7 @@ ReaderBuilder намеренно не включён в фасад: `reader_demo
 
 Ниже `B` — тип builder, `M<T>` — условное обозначение результата с полезным
 значением T, а не буквальный синтаксис daScript. Реальные сигнатуры показаны
-в `reader_builder.das` и `list_builder.das`.
+в `examples/builders/reader_builder.das` и `packages/computation/list_builder.das`.
 
 | Операция | Назначение |
 | --- | --- |
@@ -72,7 +74,6 @@ ReaderBuilder намеренно не включён в фасад: `reader_demo
 | `ce_loop_append(builder, accumulated, step)` | Value: вернуть результат накопления эффектов одной итерации |
 | `ce_loop_failed(builder, step) : bool` | Value: остановить цикл при неуспехе |
 | `ce_collect_append(builder, var accumulated, step)` | Collect: добавить результат итерации на месте |
-| `ce_collect_rethrow(builder, var accumulated)` | Collect: освободить накопленный результат и повторно бросить текущее исключение |
 
 Операции требуются только при использовании соответствующей конструкции.
 Обычно промежуточные Value-блоки и итерации возвращают `M<CeUnit>`: это
@@ -83,21 +84,20 @@ ReaderBuilder намеренно не включён в фасад: `reader_demo
 Для Collect результат должен поддерживать перемещение и `inscope`/удаление.
 Это не стратегия для обычного `int`-аккумулятора: для такого вычисления
 используйте Value. Переопределите `ce_delay` и остальные операции, возвращающие
-владеющий результат, с `return <-`. Восстановление после native panic требует
-явного освобождения накопленных данных, как в `list_builder.das`.
+владеющий результат, с `return <-`.
 
-## Ресурсы и исключения
+## Ресурсы
 
 `builder_protocol` публично подключает `computation_resources` с defaults:
 
 - `ce_using(builder, resource, body, cleanup)`;
-- `ce_try_finally(builder, body, cleanup)`;
-- `ce_try_with(builder, body, handler)`.
+- `ce_try_finally(builder, body, cleanup)`.
 
 Они подходят для копируемых Value-результатов. Владеющие Collect-результаты
-требуют перегрузок с перемещением и очисткой при исключениях. `ce_dispose`
-для конкретного ресурса виден в модуле вызывающего кода. Cleanup должен
-возвращать void, обработчик исключения — тот же тип результата, что тело.
+требуют перегрузок с перемещением. `ce_dispose` для конкретного ресурса виден
+в модуле вызывающего кода. Cleanup должен возвращать void. Операции выполняют
+cleanup после тела и не перехватывают panic: он фатален, см.
+[семантика builders](CE_SEMANTICS.md).
 
 ## Sequence
 
@@ -114,8 +114,8 @@ def ce_sequence_run(builder : MySequenceBuilder; var source : iterator<int>) : i
 Подключите `sequence_runtime public` в модуле такого builder.
 `ce_sequence_run` вызывается ровно один раз при создании CE, до обхода, и
 принимает владение сгенерированным итератором. Можно обернуть его с учётом
-настроек builder. Обёртка обязана закрывать источник при завершении, отмене
-и исключениях; готовый `ce_sequence_protect` обеспечивает это для обычного
+настроек builder. Обёртка обязана закрывать источник при завершении и отмене;
+готовый `ce_sequence_protect` обеспечивает это для обычного
 итератора. Возвращаемое значение перемещается наружу.
 
 Bind, yield и resource scopes здесь реализованы общим generator backend;
@@ -140,10 +140,10 @@ Bind, yield и resource scopes здесь реализованы общим gene
 `run_computation.ps1 -Test` включает прежние тесты и новые:
 
 - `test_reader.das`: bind, bind без переменной, return_from, Unit, циклы,
-  ветвление, cleanup, TryWith, однократное создание builder;
+  ветвление, cleanup, однократное создание builder;
 - `test_builder_protocol.das`: независимый Collect-модуль, независимый
-  Sequence-модуль с другим типом builder, ленивость, завершение, break,
-  исключение и отсутствие runtime-вызовов ce_protocol;
+  Sequence-модуль с другим типом builder, ленивость, завершение, break
+  и отсутствие runtime-вызовов ce_protocol;
 - отрицательные примеры: нет ce_protocol, неправильный дескриптор,
   отсутствующая операция, несовместимый результат итерации.
 
@@ -195,11 +195,10 @@ variant<err:string;ok:int>: no ce_unwrap(builder, source) accepts it
 ошибки не шли первыми, макрос ставит такой код в конец computation — на
 строку закрывающей скобки:
 
-- вызовы с блоком-остатком (`ce_bind`, `ce_combine`, `ce_delay`, `ce_try_with`
+- вызовы с блоком-остатком (`ce_bind`, `ce_combine`, `ce_delay`, `ce_try_finally`
   и другие) и служебные объявления прямой области;
 - внутренний вызов стоит на столбец левее внешнего, поэтому если не подходит
-  сам вызов (например, обработчик `try_with` не того типа), показана именно
-  его ошибка.
+  сам вызов, показана именно его ошибка.
 
 В областях на генераторах (Task, Sequence) переставляются только вызовы
 операций builder: имена, которые компилятор даёт вынесенным из генератора
@@ -254,17 +253,17 @@ Builder, у которого Bind и Combine только обрывают вы�
 остаётся одним блоком: bind вычисляет источник, при неуспехе возвращает его
 как результат области, иначе объявляет значение. `if`, вложенные блоки и
 циклы остаются нативными, поэтому ветка может вернуть результат досрочно, а
-цикл поддерживает `break` и `continue`. `try_with`, `try_finally` и
+цикл поддерживает `break` и `continue`. `try_finally` и
 `use_resource` по-прежнему идут через операции builder.
 
 Тело цикла раскрывается в ту же область, поэтому хуки `ce_for`, `ce_while` и
 `ce_for_zip` у такого builder не вызываются, а `ce_loop_append` ему не нужен.
 `for` по диапазону остаётся обычным `for`. Один массив обходится по индексу
-под явной блокировкой, остальные источники — через владеющие курсоры: в обоих
-случаях panic в источнике или в теле снимает блокировку и закрывает источники.
+под явной блокировкой, остальные источники — через владеющие курсоры; после
+цикла блокировка снимается, а источники закрываются.
 Внутри цикла результат области не возвращается напрямую: он сохраняется в
 переменной области, цикл покидается через `break`, и возврат происходит после
-очистки. Тело `try_with`, `try_finally` и область после `use_resource` — блоки,
+очистки. Тело `try_finally` и область после `use_resource` — блоки,
 переданные builder, поэтому `break` и `continue` внутри них записывают, куда
 идти, в переменную области цикла и завершают свою область с Unit; так же
 завершается каждая область по пути наружу, а тело цикла выполняет команду.
@@ -278,7 +277,7 @@ Builder, у которого Bind и Combine только обрывают вы�
 
 `ce_unwrap(builder, source)` в этом режиме исполняется: он извлекает значение
 успешного источника. `ce_loop_failed` проверяет шаг между инструкциями
-(`try_with`, `try_finally`, область ресурса) и требует от него Unit.
+(`try_finally`, область ресурса) и требует от него Unit.
 `ce_bind`, `ce_combine`, `ce_bind_return` и `ce_bind2` при прямом раскрытии
 не вызываются. Необязательный `ce_source` применяется как обычно и
 вычисляется один раз на источник.
@@ -339,7 +338,7 @@ bind подряд (измерено на ResultBuilder). Bind с независ�
 
 Каждый запуск deferred Sequence создаёт отдельный итератор, владеющий снимком
 до закрытия. Ресурсы тела закрываются перед удалением снимка. Пример —
-`deferred_sequence_demo.das`; контракт и обход с исключениями — [семантика builders](CE_SEMANTICS.md).
+`deferred_sequence_demo.das`; контракт — [семантика builders](CE_SEMANTICS.md).
 
 ## Переопределение циклов
 
@@ -355,15 +354,10 @@ Sequence сохраняет native loops.
 один раз, в выбранный вариант; если его тип hook не подходит, это ошибка
 компиляции, а не переход на fallback.
 
-Путь `ce_for_zip` использует явные курсоры и закрывает источники при native panic
-производителя или потребителя. Контракт операции не изменён; подробности и
-границы — [семантика builders](CE_SEMANTICS.md).
-
-Одиночный `For` Result/Option также закрывает iterator-источник при исключении
-производителя или тела: [семантика builders](CE_SEMANTICS.md).
-
-Стандартный eager For без hooks также закрывает источники при исключениях:
-[семантика builders](CE_SEMANTICS.md). Пример: `fallback_cleanup_demo.das`.
+Путь `ce_for_zip` использует явные курсоры и закрывает источники, когда цикл
+завершается или прерывается досрочно. Так же поступают одиночный `For` и
+стандартный eager For без hooks. При panic источники не закрываются: он фатален,
+см. [семантика builders](CE_SEMANTICS.md).
 
 Общий необязательный `ce_source(builder,input)` адаптирует источники bind, For,
 return_from и yield_from до обычных операций и оптимизаций. Контракт:
@@ -386,14 +380,14 @@ Sequence удерживает ресурс в heap-ячейке до закры�
 
 ## ReaderResultBuilder
 
-`reader_result_builder.das` объединяет ReaderAsk и обычный Result через
+`examples/builders/reader_result_builder.das` объединяет ReaderAsk и обычный Result через
 CeValueProtocol. Реализует базовые операции, MergeSources и BindReturn;
 For/While используют общий fallback. Изменения ядра или фасада не требуются.
 Контракт и пример: [семантика builders](CE_SEMANTICS.md).
 
 ## StateWriterResultBuilder
 
-`state_writer_result_builder.das` объединяет состояние, строковый журнал и Result
+`examples/builders/state_writer_result_builder.das` объединяет состояние, строковый журнал и Result
 через CeValueProtocol. Откат относится к начальному состоянию всего CE; журнал
 не откатывается. Циклы и BindReturn используют общий fallback, ресурсные операции
 — общий протокол. Подробности: [семантика builders](CE_SEMANTICS.md).
@@ -426,8 +420,8 @@ iterator, сохранять сигнал Cancelled и сообщать ошиб
 
 Для `source |> yield_from` resumable-builder может предоставить
 `ce_await_yield_from(builder, source)`: owning iterator своих событий. Общий lowerer
-передаёт эти события во внешний producer и закрывает iterator через защищённый
-sequence-механизм. AsyncSequenceBuilder реализует этот hook для дочернего
+передаёт эти события во внешний producer и закрывает iterator общим
+sequence-механизмом. AsyncSequenceBuilder реализует этот hook для дочернего
 AsyncSequence того же типа элементов: пересылает pending и some, поглощает
 терминальный none, распространяет Cancelled/Failed и владеет дочерним stream.
 Скалярные TaskBuilder/TaskResultBuilder такой операции не предоставляют.

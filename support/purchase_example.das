@@ -1,6 +1,7 @@
 options gen2
 module purchase_example public
-require ../lib/computation.das public
+require ../packages/computation/computation.das public
+require ../examples/builders/writer_result_builder.das public
 struct ShopItem { name : string; price : int }
 
 def find_item(id : int) {

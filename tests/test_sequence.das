@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 var steps = 0
 var sources = 0
 var builders = 0

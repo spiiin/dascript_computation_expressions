@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation.das
-require ../lib/task_runtime.das
+require ../packages/computation/computation.das
+require ../packages/computation_task/task_runtime.das
 
 // A task keeps its arguments after the function returns. An array cannot be
 // copied into it, and one that is not `var` cannot be moved either.

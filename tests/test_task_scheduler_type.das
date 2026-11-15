@@ -1,5 +1,5 @@
 options gen2
-require ../lib/task_scheduler.das
+require ../packages/computation_task/task_scheduler.das
 [export]
 def main() {
     var inscope scheduler <- task_scheduler(type<int>)

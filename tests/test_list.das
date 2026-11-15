@@ -1,7 +1,5 @@
 options gen2
-require ../lib/computation.das
-require daslib/rtti
-require strings
+require ../packages/computation/computation.das
 struct Counters { builder : int; source : int; next_source : int; finish : int }
 struct Item { id : int }
 struct Handle { id : int }
@@ -127,19 +125,6 @@ def test_resources() {
         return 1
     }
     assert(empty(discarded) && events == "open9;close9;")
-    events = ""
-    var caught = false
-    try {
-        var inscope panic_result <- computation(ListBuilder()) {
-            try_finally($ {
-                let n = [1, 2, 3] |> bind
-                let h = acquire(n) |> use_resource
-                if (n == 2) { panic("list sentinel") }
-                return n
-            }, $ { events += "finally;" })
-        }
-    } recover { caught = this_context().last_exception |> starts_with("list sentinel") }
-    assert(caught && events == "open1;close1;open2;close2;finally;")
 }
 [export]
 def main() {

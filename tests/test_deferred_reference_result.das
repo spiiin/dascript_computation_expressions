@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation.das
-require ../lib/deferred_computation.das
+require ../packages/computation/computation.das
+require ../packages/computation/deferred_computation.das
 var external=42
 def ce_run(builder:ResultBuilder; value:Result<int;string>) {
     return <- generator<int&> {yield external;return false}

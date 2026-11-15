@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation_macro.das
+require ../packages/computation/computation_macro.das
 struct InvalidZip {}
 def ce_protocol(builder:InvalidZip) {return CeValueProtocol()}
 def ce_zero(builder:InvalidZip) {return 0}

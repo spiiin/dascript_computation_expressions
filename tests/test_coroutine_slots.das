@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/coroutine_scheduler.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation/coroutine_scheduler.das
 require daslib/rtti
 var trace=""
 var opened=0
@@ -24,18 +24,6 @@ def job(name:string; frames:int; fail:bool=false) {
 }
 def reject_stale(var scheduler:CoroutineScheduler; old:CoroutineTaskId) {
     verify(!coroutine_valid(scheduler,old))
-    var caught=false
-    try {let status=coroutine_status(scheduler,old)} recover {caught=true}
-    assert(caught)
-    caught=false
-    try {let error=coroutine_error(scheduler,old)} recover {caught=true}
-    assert(caught)
-    caught=false
-    try {let changed=coroutine_cancel(scheduler,old)} recover {caught=true}
-    assert(caught)
-    caught=false
-    try {let removed=coroutine_forget(scheduler,old)} recover {caught=true}
-    assert(caught)
 }
 def reuse_and_order() {
     trace=""

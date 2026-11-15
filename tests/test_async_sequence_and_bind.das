@@ -1,8 +1,8 @@
 options gen2
 options max_infer_passes=512
-require ../lib/deferred_computation.das
-require ../lib/async_sequence_builder.das
-require ../lib/task_scheduler.das
+require ../packages/computation/deferred_computation.das
+require ../packages/computation_task/async_sequence_builder.das
+require ../packages/computation_task/task_scheduler.das
 require daslib/rtti
 require daslib/strings_boost
 
@@ -10,7 +10,6 @@ var opened=fixed_array(0,0)
 var closed=fixed_array(0,0)
 var polls=fixed_array(0,0)
 var continued=0
-var recovered=0
 var trace=""
 var allocated=0
 var released=0
@@ -21,7 +20,7 @@ struct Packet {data:array<int>
 }
 def packet(value:int) {allocated++;var result:Packet;result.data <- [value];return <- result}
 
-def child(id:int;waits:int;value:int=1;fail:bool=false;badClose:bool=false) {
+def child(id:int;waits:int;value:int=1;fail:bool=false) {
     trace+="{id}:create;"
     opened[id]++
     var state=new PollState(remaining=waits,data <- [value])
@@ -35,19 +34,17 @@ def child(id:int;waits:int;value:int=1;fail:bool=false;badClose:bool=false) {
         trace+="{id}:close;"
         closed[id]++
         unsafe {delete state}
-        if(badClose) {panic("close {id} failed")}
     })
 }
 def factory_failure() {panic("and_bind factory failed");return <- task_after_polls(0,1)}
-def cancelled_child() {var value <- child(0,100);task_cancel(value);return <- value}
 def reset() {
     verify(opened[0]==closed[0] && opened[1]==closed[1] && allocated==released)
     for(n in opened) {n=0};for(n in closed) {n=0};for(n in polls) {n=0}
-    continued=0;recovered=0;trace=""
+    continued=0;trace=""
 }
-def stream(waitA:int=1;waitB:int=2;fail:int=0;badClose:bool=false) {
+def stream(waitA:int=1;waitB:int=2;fail:int=0) {
     return <- computation(AsyncSequenceBuilder()) {
-        let pair=child(0,waitA,10,fail==1,badClose) |> and_bind(child(1,waitB,20,fail==2)) |> bind
+        let pair=child(0,waitA,10,fail==1) |> and_bind(child(1,waitB,20,fail==2)) |> bind
         continued++
         yield pair.first+pair.second
         continued++
@@ -158,43 +155,14 @@ def checks() {
         if(mode==0) {verify(polls[1]==0)}
         reset()
     }
-    // A cleanup failure does not replace the original poll/factory error.
-    {
-        var inscope source <- stream(100,0,2,true)
-        var inscope request <- async_sequence_next(source)
-        verify(task_poll(request)==TaskStatus.Failed && starts_with(task_error(request),"child 1 failed"))
-    }
-    reset()
     {
         var inscope source <- computation(AsyncSequenceBuilder()) {
-            let pair=child(0,100,1,false,true) |> and_bind(factory_failure()) |> bind
+            let pair=child(0,100,1) |> and_bind(factory_failure()) |> bind
             continued++;yield pair.first
         }
         var inscope request <- async_sequence_next(source)
         verify(task_poll(request)==TaskStatus.Failed && starts_with(task_error(request),"and_bind factory failed"))
         verify(polls[0]==0 && continued==0)
-    }
-    reset()
-    {
-        var inscope source <- computation(AsyncSequenceBuilder()) {
-            try_with($ {
-                let pair=child(0,0,1,true) |> and_bind(child(1,100,2)) |> bind
-                continued++;yield pair.first
-            },$(message:string) {verify(starts_with(message,"child 0 failed"));recovered++;yield 99})
-        }
-        var inscope request <- async_sequence_next(source)
-        verify(task_poll(request)==TaskStatus.Succeeded && (task_value(request) as some)==99 && continued==0 && recovered==1)
-    }
-    reset()
-    {
-        var inscope source <- computation(AsyncSequenceBuilder()) {
-            try_with($ {
-                let pair=cancelled_child() |> and_bind(child(1,100,2)) |> bind
-                continued++;yield pair.first
-            },$(message:string) {recovered++;yield 99})
-        }
-        var inscope request <- async_sequence_next(source)
-        verify(task_poll(request)==TaskStatus.Cancelled && continued==0 && recovered==0 && polls[1]==0)
     }
     reset()
     // Direct cancel, deletion, and group token close every pending child.

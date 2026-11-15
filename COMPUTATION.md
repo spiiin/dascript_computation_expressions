@@ -7,7 +7,8 @@
 Рабочий синхронный DSL на AST-макросах Daslang 0.6.5-RC2.
 Использует стандартные Result и Option: [переход и совместимость](CE_SEMANTICS.md).
 `computation` общий для builders; связывание записывается пайпом.
-StateBuilder и WriterBuilder описаны в [семантика builders](CE_SEMANTICS.md).
+StateBuilder и WriterBuilder — примеры builders из
+[examples/builders](examples/builders/README.md); их контракт описан в [семантика builders](CE_SEMANTICS.md).
 
 ```powershell
 cd C:\src\dascript_computation_expressions
@@ -21,7 +22,7 @@ cd C:\src\dascript_computation_expressions
 ## Result
 
 ```das
-require ./lib/computation.das
+require computation/computation
 
 let outcome = computation(ResultBuilder()) {
     let health = checked_number(100) |> bind
@@ -63,7 +64,7 @@ let loaded = computation(ResultBuilder(type<LoadError>)) {
 Тип ошибки нельзя вывести из `return value`, поэтому его несёт builder.
 Источник с другим типом ошибки не преобразуется: такой bind отклоняется при
 компиляции. Поддержаны те же конструкции, что у `ResultBuilder()`: циклы,
-`and_bind`, `return_from`, ресурсы и `try_with`.
+`and_bind`, `return_from` и ресурсы.
 
 ## Option
 
@@ -188,8 +189,8 @@ let description = computation(OptionBuilder()) {
 продолжается внутри выбранной ветки, затем переходит к общему хвосту:
 
 ```das
-require ./lib/computation.das
-require ./lib/task_builder.das
+require computation/computation
+require computation_task/task_builder
 require daslib/match
 
 [task]
@@ -275,7 +276,7 @@ let found = computation(OptionBuilder()) {
 }
 ```
 
-Типы всех `return` области должны совпадать. Тело `try_with`, `try_finally`
+Типы всех `return` области должны совпадать. Тело `try_finally`
 и область после `use_resource` — отдельные области: `return` со значением из
 них всю computation не завершает, и перед последующим кодом они должны
 вычислять Unit. `break` и `continue` из них работают: цикл вокруг получает
@@ -359,13 +360,12 @@ ListBuilder использует другое значение Zero/Combine и �
 (`try_finally($ { ... }, $ { ... })`) и блоках с параметрами
 (`$(value : int) { ... }`) `$` остаётся обязательной частью выбранной записи.
 
-## TryWith
+## Panic
 
-Добавлен `try_with($ { ... }, $(message : string) { ... })` для всех builders.
-Он обрабатывает native исключения; Error/None остаются значениями.
-Для SequenceBuilder обработчик может лениво выдавать запасные элементы.
-Семантика очистки, состояния и журнала описана в `TRY_WITH.md`.
-Пример: `try_with_demo.das`.
+Panic фатален: библиотека его не перехватывает и не освобождает после него
+ресурсы, а `try_with` удалён — его использование даёт ошибку компиляции.
+Неудачу, которую должен обработать вызывающий, возвращайте значением (Error,
+None, invalid). Подробности: [семантика builders](CE_SEMANTICS.md).
 
 
 ## Расширение CE отдельными модулями
@@ -375,7 +375,7 @@ ListBuilder использует другое значение Zero/Combine и �
 общий runtime последовательностей — в `sequence_runtime.das`.
 Новый builder выбирает стратегию через `ce_protocol` и определяет перегрузки
 операций; менять фасад или макрос не нужно. Пример независимого расширения:
-`require computation_macro` + `require reader_builder`.
+`require computation_macro` + `require reader_builder` из `examples/builders`.
 Контракт, ограничения и игровой пример: [BUILDER_PROTOCOL.md](BUILDER_PROTOCOL.md),
 `reader_demo.das`.
 

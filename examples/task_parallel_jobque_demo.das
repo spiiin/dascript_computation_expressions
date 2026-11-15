@@ -1,8 +1,8 @@
 options gen2
-require ../lib/computation.das
-require ../lib/task_runtime.das
-require ../lib/task_parallel.das
-require ../lib/task_jobque.das
+require ../packages/computation/computation.das
+require ../packages/computation_task/task_runtime.das
+require ../packages/computation_task/task_parallel.das
+require ../packages/computation_task/task_jobque.das
 require daslib/fio
 
 var queue:TaskJobQueue

@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 struct Inventory { items:array<int> }
 def load_inventory() {
     var inscope inventory:Inventory

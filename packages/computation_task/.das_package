@@ -1,0 +1,9 @@
+options gen2
+require daslib/daspkg
+
+[export]
+def package() {
+    package_name("computation_task")
+    package_description("Task runtime for computation expressions: tasks, async sequences, scheduler, channels, job queue. Needs the computation package next to it")
+    package_source("github.com/spiiin/dascript_computation_expressions")
+}

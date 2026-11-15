@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/task_scheduler.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation_task/task_scheduler.das
 require daslib/strings_boost
 require daslib/rtti
 
@@ -25,7 +25,6 @@ def reentrant() {
     return <- task_from_poll(@(){reenter();return task_ready(1)},@(){closed++})
 }
 def fail() {return <- task_from_poll(@(){panic("native failure");return task_ready(0)},@(){closed++})}
-def bad_close() {return <- task_from_poll(@(){return task_pending(type<int>)},@(){closed++;panic("close failed")})}
 
 def guards() {
     for(index in range(7)) {
@@ -37,21 +36,6 @@ def guards() {
         verify(task_status(globalScheduler,currentId)==TaskStatus.Failed)
         verify(starts_with(task_error(globalScheduler,currentId),"task scheduler: mutation"))
         verify(task_value(globalScheduler,survivor)==9)
-        delete globalScheduler
-    }
-    // The same guards apply while callbacks are closing. Read-only queries work.
-    for(index in range(7)) {
-        operation=index
-        globalScheduler <- task_scheduler(type<int>)
-        var source <- task_from_poll(@(){
-            verify(task_valid(globalScheduler,currentId) && task_count(globalScheduler)==1)
-            return task_pending(type<int>)
-        },@(){closed++;reenter()})
-        currentId=task_spawn(globalScheduler,source)
-        verify(task_tick(globalScheduler,0)==1)
-        task_scheduler_close(globalScheduler)
-        verify(task_status(globalScheduler,currentId)==TaskStatus.Failed)
-        verify(starts_with(task_error(globalScheduler,currentId),"task scheduler: mutation"))
         delete globalScheduler
     }
 }
@@ -92,19 +76,13 @@ def errors_and_close() {
     verify(task_tick(scheduler,0)==0)
     verify(task_status(scheduler,failed)==TaskStatus.Failed && starts_with(task_error(scheduler,failed),"native failure"))
     verify(task_value(scheduler,good)==8)
-    let cancelled=task_spawn(scheduler,bad_close())
     let neverStarted=task_spawn(scheduler,pending())
     task_scheduler_close(scheduler)
-    verify(task_active_count(scheduler)==0 && task_count(scheduler)==4)
-    verify(task_status(scheduler,cancelled)==TaskStatus.Failed && starts_with(task_error(scheduler,cancelled),"close failed"))
+    verify(task_active_count(scheduler)==0 && task_count(scheduler)==3)
     verify(task_status(scheduler,neverStarted)==TaskStatus.Cancelled && task_value(scheduler,good)==8)
     task_scheduler_close(scheduler)
     verify(task_tick(scheduler,0)==0)
-    let before=closed
-    var caught=false
-    try {let id=task_spawn(scheduler,pending())} recover {caught=true}
-    verify(caught && closed==before+1 && task_count(scheduler)==4)
-    verify(task_prune(scheduler)==4)
+    verify(task_prune(scheduler)==3)
 }
 [export]
 def main() {

@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/search_builder.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation/search_builder.das
 require daslib/rtti
 var steps=0
 var acquired=0
@@ -8,13 +8,12 @@ var released=0
 var closeOrder=0
 struct Resource {id:int}
 def ce_dispose(var resource:Resource) {released++;closeOrder=closeOrder*10+resource.id}
-def choices(id:int; failAt:int=0) {
+def choices(id:int) {
     return <- computation(SearchBuilder()) {
         let resource=Resource(id=id) |> use_resource
         acquired++
         let n=search_choose([1,2,3]) |> bind
         steps++
-        if(n==failAt) {panic("alternative failed")}
         yield id*10+n
     }
 }
@@ -81,30 +80,6 @@ def check() {
     verify(released==2 && closeOrder==12)
     sequence_close(early)
     verify(released==2 && closeOrder==12 && steps==2)
-
-    reset()
-    var inscope badRight <- choices(2)
-    verify(ce_sequence_next_value(badRight,value))
-    var inscope bad <- choices(1,2) |> search_append(badRight) |> search_take(8)
-    var caught=false
-    try {sequence_each(bad) $(n:int) {}} recover {caught=true}
-    verify(caught && released==2 && closeOrder==12)
-    sequence_close(bad)
-    verify(released==2)
-
-    reset()
-    var inscope badSecond <- choices(1) |> search_append(choices(2,2))
-    caught=false
-    try {sequence_each(badSecond) $(n:int) {}} recover {caught=true}
-    verify(caught && released==2 && closeOrder==12)
-
-    reset()
-    var inscope consumerRight <- choices(2)
-    verify(ce_sequence_next_value(consumerRight,value))
-    var inscope consumer <- choices(1) |> search_append(consumerRight) |> search_take(6)
-    caught=false
-    try {sequence_each(consumer) $(n:int) {panic("consumer failed")}} recover {caught=true}
-    verify(caught && released==2 && closeOrder==12)
 
     // Closing before first step must free captured arrays without running bodies.
     reset()

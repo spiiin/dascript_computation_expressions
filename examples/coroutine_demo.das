@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/coroutine_builder.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation/coroutine_builder.das
 var position=0
 var journal=""
 [coroutine]

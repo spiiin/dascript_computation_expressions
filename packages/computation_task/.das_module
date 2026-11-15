@@ -1,0 +1,15 @@
+options gen2
+require daslib/fio
+
+// Makes `require computation_task/<module>` resolve when this folder sits in a project's modules/.
+[export]
+def initialize(project_path : string) {
+    let computation_task_modules = [
+        "async_sequence_builder", "cancellation_token", "task_builder", "task_channel",
+        "task_combinators", "task_delay", "task_events", "task_function", "task_http", "task_hv",
+        "task_jobque", "task_parallel", "task_progress", "task_runtime", "task_scheduler", "task_tcp"
+    ]
+    for (name in computation_task_modules) {
+        register_native_path("computation_task", name, "{project_path}/{name}.das")
+    }
+}

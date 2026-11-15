@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/task_scheduler.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation_task/task_scheduler.das
 var trace=""
 def child(name:string) {
     return <- computation(TaskBuilder(type<int>)) {

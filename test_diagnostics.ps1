@@ -13,6 +13,7 @@ $cases=@(
     @{File='test_writer_mixed.das';Message='cannot bind a source of type variant<err:string;ok:int>';Marker='|> bind';ExactErrors=1},
     @{File='test_list_mixed.das';Message='cannot bind a source of type variant<err:string;ok:int>';Marker='|> bind';ExactErrors=1},
     @{File='test_task_wrong_source.das';Message='a task cannot bind a source of type variant<err:string;ok:int>';Marker='|> bind';ExactErrors=1},
+    @{File='test_task_error_mixed.das';Message='this task fails with string, and the computation with LoadError';Marker='fetch(id) |> bind';ExactErrors=1},
     # A function that [task] cannot rewrite is reported once, at its annotation.
     @{File='test_task_function_untyped.das';Message='needs the type of the task value';Marker='[task]';ExactErrors=1},
     @{File='test_task_function_finally.das';Message='a task body has no native finally';Marker='[task_result]';ExactErrors=1},

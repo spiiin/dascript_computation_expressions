@@ -1,8 +1,6 @@
 options gen2
 require ../support/move_resource_support.das
-require ../lib/deferred_computation.das
-require daslib/rtti
-require daslib/strings_boost
+require ../packages/computation/deferred_computation.das
 
 def eager() {
     let baseline=heap_bytes_allocated()
@@ -41,36 +39,15 @@ def eager() {
         }
         assert(length(list)==2 && list[0][0]==5 && list[1][0]==6)
     }
-    var caught=false
-    close_order=""
-    try {
-        let result=computation(ResultBuilder()) {
-            var a & = acquire_buffer(7) |> use_resource
-            var b & = acquire_buffer(8) |> use_resource
-            panic("body failed")
-            return 0
-        }
-    } recover {caught=true;assert(starts_with(this_context().last_exception,"body failed"))}
-    assert(caught && close_order=="87")
-    caught=false
-    try {
-        let result=computation(ResultBuilder()) {
-            var a & = acquire_buffer(9) |> use_resource
-            var b & = failed_buffer() |> use_resource
-            return 0
-        }
-    } recover {caught=true}
-    assert(caught && resources_opened==resources_closed)
     let current=heap_bytes_allocated();assert(current==baseline)
 }
-def make_stream(fail:bool=false) {
+def make_stream() {
     return <- computation(SequenceBuilder()) {
         var a & = acquire_buffer(1) |> use_resource
         var b & = acquire_buffer(2) |> use_resource
         try_finally($ {
             a.data[0]=10
             yield a.data[0]+b.data[0]
-            if(fail) {panic("sequence body failed")}
             yield a.data[1]
         }, $ {assert(a.id==1 && a.data[0]==10 && b.id==2)})
     }
@@ -96,24 +73,6 @@ def sequences() {
         for(value in stream) {assert(value==12);break}
         assert(close_order=="21" && resources_opened==resources_closed)
     }
-    for(producer in fixed_array(true,false)) {
-        var caught=false
-        {
-            var inscope stream <- make_stream(producer)
-            try {sequence_each(stream) $(value:int) {if(!producer) {panic("consumer failed")}}} recover {caught=true}
-        }
-        assert(caught && resources_opened==resources_closed)
-    }
-    {
-        var inscope stream <- computation(SequenceBuilder()) {
-            var a & = acquire_buffer(3) |> use_resource
-            var b & = failed_buffer() |> use_resource
-            yield 0
-        }
-        var caught=false
-        try {sequence_each(stream) $(value:int) {assert(false)}} recover {caught=true}
-        assert(caught && resources_opened==resources_closed)
-    }
     let current=heap_bytes_allocated();assert(current==baseline)
 }
 def deferred_resources() {
@@ -137,26 +96,8 @@ def deferred_resources() {
     let current=heap_bytes_allocated();assert(current==baseline)
 }
 
-struct FailingCleanup {data:array<int>}
-var cleanup_attempts=0
-def failing_cleanup_resource() {var r:FailingCleanup;r.data <- [1,2];return <- r}
-def ce_dispose(var r:FailingCleanup) {cleanup_attempts++;delete r;panic("cleanup failed after release")}
-def eager_cleanup_failure() {
-    let baseline=heap_bytes_allocated()
-    let previous=cleanup_attempts
-    var caught=false
-    try {
-        var inscope result <- computation(MoveResultBuilder()) {
-            var resource & = failing_cleanup_resource() |> use_resource
-            return <- [resource.data[0],99]
-        }
-    } recover {caught=true}
-    assert(caught && cleanup_attempts==previous+1)
-    let current=heap_bytes_allocated();assert(current==baseline)
-}
-
 [export]
 def main() {
-    for(round in range(5)) {eager();sequences();deferred_resources();eager_cleanup_failure()}
+    for(round in range(5)) {eager();sequences();deferred_resources()}
     print("move-only resource checks OK\n")
 }

@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 struct Resource {data:array<int>}
 def acquire() {var r:Resource;r.data <- [1];return <- r}
 [export]

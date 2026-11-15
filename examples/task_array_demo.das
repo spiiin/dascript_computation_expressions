@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/task_scheduler.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation_task/task_scheduler.das
 var released=0
 var completion=""
 struct AssetData {items:array<int>}

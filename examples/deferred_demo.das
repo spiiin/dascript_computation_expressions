@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation.das
-require ../lib/deferred_computation.das
+require ../packages/computation/computation.das
+require ../packages/computation/deferred_computation.das
 var steps=0
 def make_reward() {
     var inscope rewards <- [10,20,30]

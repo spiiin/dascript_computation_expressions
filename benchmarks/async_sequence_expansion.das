@@ -1,7 +1,7 @@
 options gen2
 options max_infer_passes=256
-require ../lib/computation_macro.das
-require ../lib/async_sequence_builder.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation_task/async_sequence_builder.das
 
 def source() {
     return <- computation(AsyncSequenceBuilder()) {

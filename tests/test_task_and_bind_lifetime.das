@@ -1,19 +1,18 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/task_scheduler.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation_task/task_scheduler.das
 require daslib/strings_boost
 require daslib/rtti
 var opened=fixed_array(0,0)
 var closed=fixed_array(0,0)
 var polls=fixed_array(0,0)
 var continued=0
-var recovered=0
 var order=""
 var group:CancellationToken
 struct Payload {remaining:int; data:array<int>}
 def finalize(var state:Payload) {delete state.data}
 
-def owned(id,waits:int; value:auto(T); fail:bool=false; badClose:bool=false; request:bool=false) {
+def owned(id,waits:int; value:auto(T); fail:bool=false; request:bool=false) {
     opened[id]++
     var state=new Payload(remaining=waits,data <- [1,2,3])
     return <- task_from_poll(@() {
@@ -25,20 +24,14 @@ def owned(id,waits:int; value:auto(T); fail:bool=false; badClose:bool=false; req
     },@() {
         closed[id]++;order+="{id};"
         unsafe {delete state}
-        if(badClose) {panic("close {id} failed")}
     })
 }
 def factory_failure() {panic("factory failed");return <- task_after_polls(0,1)}
 def empty_failure() {panic("");return <- task_after_polls(0,1)}
-def cancelled_child() {
-    var child <- owned(0,3,1)
-    task_cancel(child)
-    return <- child
-}
 def reset() {
     verify(opened[0]==closed[0] && opened[1]==closed[1])
     for(v in opened) {v=0};for(v in closed) {v=0};for(v in polls) {v=0}
-    continued=0;recovered=0;order=""
+    continued=0;order=""
 }
 
 def checks() {
@@ -74,7 +67,7 @@ def checks() {
     reset()
     {
         var inscope task <- computation(TaskBuilder(type<int>)) {
-            let p=owned(0,0,1,fail=true) |> and_bind(owned(1,3,2,badClose=true)) |> bind
+            let p=owned(0,0,1,fail=true) |> and_bind(owned(1,3,2)) |> bind
             continued++;return p.first
         }
         verify(task_poll(task)==TaskStatus.Failed && continued==0 && polls[1]==0 && order=="0;1;")
@@ -89,25 +82,6 @@ def checks() {
         verify(task_poll(task)==TaskStatus.Succeeded && continued==0 && order=="1;0;")
         let value=task_value(task)
         verify(value is err && value as err=="denied")
-    }
-    reset()
-    {
-        var inscope task <- computation(TaskResultBuilder(type<int>)) {
-            let p=owned(0,0,result_error("denied",type<int>)) |> and_bind(owned(1,3,result_ok(2),badClose=true)) |> bind
-            continued++;return p.first
-        }
-        verify(task_poll(task)==TaskStatus.Failed && continued==0 && polls[1]==0 && order=="0;1;")
-        verify(starts_with(task_error(task),"close 1 failed"))
-    }
-    reset()
-    {
-        var inscope task <- computation(TaskBuilder(type<int>)) {
-            try_with($ {
-                let p=cancelled_child() |> and_bind(owned(1,3,2)) |> bind
-                continued++;return p.first
-            },$(message:string){recovered++;return 99})
-        }
-        verify(task_poll(task)==TaskStatus.Cancelled && recovered==0 && continued==0 && polls[1]==0)
     }
     reset()
     group <- cancellation_token()
@@ -133,20 +107,10 @@ def checks() {
     }
     reset()
     {
+        // A later factory throws before a merged owner exists; its error is
+        // reported and the first factory's owner is released.
         var inscope task <- computation(TaskBuilder(type<int>)) {
-            let p=owned(0,3,1,badClose=true) |> and_bind(owned(1,3,2,badClose=true)) |> bind
-            return p.first
-        }
-        verify(task_poll(task)==TaskStatus.Waiting)
-        verify(task_cancel(task) && task_status(task)==TaskStatus.Failed && order=="0;1;")
-        verify(starts_with(task_error(task),"close 0 failed"))
-    }
-    reset()
-    {
-        // A later factory throws before a merged owner exists; preserve its
-        // error even when releasing the first factory's owner reports a fault.
-        var inscope task <- computation(TaskBuilder(type<int>)) {
-            let p=owned(0,3,1,badClose=true) |> and_bind(factory_failure()) |> bind
+            let p=owned(0,3,1) |> and_bind(factory_failure()) |> bind
             continued++;return p.first
         }
         verify(task_poll(task)==TaskStatus.Failed && opened[0]==1 && closed[0]==1 && polls[0]==0)

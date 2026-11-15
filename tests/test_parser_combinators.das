@@ -1,7 +1,7 @@
 options gen2
 options stack = 1048576
-require ../lib/computation_macro.das
-require ../lib/parser_builder.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation/parser_builder.das
 var rightCalls=0
 
 def cut_branch(cursor:ParserBuilder) {

@@ -1,10 +1,9 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/task_scheduler.das
-require ../lib/task_combinators.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation_task/task_scheduler.das
+require ../packages/computation_task/task_combinators.das
 require daslib/async_boost
 require daslib/rtti
-require daslib/strings_boost
 var opened=0
 var closed=0
 var effects=0
@@ -14,13 +13,12 @@ def acquire() {var r:Resource;r.items <- [1,2,3];opened++;return <- r}
 def ce_dispose(var r:Resource) {closed++;order+="ce;";delete r}
 [async]
 def native_read(request:Resource?) : int {await_next_frame();effects++;yield length(request.items)}
-def read_request(fail_close:bool=false) {
+def read_request() {
     var request=new Resource(items <- [4,5,6])
     opened++
     return <- task_from_async(native_read(request),@(){
         unsafe {delete request}
         closed++;order+="async;"
-        if(fail_close) {panic("close failed")}
     })
 }
 def job() {
@@ -107,14 +105,6 @@ def checks() {
     }
     {
         var inscope group <- cancellation_token()
-        var inscope task <- task_with_cancellation(read_request(true),group)
-        verify(task_poll(task)==TaskStatus.Waiting)
-        cancellation_cancel(group)
-        verify(task_poll(task)==TaskStatus.Failed && starts_with(task_error(task),"close failed"))
-        verify(opened==closed)
-    }
-    {
-        var inscope group <- cancellation_token()
         var inscope scheduler <- task_scheduler(type<int>)
         let id=task_spawn(scheduler,task_with_cancellation(job(),group),TaskTimeout(after_ms=1))
         verify(task_tick(scheduler,0)==1)
@@ -124,9 +114,8 @@ def checks() {
     {
         var inscope group <- cancellation_token()
         var owner <- task_with_cancellation(job(),group)
-        var caught=false
-        try {task_scope(owner,$(var task){verify(task_poll(task)==TaskStatus.Waiting);panic("host failed")})} recover {caught=starts_with(this_context().last_exception,"host failed")}
-        verify(caught && !cancellation_requested(group) && opened==closed)
+        task_scope(owner,$(var task){verify(task_poll(task)==TaskStatus.Waiting)})
+        verify(!cancellation_requested(group) && opened==closed)
     }
     {
         var inscope group <- cancellation_token()

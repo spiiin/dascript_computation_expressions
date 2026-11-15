@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation.das
-require ../lib/task_runtime.das
+require ../packages/computation/computation.das
+require ../packages/computation_task/task_runtime.das
 
 // A native finally would run when the function returns the cold task, not
 // when the task ends, so [task_result] rejects it like computation does.

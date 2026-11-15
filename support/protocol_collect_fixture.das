@@ -1,6 +1,6 @@
 options gen2
 module protocol_collect_fixture public
-require ../lib/builder_protocol.das public
+require ../packages/computation/builder_protocol.das public
 require daslib/rtti
 
 struct ExternalCollectionContext {}
@@ -22,30 +22,18 @@ def ce_unwrap(builder : tuple<kind : ExternalCollectionContext; element : auto(T
 def ce_bind(builder : tuple<kind : ExternalCollectionContext; element : auto(T)>; source : auto(U)[];
             next : block<(item : U) : array<T>>) : array<T> {
     var inscope values : array<T>
-    try {
-        for (item in source) {
-            var inscope part <- invoke(next, item)
-            for (value in part) { values |> push(value) }
-        }
-    } recover {
-        let failure = "{this_context().last_exception}"
-        delete values
-        panic(failure)
+    for (item in source) {
+        var inscope part <- invoke(next, item)
+        for (value in part) { values |> push(value) }
     }
     return <- values
 }
 def ce_bind(builder : tuple<kind : ExternalCollectionContext; element : auto(T)>; source : array<auto(U)>;
             next : block<(item : U) : array<T>>) : array<T> {
     var inscope values : array<T>
-    try {
-        for (item in source) {
-            var inscope part <- invoke(next, item)
-            for (value in part) { values |> push(value) }
-        }
-    } recover {
-        let failure = "{this_context().last_exception}"
-        delete values
-        panic(failure)
+    for (item in source) {
+        var inscope part <- invoke(next, item)
+        for (value in part) { values |> push(value) }
     }
     return <- values
 }
@@ -66,14 +54,8 @@ def ce_combine(builder : tuple<kind : ExternalCollectionContext; element : auto(
                next : block<() : array<T>>) : array<T> {
     var inscope values : array<T>
     for (value in first) { values |> push(value) }
-    try {
-        var inscope rest <- invoke(next)
-        for (value in rest) { values |> push(value) }
-    } recover {
-        let failure = "{this_context().last_exception}"
-        delete values
-        panic(failure)
-    }
+    var inscope rest <- invoke(next)
+    for (value in rest) { values |> push(value) }
     return <- values
 }
 def fixture_append(var accumulated : array<auto(T)>; step : array<T>) {
@@ -82,58 +64,24 @@ def fixture_append(var accumulated : array<auto(T)>; step : array<T>) {
 def ce_try_finally(builder : tuple<kind : ExternalCollectionContext; element : auto(T)>;
                    body : block<() : array<T>>; cleanup : block<() : void>) : array<T> {
     var inscope values : array<T>
-    try { values <- invoke(body) } recover {
-        let failure = "{this_context().last_exception}"
-        invoke(cleanup)
-        panic(failure)
-    }
-    try { invoke(cleanup) } recover {
-        let failure = "{this_context().last_exception}"
-        delete values
-        panic(failure)
-    }
+    values <- invoke(body)
+    invoke(cleanup)
     return <- values
 }
 def ce_using(builder : tuple<kind : ExternalCollectionContext; element : auto(T)>; resource : auto(U);
              body : block<(item : U) : array<T>>; cleanup : block<(var item : U) : void>) : array<T> {
     var owned = resource
     var inscope values : array<T>
-    try { values <- invoke(body, owned) } recover {
-        let failure = "{this_context().last_exception}"
-        invoke(cleanup, owned)
-        panic(failure)
-    }
-    try { invoke(cleanup, owned) } recover {
-        let failure = "{this_context().last_exception}"
-        delete values
-        panic(failure)
-    }
+    values <- invoke(body, owned)
+    invoke(cleanup, owned)
     return <- values
 }
 
 
 
-// Called from generated recovery without requiring rtti in the user's module.
-def fixture_rethrow(var values : array<auto(T)>) {
-    let failure = "{this_context().last_exception}"
-    delete values
-    panic(failure)
-}
 
-def ce_try_with(builder : tuple<kind:ExternalCollectionContext;element:auto(T)>;
-                body : block<() : array<T>>; handler : block<(message:string) : array<T>>) : array<T> {
-    var inscope values : array<T>
-    try { values <- invoke(body) } recover {
-        let message = "{this_context().last_exception}"
-        return <- invoke(handler, message)
-    }
-    return <- values
-}
 
 def ce_protocol(builder : tuple<kind:ExternalCollectionContext;element:auto(T)>) { return CeCollectProtocol() }
 def ce_collect_append(builder : tuple<kind:ExternalCollectionContext;element:auto(T)>;
                       var accumulated : array<T>; step : array<T>) { fixture_append(accumulated, step) }
-def ce_collect_rethrow(builder : tuple<kind:ExternalCollectionContext;element:auto(T)>; var accumulated : array<T>) {
-    fixture_rethrow(accumulated)
-}
 

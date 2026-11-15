@@ -1,5 +1,5 @@
 options gen2
-require ../../lib/computation.das
+require ../../packages/computation/computation.das
 
 def work(seed:int) : int64 {
     let result=computation(StateBuilder(seed)) {

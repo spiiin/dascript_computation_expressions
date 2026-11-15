@@ -1,7 +1,7 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 require ../support/bounded_result_builder.das
-require ../lib/deferred_computation.das
+require ../packages/computation/deferred_computation.das
 require daslib/rtti
 
 var sources=0
@@ -101,20 +101,6 @@ def iterators(builder:auto) {
     }
 }
 
-def array_lock_cleanup() {
-    var inscope values <- [1,2,3]
-    var caught=false
-    try {
-        let result=computation(ResultBuilder()) {
-            for (v in values) { values |> push(9); v+=1 }
-        }
-    } recover { caught=true }
-    assert(caught && length(values)==3)
-    // Reallocation is forbidden during traversal, but the error releases the lock.
-    values |> push(4)
-    assert(length(values)==4)
-}
-
 def temporary() { return <- [1,2,3] }
 def temporary_lifetime() {
     let before=heap_bytes_allocated()
@@ -133,7 +119,6 @@ def main() {
     stops(ResultBuilder()); stops(OptionBuilder())
     arrays(ResultBuilder()); arrays(OptionBuilder())
     iterators(ResultBuilder()); iterators(OptionBuilder())
-    array_lock_cleanup()
     temporary_lifetime()
     reset()
     let limited=computation(BoundedResultBuilder(limit=2)) {

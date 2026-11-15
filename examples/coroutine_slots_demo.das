@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/coroutine_scheduler.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation/coroutine_scheduler.das
 def one_frame() {
     return <- computation(CoroutineBuilder()) {yield next_frame()}
 }

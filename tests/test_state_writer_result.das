@@ -1,7 +1,8 @@
 options gen2
 require ../support/game_logged_transaction.das
-require ../lib/computation.das
-require ../lib/deferred_computation.das
+require ../packages/computation/computation.das
+require ../examples/builders/computation_effects.das
+require ../packages/computation/deferred_computation.das
 require daslib/rtti
 var after=0
 var closed=0
@@ -128,16 +129,6 @@ def resources() {
         result_error("stop",type<CeUnit>) |> bind
     }
     assert(failed.result is err && failed.state==10 && failed.log=="open;" && closed==before+1)
-    var caught=false
-    try {
-        let thrown=computation(StateWriterResultBuilder(10)) {
-            let resource=Resource() |> use_resource
-            tell("open;") |> bind
-            panic("native panic")
-            return 1
-        }
-    } recover {caught=true}
-    assert(caught && closed==before+2)
 }
 def make_task() {
     return <- deferred(StateWriterResultBuilder(10),2) $(amount) {

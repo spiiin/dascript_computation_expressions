@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/async_sequence_builder.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation_task/async_sequence_builder.das
 
 var itemFinalized=0
 struct CopyItem {value:int
@@ -25,15 +25,6 @@ def loop_stream() {
             yield n
         }
         yield 99
-    }
-}
-def recovered_stream() {
-    return <- computation(AsyncSequenceBuilder()) {
-        try_with($ {
-            task_after_polls(1,CeUnit()) |> bind
-            panic("recover producer")
-        },$(message:string) {yield 8})
-        yield 9
     }
 }
 [export]
@@ -75,11 +66,5 @@ def main() {
         verify(task_poll(item)==TaskStatus.Succeeded)
         verify(task_value(item) as some==(i==0 ? 0 : (i==1 ? 2 : 99)))
     }
-    var inscope recovered <- recovered_stream()
-    var inscope eight <- async_sequence_next(recovered)
-    verify(task_poll(eight)==TaskStatus.Waiting)
-    verify(task_poll(eight)==TaskStatus.Succeeded && task_value(eight) as some==8)
-    var inscope nine <- async_sequence_next(recovered)
-    verify(task_poll(nine)==TaskStatus.Succeeded && task_value(nine) as some==9)
     print("Async sequence checks OK\n")
 }

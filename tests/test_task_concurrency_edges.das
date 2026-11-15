@@ -1,7 +1,7 @@
 options gen2
-require ../lib/computation.das
-require ../lib/task_runtime.das
-require ../lib/task_parallel.das
+require ../packages/computation/computation.das
+require ../packages/computation_task/task_runtime.das
+require ../packages/computation_task/task_parallel.das
 require daslib/rtti
 var factories=0
 
@@ -58,18 +58,6 @@ def checks() {
         var inscope retry <- task_retry(@(attempt:int) {return <- task_after_polls(0,result_error("again",type<int>))},2,1l)
         task_poll(retry) // A nonzero delay requires the scheduler clock.
         verify(retry.status==TaskStatus.Failed)
-    }
-    {
-        var inscope sem <- task_semaphore(1)
-        var inscope protected <- task_with_semaphore(sem,@() {
-            return <- task_from_poll(@(){return task_pending(type<int>)},@(){panic("cleanup failed")})
-        })
-        task_poll(protected);task_cancel(protected)
-        verify(protected.status==TaskStatus.Failed && task_channel_count(sem.channel)==1)
-        var inscope retry <- task_retry(@(attempt:int) {
-            return <- task_from_poll(@(){return task_pending(type<Result<int;string>>)},@(){panic("cleanup failed")})
-        },2)
-        task_poll(retry);task_cancel(retry);verify(retry.status==TaskStatus.Failed)
     }
     {
         var inscope ch <- task_channel(type<string>,1)

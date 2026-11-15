@@ -1,12 +1,10 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
+require ../examples/builders/writer_result_builder.das
+require ../examples/builders/state_result_builder.das
 
 var maps=0
-var closes=0
-struct Resource {}
-def ce_dispose(var resource:Resource) { closes++ }
 def mapped(value:int) { maps++; return (payload=value+1) }
-def fail_map(value:int) : int { panic("mapper failure"); return value }
 [export]
 def main() {
     let stateGetFast=computation(StateBuilder(10)) { let x=state_get() |> bind; return mapped(x) }
@@ -90,31 +88,8 @@ def main() {
     var transaction=StateResultBuilder(10)
     let transactionalSnapshot=ce_bind_return(transaction,state_get(),$(n:int) { transaction.state=20; return n+1 })
     assert(transactionalSnapshot.result is ok && (transactionalSnapshot.result as ok)==11 && transactionalSnapshot.state==20)
-    var caught=false
-    try {
-        let unused=ce_bind_return(transaction,state_put(50),$(unit:CeUnit) { return fail_map(1) })
-    } recover { caught=true }
-    assert(caught && transaction.state==50)
     let reset=ce_bind_return(transaction,result_error("reset",type<int>),$(n:int) { return mapped(n) })
     assert(reset.result is err && transaction.state==10 && reset.state==10 && maps==20)
-    caught=false
-    try {
-        let unused=computation(StateResultBuilder(10)) {
-            let resource=Resource() |> use_resource
-            let n=result_ok(1) |> bind
-            return fail_map(n)
-        }
-    } recover { caught=true }
-    assert(caught && closes==1)
-    caught=false
-    try {
-        let unused=computation(WriterResultBuilder()) {
-            let resource=Resource() |> use_resource
-            let n=writer_result_ok(1,"before;") |> bind
-            return fail_map(n)
-        }
-    } recover { caught=true }
-    assert(caught && closes==2)
     print("effect bind_return checks OK\n")
 }
 

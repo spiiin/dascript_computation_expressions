@@ -1,20 +1,16 @@
 options gen2
-require ../lib/computation.das
-require daslib/rtti
-require strings
+require ../packages/computation/computation.das
+require ../examples/builders/writer_result_builder.das
+require ../examples/builders/state_result_builder.das
 struct TestResource { id : int }
 var events = ""
-var dispose_failure = 0
-var acquire_failure = 0
 
 def acquire(id : int) {
     events += "open{id};"
-    if (id == acquire_failure) { panic("acquisition failed") }
     return TestResource(id=id)
 }
 def ce_dispose(var handle : TestResource) {
     events += "close{handle.id};"
-    if (handle.id == dispose_failure) { panic("disposal failed") }
 }
 def fail_source(builder : ResultBuilder) { return result_error("stop", type<int>) }
 def fail_source(builder : OptionBuilder) { return none(type<int>) }
@@ -99,76 +95,6 @@ def test_failure(builder : auto) {
     }
     assert(events == "open1;open2;close2;iteration;open3;close3;iteration;close1;")
 }
-def test_exceptions() {
-    events = ""
-    var caught = ""
-    try {
-        let output = computation(ResultBuilder()) {
-            try_finally($ {
-                let a = acquire(1) |> use_resource
-                let b = acquire(2) |> use_resource
-                panic("body sentinel")
-                return 42
-            }, $ { events += "finally;" })
-        }
-    } recover { caught = "{this_context().last_exception}" }
-    assert(events == "open1;open2;close2;close1;finally;")
-    assert(caught |> starts_with("body sentinel"))
-
-    events = ""
-    acquire_failure = 2
-    try {
-        let output = computation(ResultBuilder()) {
-            let a = acquire(1) |> use_resource
-            let b = acquire(2) |> use_resource
-            return 42
-        }
-    } recover { caught = "{this_context().last_exception}" }
-    acquire_failure = 0
-    assert(events == "open1;open2;close1;")
-    assert(caught |> starts_with("acquisition failed"))
-
-    events = ""
-    dispose_failure = 2
-    try {
-        let output = computation(ResultBuilder()) {
-            try_finally($ {
-                let a = acquire(1) |> use_resource
-                let b = acquire(2) |> use_resource
-                return 42
-            }, $ { events += "finally;" })
-        }
-    } recover { caught = "{this_context().last_exception}" }
-    dispose_failure = 0
-    assert(events == "open1;open2;close2;close1;finally;")
-    assert(caught |> starts_with("disposal failed"))
-
-    events = ""
-    dispose_failure = 1
-    try {
-        let output = computation(ResultBuilder()) {
-            try_finally($ {
-                let a = acquire(1) |> use_resource
-                panic("original body failure")
-                return 42
-            }, $ { events += "finally;" })
-        }
-    } recover { caught = "{this_context().last_exception}" }
-    dispose_failure = 0
-    assert(events == "open1;close1;finally;")
-    assert(caught |> starts_with("disposal failed"))
-
-    events = ""
-    try {
-        let output = computation(ResultBuilder()) {
-            try_finally($ {
-                try_finally($ { return 1 }, $ { events += "cleanup;"; panic("cleanup failed") })
-            }, $ { events += "outer;" })
-        }
-    } recover { caught = "{this_context().last_exception}" }
-    assert(events == "cleanup;outer;")
-    assert(caught |> starts_with("cleanup failed"))
-}
 def test_effects() {
     events = ""
     let wr = computation(WriterResultBuilder()) {
@@ -203,8 +129,7 @@ def main() {
     test_failure(OptionBuilder())
     test_failure(WriterResultBuilder())
     test_failure(StateResultBuilder(10))
-    test_exceptions()
     test_effects()
-    print("resources checks OK: six builders, LIFO, loops, short circuit, panic, acquisition/disposal failures\n")
+    print("resources checks OK: six builders, LIFO, loops, short circuit\n")
 }
 

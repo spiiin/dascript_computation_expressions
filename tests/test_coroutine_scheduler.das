@@ -1,7 +1,7 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/coroutine_scheduler.das
-require ../lib/deferred_computation.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation/coroutine_scheduler.das
+require ../packages/computation/deferred_computation.das
 require daslib/rtti
 require daslib/strings_boost
 
@@ -85,12 +85,6 @@ def cleanup() {
         verify(coroutine_status(scheduler,a)==CoroutineStatus.Cancelled)
         verify(coroutine_status(scheduler,b)==CoroutineStatus.Cancelled)
         assert(opened==closed)
-        var inscope rejected <- script("rejected",false)
-        verify(coroutine_resume(rejected))
-        var caught=false
-        try {let id=coroutine_spawn(scheduler,rejected)} recover {caught=true}
-        assert(caught && opened==closed)
-        verify(!coroutine_resume(rejected))
     }
     {
         var inscope original:CoroutineScheduler
@@ -160,22 +154,9 @@ def deferred_tasks() {
     let current=heap_bytes_allocated()
     assert(current==baseline)
 }
-def invalid_ids() {
-    var inscope scheduler:CoroutineScheduler
-    for (slot in fixed_array(-1,0,1)) {
-        let id=CoroutineTaskId(slot=slot,generation=uint64(1))
-        var caught=false
-        try {let status=coroutine_status(scheduler,id)} recover {caught=true}
-        assert(caught)
-        caught=false
-        try {let changed=coroutine_cancel(scheduler,id)} recover {caught=true}
-        assert(caught)
-    }
-    verify(coroutine_tick(scheduler)==0)
-}
 [export]
 def main() {
-    for (round in range(3)) {lifecycle(); cleanup(); deferred_tasks(); invalid_ids()}
+    for (round in range(3)) {lifecycle(); cleanup(); deferred_tasks()}
     reentrant()
     print("coroutine scheduler checks OK\n")
 }

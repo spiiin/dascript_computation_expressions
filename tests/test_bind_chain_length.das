@@ -1,5 +1,6 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
+require ../examples/builders/computation_effects.das
 
 // How many binds one scope holds when every source uses the value before it.
 // Each such bind costs the compiler inference passes, and a builder lowered

@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 struct BadSource {}
 def ce_source(builder:ResultBuilder; source:BadSource) {}
 [export]

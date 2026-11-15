@@ -1,6 +1,6 @@
 options gen2
 module report_builder public
-require ../lib/computation_builders.das public
+require ../packages/computation/computation_builders.das public
 
 struct ReportBuilder { title:string }
 def ce_protocol(builder:ReportBuilder) { return CeValueProtocol() }

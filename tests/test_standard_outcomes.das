@@ -3,9 +3,9 @@ options max_infer_passes=1024
 options stack=524288
 require daslib/result
 require daslib/option
-require ../lib/computation.das
-require ../lib/task_builder.das
-require ../lib/async_sequence_builder.das
+require ../packages/computation/computation.das
+require ../packages/computation_task/task_builder.das
+require ../packages/computation_task/async_sequence_builder.das
 require daslib/rtti
 var steps=0
 struct Settings {n:int}

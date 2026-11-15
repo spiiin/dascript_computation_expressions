@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/search_builder.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation/search_builder.das
 var opened=0
 var closed=0
 struct SearchResource {name:string}

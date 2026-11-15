@@ -1,5 +1,6 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
+require ../examples/builders/computation_effects.das
 
 // As test_user_error_direct, for a builder lowered with continuations: every
 // bind around the mistake fails to type as well, and comes after it.

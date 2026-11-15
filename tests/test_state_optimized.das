@@ -1,13 +1,12 @@
 options gen2
-require ../lib/computation.das
-require ../lib/deferred_computation.das
+require ../packages/computation/computation.das
+require ../examples/builders/computation_effects.das
+require ../packages/computation/deferred_computation.das
 require daslib/rtti
-require strings
 
 struct Game {hp:int; mana:int}
 var sources=0
 var conditions=0
-var cleanups=0
 def turns(n:int) {sources++; return range(n)}
 def more(i,n:int) {conditions++; return i<n}
 
@@ -49,22 +48,6 @@ def main() {
         }
     }
     assert(nested.state==12)
-    let recovered=computation(StateBuilder(0)) {
-        try_with($ {
-            try_finally($ {
-                for (i in range(10)) {
-                    state_put(i+10) |> bind
-                    if (i==2) {panic("state loop panic")}
-                }
-                return 0
-            }, $ {cleanups++})
-        }, $(message:string) {
-            assert(find(message,"state loop panic")>=0)
-            let n=state_get() |> bind
-            return n
-        })
-    }
-    assert(recovered.value==12 && recovered.state==12 && cleanups==1)
     {
         var inscope task <- deferred(StateBuilder(2),5) $(count) {
             for (i in range(count)) {

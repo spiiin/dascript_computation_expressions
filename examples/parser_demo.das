@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/parser_builder.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation/parser_builder.das
 def assignment(text:string) {
     return computation(ParserBuilder(text=text)) {
         parser_literal("hp") |> bind

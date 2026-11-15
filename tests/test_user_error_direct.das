@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 
 def half(value : int) : Result<int;string> {
     return value % 2 == 0 ? result_ok(value / 2) : result_error("odd", type<int>)

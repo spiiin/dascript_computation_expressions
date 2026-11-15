@@ -1,6 +1,6 @@
 options gen2
 module move_resource_support public
-require ../lib/computation.das public
+require ../packages/computation/computation.das public
 struct UploadBuffer {id:int;data:array<int>}
 var resources_opened=0
 var resources_closed=0

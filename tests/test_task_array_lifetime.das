@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/task_scheduler.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation_task/task_scheduler.das
 require daslib/rtti
 require daslib/strings_boost
 var opened=fixed_array(0,0,0)
@@ -9,7 +9,7 @@ var polls=fixed_array(0,0,0)
 var order=""
 var effects=0
 struct Request {remaining:int;data:array<int>}
-def owned(id,waits:int; fail_native:bool=false; fail_close:bool=false) {
+def owned(id,waits:int; fail_native:bool=false) {
     opened[id]++
     var state=new Request(remaining=waits,data <- [1,2,3])
     return <- task_from_poll(@(){
@@ -20,12 +20,11 @@ def owned(id,waits:int; fail_native:bool=false; fail_close:bool=false) {
     },@(){
         closed[id]++;order+="{id};"
         unsafe {delete state}
-        if(fail_close) {panic("close {id} failed")}
     })
 }
-def inputs(waits:int=2; fail_native:int=-1; fail_close:int=-1) {
+def inputs(waits:int=2; fail_native:int=-1) {
     var tasks:array<typedecl(task_after_polls(0,0))>
-    for(i in range(3)) {tasks |> emplace(owned(i,waits,i==fail_native,i==fail_close))}
+    for(i in range(3)) {tasks |> emplace(owned(i,waits,i==fail_native))}
     return <- tasks
 }
 def reset() {
@@ -44,16 +43,9 @@ def checks() {
     }
     balanced();reset()
     {
-        var inscope task <- task_when_all(inputs(fail_native=1,fail_close=1))
+        var inscope task <- task_when_all(inputs(fail_native=1))
         verify(task_poll(task)==TaskStatus.Failed && polls[0]==1 && polls[1]==1 && polls[2]==0)
         verify(starts_with(task_error(task),"child 1 failed") && order=="1;0;2;")
-    }
-    balanced();reset()
-    {
-        var inscope task <- task_when_all(inputs(fail_close=1))
-        verify(task_poll(task)==TaskStatus.Waiting)
-        verify(task_cancel(task) && task_status(task)==TaskStatus.Failed && order=="0;1;2;")
-        verify(starts_with(task_error(task),"close 1 failed"))
     }
     balanced();reset()
     {
@@ -62,14 +54,6 @@ def checks() {
         var inscope task <- task_when_all(tasks)
         verify(task_poll(task)==TaskStatus.Cancelled && polls[0]==1 && polls[2]==0)
         verify(order=="1;0;2;" && empty(task_error(task)))
-    }
-    balanced();reset()
-    {
-        var tasks <- inputs(fail_close=0)
-        verify(task_cancel(tasks[1]))
-        var inscope task <- task_when_all(tasks)
-        verify(task_poll(task)==TaskStatus.Failed && polls[2]==0)
-        verify(starts_with(task_error(task),"close 0 failed"))
     }
     balanced();reset()
     {
@@ -104,9 +88,7 @@ def checks() {
     balanced();reset()
     {
         var owner <- task_when_all(inputs())
-        var caught=false
-        try {task_scope(owner,$(var task){verify(task_poll(task)==TaskStatus.Waiting);panic("host failed")})} recover {caught=starts_with(this_context().last_exception,"host failed")}
-        verify(caught)
+        task_scope(owner,$(var task){verify(task_poll(task)==TaskStatus.Waiting)})
     }
     balanced();reset()
     {

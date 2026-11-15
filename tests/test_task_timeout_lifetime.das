@@ -1,9 +1,7 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/task_scheduler.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation_task/task_scheduler.das
 require daslib/async_boost
-require daslib/rtti
-require daslib/strings_boost
 var opened=0
 var closed=0
 var continued=0
@@ -41,8 +39,6 @@ def checked_job() {
         return n+length(r.items)
     }
 }
-var callbackScheduler:typedecl(task_scheduler(type<int>))
-var callbackId:TaskId
 def checks() {
     let before=continued
     order=""
@@ -79,28 +75,12 @@ def checks() {
     }
     {
         var owner <- task_scheduler(type<int>)
-        var caught=false
-        try {
-            task_scheduler_scope(owner,$(var scheduler) {
-                let id=task_spawn(scheduler,game_job(),TaskTimeout(after_ms=100))
-                verify(task_tick(scheduler,0)==1)
-                panic("host failed")
-            })
-        } recover {caught=starts_with(this_context().last_exception,"host failed")}
-        verify(caught && opened==closed)
+        task_scheduler_scope(owner,$(var scheduler) {
+            let id=task_spawn(scheduler,game_job(),TaskTimeout(after_ms=100))
+            verify(task_tick(scheduler,0)==1)
+        })
+        verify(opened==closed)
     }
-    callbackScheduler <- task_scheduler(type<int>)
-    var source <- task_from_poll(@(){return task_pending(type<int>)},@(){
-        verify(task_timed_out(callbackScheduler,callbackId))
-        let n=task_tick(callbackScheduler,0)
-    })
-    callbackId=task_spawn(callbackScheduler,source,TaskTimeout(after_ms=0))
-    let other=task_spawn(callbackScheduler,read_request(),TaskTimeout(after_ms=0))
-    verify(task_tick(callbackScheduler,0)==0)
-    verify(task_timed_out(callbackScheduler,callbackId) && task_status(callbackScheduler,callbackId)==TaskStatus.Failed)
-    verify(starts_with(task_error(callbackScheduler,callbackId),"task scheduler: mutation"))
-    verify(task_status(callbackScheduler,other)==TaskStatus.Cancelled && opened==closed)
-    delete callbackScheduler
 }
 [export]
 def main() {

@@ -1,7 +1,7 @@
 options gen2
 module protocol_test_builders public
-require ../lib/builder_protocol.das public
-require ../lib/sequence_runtime.das public
+require ../packages/computation/builder_protocol.das public
+require ../packages/computation/sequence_runtime.das public
 require daslib/rtti
 
 var protocolCalls = 0

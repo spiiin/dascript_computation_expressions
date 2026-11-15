@@ -1,6 +1,7 @@
 options gen2
 module game_state_example public
-require ../lib/computation.das public
+require ../packages/computation/computation.das public
+require ../examples/builders/computation_effects.das public
 require math
 
 struct GameState {

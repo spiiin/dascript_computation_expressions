@@ -4,9 +4,23 @@ $ErrorActionPreference='Stop'
 $Daslang = Resolve-CeDaslang $Daslang
 $destination=Join-Path ([IO.Path]::GetFullPath($OutputDirectory)) ('integration-'+[guid]::NewGuid().ToString('N'))
 & (Join-Path $PSScriptRoot 'export_library.ps1') -Destination $destination
-$expected=@(Get-Content (Join-Path $PSScriptRoot 'public_modules.json') -Raw|ConvertFrom-Json)
-$actual=@(Get-ChildItem (Join-Path $destination 'lib') -Filter '*.das'|Select-Object -ExpandProperty Name)
-if(@(Compare-Object $expected $actual).Count){throw 'Export has unexpected modules'}
+# Each package arrives whole, with its descriptor and manifest, and nothing else does.
+foreach($package in @('computation','computation_task')) {
+    $expected=@(Get-ChildItem (Join-Path $PSScriptRoot "packages/$package") -Filter '*.das'|Select-Object -ExpandProperty Name)
+    $actual=@(Get-ChildItem (Join-Path $destination "modules/$package") -Filter '*.das'|Select-Object -ExpandProperty Name)
+    if(@(Compare-Object $expected $actual).Count){throw "Export has unexpected modules in $package"}
+    foreach($file in @('.das_module','.das_package')){
+        if(-not(Test-Path -LiteralPath (Join-Path $destination "modules/$package/$file"))){throw "Incomplete export: $package/$file"}
+    }
+}
+# The repository's own descriptor, used when the whole repository is installed
+# as one package, names the same modules as the two package descriptors.
+$rootDescriptor=[IO.File]::ReadAllText((Join-Path $PSScriptRoot '.das_module'))
+foreach($package in @('computation','computation_task')) {
+    $own=[regex]::Match([IO.File]::ReadAllText((Join-Path $PSScriptRoot "packages/$package/.das_module")),'(?s)_modules = \[(.*?)\]').Groups[1].Value -replace '\s',''
+    $shared=[regex]::Match($rootDescriptor,"(?s)${package}_modules = \[(.*?)\]").Groups[1].Value -replace '\s',''
+    if(-not $own -or $own -cne $shared){throw "Root .das_module disagrees with packages/$package/.das_module"}
+}
 foreach($file in @('README.md','INTEGRATION.md','PUBLIC_API.md','COMPUTATION.md','CE_SEMANTICS.md','BUILDER_PROTOCOL.md','RELIABILITY.md','aot_host/main.cpp','aot_host/CMakeLists.txt','aot_host/recover_064.h','main.das','identity_builder.das','manifest.json')){
     if(-not(Test-Path -LiteralPath (Join-Path $destination $file))){throw "Incomplete export: $file"}
 }
@@ -21,20 +35,24 @@ foreach($document in Get-ChildItem -LiteralPath $destination -Filter '*.md' -Fil
 }
 & $Daslang (Join-Path $destination 'main.das') -no-module-cache
 if($LASTEXITCODE -ne 0){throw 'Minimal external builder failed'}
+# The core package alone is a complete export: nothing in it needs the Task runtime.
+$coreOnly=Join-Path ([IO.Path]::GetFullPath($OutputDirectory)) ('integration-core-'+[guid]::NewGuid().ToString('N'))
+& (Join-Path $PSScriptRoot 'export_library.ps1') -Destination $coreOnly -Packages computation
+if(Test-Path -LiteralPath (Join-Path $coreOnly 'modules/computation_task')){throw 'Core export contains the Task package'}
+& $Daslang (Join-Path $coreOnly 'main.das') -no-module-cache
+if($LASTEXITCODE -ne 0){throw 'Core-only export failed'}
 $smoke=@'
 options gen2
-require ./lib/computation.das
-require ./lib/validation_builder.das
-require ./lib/reader_result_builder.das
-require ./lib/deferred_computation.das
-require ./lib/task_builder.das
-require ./lib/task_combinators.das
-require ./lib/task_scheduler.das
-require ./lib/task_events.das
-require ./lib/async_sequence_builder.das
-require ./lib/parser_builder.das
-require ./lib/search_builder.das
-require ./lib/query_builder.das
+require computation/computation
+require computation/validation_builder
+require computation/deferred_computation
+require computation_task/task_builder
+require computation_task/task_combinators
+require computation_task/task_scheduler
+require computation_task/task_events
+require computation_task/async_sequence_builder
+require computation/parser_builder
+require computation/search_builder
 require daslib/async_boost
 [async]
 def standard_value() : int {await_next_frame();yield 12}
@@ -48,19 +66,6 @@ def main() {
     assert(length((parsedItems as parsed).value)==2 && (parsedItems as parsed).value[1]==2)
     let parsed=computation(ParserBuilder(text="21")) {let n=parser_int() |> bind;parser_eof() |> bind;return n*2}
     assert(parsed is parsed && (parsed as parsed).value==42)
-    var inscope queryOrdered <- fixed_array(3,1,3,2) |> query_order_by(false) <| $(n:int) {return n}
-    var inscope queryUnique <- queryOrdered |> query_distinct()
-    assert(length(queryUnique)==3 && queryUnique[0]==1 && queryUnique[2]==3)
-    var inscope queryFiltered <- queryUnique |> query_where <| $(n:int) {return n>1}
-    var inscope queryProjected <- queryFiltered |> query_select <| $(n:int) {return n*10}
-    assert(length(queryProjected)==2 && queryProjected[0]==20 && queryProjected[1]==30)
-    var inscope queryGroups <- computation(QueryBuilder()) {
-        var group & = queryUnique |> query_group_by <| $(n:int) {return n%2} |> bind
-        return length(group.values)
-    }
-    assert(length(queryGroups)==2 && queryGroups[0]==2 && queryGroups[1]==1)
-    var inscope queryRows <- computation(QueryBuilder()) {let n=fixed_array(1,2) |> bind;query_where(n>1) |> bind;return n*2}
-    assert(length(queryRows)==1 && queryRows[0]==4)
     var inscope alternatives <- computation(SearchBuilder()) {
         let n=search_choose([1,2]) |> search_append(search_choose([10,20])) |> search_take(3) |> bind
         yield n
@@ -72,14 +77,6 @@ def main() {
     var foundSum=0
     sequence_each(found) $(n:int) {foundSum+=n}
     assert(foundSum==2)
-    let state=computation(StateBuilder(5)) {
-        state_modify($(n:int){return n+2}) |> bind
-        let value=state_gets($(n:int){return n*2}) |> bind
-        return value
-    }
-    assert(state.state==7 && state.value==14)
-    let reader=computation(ReaderResultBuilder(6)) {let n=reader_ask() |> bind;return n+1}
-    assert(reader as ok==7)
     let check=computation(ValidationBuilder()) {
         let p=validation_ok(2) |> and_bind(validation_ok(3)) |> bind
         return p.first+p.second
@@ -184,7 +181,7 @@ Write-Host "Standalone export verified: $destination"
 # Optional adapter is checked from the exported package, not the checkout.
 $hvSmoke=@'
 options gen2
-require ./lib/task_hv.das
+require computation_task/task_hv
 [export]
 def main() {
     var inscope socket <- hv_websocket()

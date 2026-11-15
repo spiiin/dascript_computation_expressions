@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/reader_result_builder.das
+require ../packages/computation/computation_macro.das
+require ./builders/reader_result_builder.das
 
 struct CombatRules {
     minimumLevel:int=3

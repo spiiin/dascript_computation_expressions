@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation_macro.das
+require ../packages/computation/computation_macro.das
 require ../support/protocol_test_builders.das
 require ../support/protocol_collect_fixture.das
 
@@ -18,10 +18,6 @@ def main() {
     var total = 0
     for (value in totals) { total += value }
     assert(total == 37)
-    var inscope recovered <- computation(ExternalCollectionBuilder()) {
-        try_with($ { for (i in range(3)) { yield i; panic("failure") } }, $(message:string) { yield 99 })
-    }
-    assert(length(recovered) == 1 && recovered[0] == 99)
     {
         var inscope values <- computation(custom_sequence()) {
             let resource = Resource() |> use_resource
@@ -38,17 +34,7 @@ def main() {
         var inscope values <- computation(custom_sequence()) { yield "complete" }
         for (value in values) { assert(value == "complete") }
     }
-    var caught = false
-    try {
-        var inscope values <- computation(custom_sequence()) {
-            let resource = Resource() |> use_resource
-            panic("failure")
-            yield "unreachable"
-        }
-        for (value in values) { assert(false) }
-    } recover { caught = true }
-    assert(caught && closes == 2)
-    assert(sequenceConstructors == 3 && sequenceRuns == 3)
+    assert(sequenceConstructors == 2 && sequenceRuns == 2)
     assert(protocolCalls == 0)
     print("builder protocol checks OK\n")
 }

@@ -3,26 +3,29 @@
 Проверенный SDK — Daslang v0.6.5-RC2 со стандартной daslib. SDK не включён в экспорт.
 Result и Option теперь являются стандартными `Result<T;string>` / `Option<T>`.
 Миграция и правила владения: [семантика builders](CE_SEMANTICS.md).
-Необязательный `./lib/task_hv.das` требует установленный `dashv/dashv_boost`.
+Необязательный `computation_task/task_hv` требует установленный `dashv/dashv_boost`.
 API: `hv_websocket`, `ws_connect`, `ws_send_text`, `ws_receive_text`,
 `HvWebSocketConfig`, `hv_websocket_stats`; контракт и пример: [семантика builders](CE_SEMANTICS.md).
 
-В поставке `lib/` содержит только библиотечные модули. Из корня приложения:
+Библиотека — два пакета: `computation` (ядро) и `computation_task` (Task-рантайм,
+нужен только для задач). В приложении они лежат в `modules/`, см.
+[подключение](INTEGRATION.md):
 
 ```das
 options gen2
-require ./lib/computation.das
+require computation/computation
 ```
 
-Дополнительные подключения: `./lib/reader_builder.das`, `./lib/reader_result_builder.das`,
-`./lib/validation_builder.das`, `./lib/state_writer_result_builder.das`,
-`./lib/deferred_computation.das`, `./lib/coroutine_builder.das`, `./lib/coroutine_scheduler.das`.
-Типизированные задачи: `./lib/task_builder.das`, см. [семантика builders](CE_SEMANTICS.md).
-Планировщик и таймауты: `./lib/task_scheduler.das`, см. [семантика builders](CE_SEMANTICS.md).
-Совместное ожидание: `./lib/task_combinators.das`, операции task_when_all,
+Дополнительные подключения: `computation/validation_builder`,
+`computation/deferred_computation`, `computation/coroutine_builder`, `computation/coroutine_scheduler`.
+State, Writer, Reader и Query в библиотеку не входят: это примеры builders поверх
+публичного протокола, см. [examples/builders](examples/builders/README.md).
+Типизированные задачи: `computation_task/task_builder`, см. [семантика builders](CE_SEMANTICS.md).
+Планировщик и таймауты: `computation_task/task_scheduler`, см. [семантика builders](CE_SEMANTICS.md).
+Совместное ожидание: `computation_task/task_combinators`, операции task_when_all,
 task_result_when_all, task_race и [and_bind для Task](CE_SEMANTICS.md); см. [семантика builders](CE_SEMANTICS.md).
-Вложенные файлы приложения используют соответствующий относительный путь
-с расширением `.das`, например `require ../lib/computation.das`.
+Модуль подключается по имени пакета, без расширения. Тесты и примеры этого
+репозитория подключают пакеты из `packages/` относительным путём с `.das`.
 
 ## Builders и результаты
 
@@ -30,22 +33,17 @@ task_result_when_all, task_race и [and_bind для Task](CE_SEMANTICS.md); см
 |---|---|
 | ResultBuilder / OptionBuilder | `Result<T;string>` (err/ok) / `Option<T>` (none/some) |
 | MoveResultBuilder / MoveOptionBuilder | Те же варианты с передаваемым владением |
-| StateBuilder(initial) | `(value, state)` |
-| WriterBuilder | `(value, log)` |
-| StateResultBuilder(initial) | `(result, state)`, откат state при Error |
-| WriterResultBuilder | `(result, log)`, журнал сохраняется при Error |
-| StateWriterResultBuilder(initial) | `(result, state, log)`, откат state и сохранение журнала при Error |
-| ReaderBuilder(environment) / ReaderResultBuilder(environment) | `(value)` / Result |
 | ValidationBuilder | valid/invalid с накоплением ошибок в and_bind |
 | ListBuilder(type<T>) | Владеющий array<T> |
 | SequenceBuilder(type<T>) | Ленивый iterator, для move-only элементов — owning slot |
 | CoroutineBuilder | Ленивый iterator<CoroutineFrame> |
 | TaskBuilder(type<T>) | Однократная задача с результатом T, запуск через task_poll |
 | TaskResultBuilder(type<T>) | Задача с Result<T>, Error пропускает продолжение |
+| TaskResultBuilder(type<T>, type<E>) | То же с собственным типом ошибки: Task<Result<T;E>> |
 | AsyncSequenceBuilder(type<T>) | Асинхронный stream; next возвращает Task<Option<T>> |
 
 ListBuilder()/SequenceBuilder() выбирают int. Обычные Value CE выполняются
-немедленно; Sequence/Coroutine — при обходе/возобновлении. State/Reader и обычные
+немедленно; Sequence/Coroutine — при обходе/возобновлении. Обычные
 Result/Option используют копируемые данные. Для move-only нужны owning builders
 или соответствующий List/Sequence. По умолчанию нет сетевого async или потоков.
 Task поддерживает неблокирующее ожидание через callback-адаптер; сетевой транспорт
@@ -68,20 +66,11 @@ task_error, task_cancel, task_scope, task_from_poll, task_after_polls.
 | `move_ok(value[,type<E>])`, `move_some(value)` | Перемещение: одноаргументный move_ok — обёртка для Result<T,string>, остальные — стандартные функции |
 | `ce_move_some(value)` | Стандартный Option с обходом AOT-перемещения tuple; см. STANDARD_TYPES.md |
 | `move_error(message, type<T>)`, `move_none(type<T>)` | Неуспешные owning-результаты |
-| `state_get()`, `state_put(state)` | Описания чтения / замены состояния, выполняемые через bind |
-| `state_modify($(state:S) {return nextState})` | Преобразовать состояние, завершается bind |
-| `state_gets($(state:S) {return projection})` | Прочитать часть состояния, завершается bind |
-| `state_result(value, state)` | Готовый результат обычного State |
-| `state_result_ok(value,state)`, `state_result_error(message,type<T>,state)`, `state_result_value(result,state)` | Готовые StateResult |
-| `writer_value(value, log="")`, `tell(message)` | Значение с журналом / запись Unit в журнал |
-| `writer_result_ok(value,log="")`, `writer_result_error(message,type<T>,log="")`, `writer_result(result,log="")` | Готовые WriterResult |
-| `state_writer_result_ok(value,state,log="")`, `state_writer_result_error(message,type<T>,state,log="")`, `state_writer_result_value(result,state,log="")` | Готовые StateWriterResult |
-| `reader_ask()`, `reader_value(value)` | Окружение / готовый результат Reader |
 | `validation_ok(value)`, `validation_error(message,type<T>)`, `left |> validation_zip(right)` | Проверки и объединение независимых ошибок |
 | `deferred(builder,data) $(snapshot) {...}`, `deferred(builder) {...}` | Владеющий снимок для повторных запусков |
 | `run_deferred(task)` | Новый запуск; task передаётся изменяемым владельцем |
-| `sequence_each(source, action)` | Защищённый обход и закрытие источника, включая исключение action |
-| `sequence_each_move(source, action)` | Защищённый обход owning-элементов по ссылке |
+| `sequence_each(source, action)` | Обход и закрытие источника |
+| `sequence_each_move(source, action)` | Обход owning-элементов по ссылке и закрытие источника |
 | `sequence_next_move(source, value)` | Получить следующий элемент перемещением, возвращает bool |
 | `sequence_close(source)` | Явное закрытие итератора |
 | `next_frame()`, `wait_frames(count)` | События ожидания Coroutine, выдаются через yield |
@@ -104,17 +93,17 @@ handles и stack blocks; каждый run клонирует рабочие да
 - `coroutine_forget`, `coroutine_prune` — удалить завершённые записи;
 - `coroutine_task_count`, `coroutine_slot_count` — число задач / слотов;
 - `coroutine_close(scheduler)` — закрыть все задачи;
-- `coroutine_scope($(var scheduler:CoroutineScheduler) {...})` — защищённая область scheduler.
+- `coroutine_scope($(var scheduler:CoroutineScheduler) {...})` — область scheduler: при выходе закрывает его задачи.
 
 ## CE-маркеры и расширение
 
 `source |> bind`, `left |> and_bind(right) |> bind`, `return value`,
 `return source |> return_from`, `yield value`, `source |> yield_from`,
-`resource |> use_resource`, `try_finally(body,cleanup)`, `try_with(body,handler)`
+`resource |> use_resource`, `try_finally(body,cleanup)`
 раскрываются макросом. Поддержка зависит от builder. and_bind вычисляет фабрики
 достигнутой группы слева направо; у Task затем кооперативно опрашивает детей. Не запускает
-потоки; Error/None не являются исключениями. StateResult откатывает только поле
-state, не внешние эффекты или объекты по указателям.
+потоки. Error/None — значения; panic фатален и не перехватывается, `try_with`
+удалён, см. [семантика builders](CE_SEMANTICS.md).
 
 `identity_builder.das` и `main.das` в экспортированном примере показывают
 минимальный CeValueProtocol с ce_bind/ce_unwrap/ce_return/ce_zero/ce_combine.
@@ -162,10 +151,42 @@ def load_level(id : int) : Task<int> {
 | --- | --- | --- |
 | `[task]` | `TaskBuilder(type<T>)` | `Task<T>` |
 | `[task_result]` | `TaskResultBuilder(type<T>)` | `Task<Result<T;string>>` |
+| `[task_result]`, результат `Result<T;E>` | `TaskResultBuilder(type<T>, type<E>)` | `Task<Result<T;E>>` |
 
-Аннотации приходят вместе с `./lib/task_builder.das`. Тип результата объявляется
+Аннотации приходят вместе с `computation_task/task_builder`. Тип результата объявляется
 явно; `void` и нативный `finally` не поддерживаются — для очистки есть
 `try_finally(body, cleanup)`.
+
+Тип ошибки задачи задаётся объявленным результатом `Result<T;E>`; E — любой
+копируемый тип, обычно enum или структура:
+
+```das
+enum LoadError { NotFound; Denied }
+
+[task_result]
+def load(id : int) : Result<string;LoadError> {
+    let record = lookup(id) |> bind        // Task<Result<Record;LoadError>>
+    return record.name
+}
+```
+
+Ошибка связанной задачи завершает и внешнюю, поэтому их типы ошибок должны
+совпадать. Молча ошибка не преобразуется: bind задачи с другим типом ошибки
+отклоняется при компиляции одним сообщением, в котором названы оба типа.
+`task_map_error(task, @@convert)` из `computation_task/task_combinators` меняет тип
+ошибки задачи — так в такой функции связываются источники библиотеки, которые
+ошибаются строкой:
+
+```das
+def classify(message : string) : LoadError { ... }
+
+let page = task_map_error(fetch(url), @@classify) |> bind
+```
+
+Задачи без собственного результата (`Task<CeUnit>`, например `task_delay_ms`)
+связываются как обычно. `and_bind`, `deferred`, `task_result_when_all` (пара и
+массив) и `task_result_race` сохраняют тип ошибки своих задач; задачи одной
+группы должны ошибаться одним типом.
 
 Задача живёт дольше вызова функции, поэтому аргументы она забирает себе.
 Аргумент, объявленный `var`, перемещается в задачу и может быть некопируемым —
@@ -194,7 +215,7 @@ def drain(var tasks : array<Task<int>>; limit : int) : int {
 | Аннотация | Builder | `def f(...) : T` возвращает |
 | --- | --- | --- |
 | `[sequence]` | `SequenceBuilder(type<T>)` | `iterator<T>` |
-| `[async_sequence]` | `AsyncSequenceBuilder(type<T>)` | асинхронный поток элементов `T` |
+| `[async_sequence]` | `AsyncSequenceBuilder(type<T>)` | `AsyncSequence<T>` |
 | `[coroutine]` | `CoroutineBuilder()` | корутину; результат не объявляется |
 
 ```das
@@ -206,9 +227,9 @@ def evens(limit : int) : int {
 }
 ```
 
-`[sequence]` и `[coroutine]` приходят вместе с `./lib/sequence_builder.das` и
-`./lib/coroutine_builder.das`, `[async_sequence]` — с
-`./lib/async_sequence_builder.das`. Аргументы `var` перемещаются так же, как у
+`[sequence]` и `[coroutine]` приходят вместе с `computation/sequence_builder` и
+`computation/coroutine_builder`, `[async_sequence]` — с
+`computation_task/async_sequence_builder`. Аргументы `var` перемещаются так же, как у
 `[task]`.
 
 ## Имена типов Task
@@ -224,19 +245,32 @@ def evens(limit : int) : int {
 | `TaskProgress<T>` | `task_progress(type<T>)` |
 | `TaskEventSource<T>` | `task_event_source(type<T>)` |
 | `TaskJobQueue` | `task_job_queue()` |
+| `TaskJobStream<T;Input>` | `task_jobque_stream(queue, type<T>, input, @@work)`; Input — тип входа worker |
+| `AsyncSequence<T>` | `computation(AsyncSequenceBuilder(type<T>))`, функция `[async_sequence]` |
+| `TaskShared<T>` | `task_share(task)` |
+| `TaskScheduler<T>` | `task_scheduler(type<T>)` |
+| `TaskRuntime` | `task_runtime()` |
+| `TaskTicket<T>` | `task_spawn(runtime, task)` |
 
 ```das
 var inbox : TaskChannel<string>
 def total(var tasks : array<Task<int>>) : int { ... }
+
+struct Game {
+    runtime : TaskRuntime
+    jobs : TaskScheduler<int>
+}
+def first_reading(var readings : AsyncSequence<int>) : Task<Option<int>> { ... }
 ```
 
 Имя — тот же структурный тип, что и значение конструктора, поэтому старый код
-с `typedecl(...)` остаётся совместимым. У scheduler, runtime, потока jobque и
-AsyncSequence имён пока нет: там по-прежнему нужен `typedecl`.
+с `typedecl(...)` остаётся совместимым. `TaskScheduler<T>` и
+`TaskJobStream<T;Input>` объявляют переменную, поле или параметр с конкретными
+типами; вывести `auto(T)` из аргумента через них нельзя.
 
 ## Полный Task API
 
-`./lib/async_sequence_builder.das`: AsyncSequenceBuilder, async_sequence_next,
+`computation_task/async_sequence_builder`: AsyncSequenceBuilder, async_sequence_next,
 async_sequence_close. Получение элементов через bind в TaskBuilder; завершение —
 none, отмена/таймаут next закрывают stream. Владельцы: use_resource или inscope.
 Копируемые и move-only элементы, один активный next. Для owning значений:
@@ -265,21 +299,19 @@ task_result_when_all (пара и массив), task_race и task_result_race.
 
 ## Ожидание событий
 
-`./lib/task_events.das`: task_event_source(type<T>), task_wait_event, task_event_emit,
+`computation_task/task_events`: task_event_source(type<T>), task_wait_event, task_event_emit,
 task_event_close, task_event_subscriber_count, task_event_stats. Broadcast по активным
 подпискам, копируемый T, Task<Result<T>>. Контракт: [семантика builders](CE_SEMANTICS.md).
 
-## Parser, Search и Query
+## Parser и Search
 
-Отдельные модули: `./lib/parser_builder.das`, `./lib/search_builder.das`,
-`./lib/query_builder.das`. Протокол и примеры: [семантика builders](CE_SEMANTICS.md).
+Отдельные модули: `computation/parser_builder`, `computation/search_builder`.
+Протокол и примеры: [семантика builders](CE_SEMANTICS.md).
 
 - `ParserBuilder(text=...)`: `parser_literal`, `parser_int`, `parser_spaces`,
   `parser_eof`, `parser_choice`, `parser_call(@@grammar)`; результат parsed/failure.
 - `SearchBuilder(type<T>)`: `search_choose` потребляет массив,
   `search_guard` отсекает ветвь, `search_once` / `search_cut` оставляют первое решение источника.
-- `QueryBuilder(type<T>)`: `query_where`, `query_select`, `query_join`;
-  стабильный inner join и накопление массива, без подключения СУБД.
 
 Новые builders работают с копируемыми значениями. Результаты Search нужно
 закрывать через `sequence_each`, `sequence_close` или владеющую область.
@@ -293,16 +325,7 @@ Search-комбинаторы: `source |> search_take(n)` ограничивае
 `left |> search_append(right)` последовательно объединяет альтернативы, владея обоими iterator.
 Контракт и пример: [семантика builders](CE_SEMANTICS.md).
 
-Query-операции: `source |> query_order_by(key,descending=false)`, `source |> query_group_by(key)`,
-`source |> query_distinct()` / `query_distinct(key)`. Стабильный порядок, ключ вычисляется один раз на строку.
-Группы владеют вложенными массивами; внутри CE: `var group & = ... |> bind`.
-Контракт и пример: [семантика builders](CE_SEMANTICS.md).
-
-Для блока в конце: `source |> query_order_by(descending) <| key`;
-это перегрузка `(source, descending, key)`, прежняя сигнатура сохранена.
-
-В примерах блоки `query_where`, `query_select`, `query_group_by` и `query_distinct(key)`
-передаются через `source |> query_operation <| $(row:Row) {...}`; прежние вызовы со скобками также поддерживаются.
+QueryBuilder и его операции — пример builder, см. [examples/builders](examples/builders/README.md).
 
 
 Task concurrency: [семантика builders](CE_SEMANTICS.md).

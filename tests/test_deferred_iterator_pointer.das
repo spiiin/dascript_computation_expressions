@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation.das
-require ../lib/deferred_computation.das
+require ../packages/computation/computation.das
+require ../packages/computation/deferred_computation.das
 struct PointerSequence {}
 def ce_protocol(builder:PointerSequence) { return ce_sequence_protocol(type<int?>) }
 def ce_sequence_run(builder:PointerSequence; var source:iterator<int?>) { return <- ce_sequence_protect(source) }

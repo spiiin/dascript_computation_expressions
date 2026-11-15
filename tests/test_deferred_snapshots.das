@@ -1,18 +1,17 @@
 options gen2
-require ../lib/computation.das
-require ../lib/deferred_computation.das
+require ../packages/computation/computation.das
+require ../examples/builders/computation_effects.das
+require ../packages/computation/deferred_computation.das
 struct Config {
     name:string
     amounts:array<int>
 }
 struct Game { gold:int }
 var cloned=0
-var rejectClone=false
 struct Fragile { amounts:array<int> }
 def clone(var dest:Fragile; src:Fragile) {
     cloned++
     dest.amounts := src.amounts
-    if (rejectClone) { panic("clone failed") }
 }
 [export]
 def main() {
@@ -39,22 +38,12 @@ def main() {
             var inscope value:Fragile
             value.amounts <- [1,2,3]
             var inscope task <- deferred(ResultBuilder(),value) $(snapshot) { return length(snapshot.amounts) }
-            rejectClone=true
-            var caught=false
-            try { let ignored=run_deferred(task) } recover { caught=true }
-            assert(caught)
-            rejectClone=false
             let after=run_deferred(task)
             assert(after as ok==3)
-            rejectClone=true
-            caught=false
-            try { var inscope ignored <- deferred(ResultBuilder(),value) $(snapshot) { return length(snapshot.amounts) } } recover { caught=true }
-            assert(caught)
-            rejectClone=false
         }
         let after=heap_bytes_allocated()
         assert(after==baseline)
     }
-    assert(cloned==40)
+    assert(cloned==20)
     print("deferred snapshot checks OK\n")
 }

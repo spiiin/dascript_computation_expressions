@@ -1,8 +1,8 @@
 options gen2
 module task_glfw_keyboard public
-require ../lib/computation_macro.das
-require ../lib/task_scheduler.das public
-require ../lib/task_events.das public
+require ../packages/computation/computation_macro.das
+require ../packages/computation_task/task_scheduler.das public
+require ../packages/computation_task/task_events.das public
 require glfw public
 require daslib/rtti
 require strings
@@ -135,33 +135,27 @@ def glfw_keyboard_open(hidden:bool=false;timeout:int64=15000l;interval:int=500) 
     if(glfw_live || scheduler_live || events_live) {panic("GLFW keyboard demo is already open")}
     if(timeout<1 || interval<1) {panic("GLFW keyboard timeout and heartbeat must be positive")}
     timeout_ms=timeout;heartbeat_ms=interval;ticks=0;continued=0;last_title=""
-    try {
-        if(glfwInit()==0) {panic("glfwInit failed: a desktop/windowing session is required")}
-        glfw_live=true
-        glfwDefaultWindowHints()
-        // No OpenGL context, renderer or GPU driver is needed. The title is the UI.
-        glfwWindowHint(int(GLFW_CLIENT_API),int(GLFW_NO_API))
-        glfwWindowHint(int(GLFW_VISIBLE),hidden ? 0 : 1)
-        if(hidden) {glfwWindowHint(int(GLFW_FOCUSED),0)}
-        demo_window=glfwCreateWindow(1100,100,"Task keyboard",null,null)
-        if(demo_window==null) {panic("glfwCreateWindow failed")}
-        events <- task_event_source(type<string>);events_live=true
-        scheduler <- task_scheduler(type<Result<string;string>>);scheduler_live=true
-        start_reader()
-        background=task_spawn(scheduler,heartbeat());background_live=true
-        // Native callbacks do not own script lambdas. Keep them until chain_clear.
-        key_handler=@(w:GLFWwindow const?;key,scan,action,mods:int) {on_key(key,action)}
-        char_handler=@(w:GLFWwindow const?;cp:uint) {on_char(cp)}
-        glfw_chain_add_key(demo_window,key_handler)
-        glfw_chain_add_char(demo_window,char_handler)
-        callbacks=2
-        task_tick(scheduler,0)
-        update_status()
-    } recover {
-        let message="{this_context().last_exception}"
-        glfw_keyboard_close()
-        panic(message)
-    }
+    if(glfwInit()==0) {panic("glfwInit failed: a desktop/windowing session is required")}
+    glfw_live=true
+    glfwDefaultWindowHints()
+    // No OpenGL context, renderer or GPU driver is needed. The title is the UI.
+    glfwWindowHint(int(GLFW_CLIENT_API),int(GLFW_NO_API))
+    glfwWindowHint(int(GLFW_VISIBLE),hidden ? 0 : 1)
+    if(hidden) {glfwWindowHint(int(GLFW_FOCUSED),0)}
+    demo_window=glfwCreateWindow(1100,100,"Task keyboard",null,null)
+    if(demo_window==null) {panic("glfwCreateWindow failed")}
+    events <- task_event_source(type<string>);events_live=true
+    scheduler <- task_scheduler(type<Result<string;string>>);scheduler_live=true
+    start_reader()
+    background=task_spawn(scheduler,heartbeat());background_live=true
+    // Native callbacks do not own script lambdas. Keep them until chain_clear.
+    key_handler=@(w:GLFWwindow const?;key,scan,action,mods:int) {on_key(key,action)}
+    char_handler=@(w:GLFWwindow const?;cp:uint) {on_char(cp)}
+    glfw_chain_add_key(demo_window,key_handler)
+    glfw_chain_add_char(demo_window,char_handler)
+    callbacks=2
+    task_tick(scheduler,0)
+    update_status()
 }
 
 def glfw_keyboard_frame(now_ms:int64) : bool {

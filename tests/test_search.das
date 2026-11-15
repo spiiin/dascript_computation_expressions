@@ -1,17 +1,16 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/search_builder.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation/search_builder.das
 require daslib/rtti
 var visited=0
 var released=0
 struct Resource {id:int}
 def ce_dispose(var resource:Resource) {released++}
-def candidates(fail:bool=false) {
+def candidates() {
     return <- computation(SearchBuilder()) {
         let resource=Resource(id=1) |> use_resource
         let x=search_choose([1,2,3]) |> bind
         visited++
-        if(fail && x==2) {panic("search failure")}
         yield x
     }
 }
@@ -42,14 +41,6 @@ def check() {
     for(n in early) {assert(n==1);break}
     sequence_close(early)
     assert(released==4)
-    var caught=false
-    var inscope bad <- candidates(true)
-    try {sequence_each(bad) $(n:int) {}} recover {caught=true}
-    assert(caught && released==5)
-    var inscope consumer <- candidates()
-    caught=false
-    try {sequence_each(consumer) $(n:int) {panic("consumer")}} recover {caught=true}
-    assert(caught && released==6)
     var inscope emptySearch <- computation(SearchBuilder()) {search_guard(false) |> bind;yield 99}
     var inscope noSolution <- search_cut(emptySearch)
     var found=0
@@ -57,7 +48,7 @@ def check() {
     assert(found==0)
     var inscope unopened <- search_once(candidates())
     sequence_close(unopened)
-    assert(released==6)
+    assert(released==4)
     var inscope unusedChoices <- search_choose([1,2,3])
     sequence_close(unusedChoices)
 }

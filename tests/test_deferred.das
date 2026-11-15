@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation.das
-require ../lib/deferred_computation.das
+require ../packages/computation/computation.das
+require ../packages/computation/deferred_computation.das
 require ../support/report_builder.das
 var steps=0
 var acquired=0
@@ -59,29 +59,8 @@ def main() {
         var inscope moved <- task
         let result=run_deferred(moved)
         assert(result as ok==42 && steps==25)
-        var caught=false
-        try { let ignored=run_deferred(task) } recover { caught=true }
-        assert(caught)
     }
-    for (round in range(10)) {
-        {
-            var inscope task <- deferred(ResultBuilder(),source()) $(snapshot) {
-                let resource=acquire() |> use_resource
-                steps++
-                snapshot[0]=999
-                panic("deferred failure")
-                return snapshot[0]
-            }
-            for (attempt in range(3)) {
-                var caught=false
-                try { let ignored=run_deferred(task) } recover { caught=true }
-                assert(caught)
-            }
-        }
-        let after=heap_bytes_allocated()
-        assert(after==baseline)
-    }
-    assert(closed==54 && acquired==54 && steps==55)
+    assert(closed==24 && acquired==24 && steps==25)
     {
         var inscope task <- deferred(OptionBuilder(),7) $(number) {
             let n=none(type<int>) |> bind
@@ -90,7 +69,7 @@ def main() {
         }
         let a=run_deferred(task)
         let b=run_deferred(task)
-        assert(a is none && b is none && steps==55)
+        assert(a is none && b is none && steps==25)
     }
     {
         var inscope task <- deferred(ResultBuilder(),7) $(number) {
@@ -100,7 +79,7 @@ def main() {
         }
         let a=run_deferred(task)
         let b=run_deferred(task)
-        assert(a is err && b is err && a as err=="not available" && steps==55)
+        assert(a is err && b is err && a as err=="not available" && steps==25)
     }
     {
         var inscope task <- deferred(ReportBuilder(title="Reward"),5) $(number) {

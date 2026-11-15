@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 
 // A mistake in a yielded value is the first error; the compiler's complaint
 // about the yield itself follows it.

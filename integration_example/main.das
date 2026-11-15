@@ -1,5 +1,5 @@
 options gen2
-require ./lib/computation.das
+require computation/computation
 require identity_builder
 [export]
 def main() {

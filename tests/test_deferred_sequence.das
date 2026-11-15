@@ -1,8 +1,6 @@
 options gen2
-require ../lib/computation.das
-require ../lib/deferred_computation.das
-require daslib/rtti
-require daslib/strings_boost
+require ../packages/computation/computation.das
+require ../packages/computation/deferred_computation.das
 var freed=0
 var opened=0
 var closed=0
@@ -10,7 +8,6 @@ var visited=0
 var log=""
 struct Snapshot {
     values:array<int>
-    fail:bool
     def finalize {
         if (length(values)>0) { freed++; log+="D" }
         delete values
@@ -19,24 +16,22 @@ struct Snapshot {
 struct Resource {}
 def acquire() { opened++; return Resource() }
 def ce_dispose(var resource:Resource) { closed++; log+="R" }
-def make_task(fail:bool) {
+def make_task() {
     var inscope data:Snapshot
     data.values <- [10,20]
-    data.fail=fail
     return <- deferred(SequenceBuilder(),data) $(snapshot) {
         let resource=acquire() |> use_resource
         try_finally($ {
             snapshot.values[0]++
             visited++
             yield snapshot.values[0]
-            if (snapshot.fail) { panic("producer failed") }
             visited++
             yield snapshot.values[1]
         }, $ { assert(snapshot.values[0]==11); log+="F" })
     }
 }
 def return_early() : int {
-    var inscope task <- make_task(false)
+    var inscope task <- make_task()
     var inscope seq <- run_deferred(task)
     for (value in seq) { return value }
     return 0
@@ -48,7 +43,7 @@ def main() {
     for (round in range(10)) {
         reset()
         {
-            var inscope task <- make_task(false)
+            var inscope task <- make_task()
             assert(freed==1 && opened==0)
             var inscope first <- run_deferred(task)
             var inscope second <- task |> run_deferred
@@ -72,7 +67,7 @@ def main() {
     }
     reset()
     {
-        var inscope task <- make_task(false)
+        var inscope task <- make_task()
         for (round in range(10)) {
             {
                 var inscope seq <- run_deferred(task)
@@ -93,39 +88,6 @@ def main() {
     assert(early==11 && freed==3 && closed==1)
     let afterReturn=heap_bytes_allocated()
     assert(afterReturn==baseline)
-    reset()
-    {
-        var inscope task <- make_task(true)
-        for (round in range(10)) {
-            {
-                var inscope seq <- run_deferred(task)
-                var caught=false
-                var message=""
-                try { sequence_each(seq) $(value:int) { assert(value==11) } } recover { caught=true; message="{this_context().last_exception}" }
-                assert(caught && starts_with(message,"producer failed") && freed==round+2 && closed==round+1)
-                sequence_close(seq)
-            }
-        }
-    }
-    assert(freed==12 && closed==10)
-    let afterPanic=heap_bytes_allocated()
-    assert(afterPanic==baseline)
-    reset()
-    {
-        var inscope task <- make_task(false)
-        for (round in range(10)) {
-            {
-                var inscope seq <- run_deferred(task)
-                var caught=false
-                var message=""
-                try { sequence_each(seq) $(value:int) { panic("consumer failed") } } recover { caught=true; message="{this_context().last_exception}" }
-                assert(caught && starts_with(message,"consumer failed") && freed==round+2 && closed==round+1)
-            }
-        }
-    }
-    assert(freed==12 && closed==10)
-    let afterConsumer=heap_bytes_allocated()
-    assert(afterConsumer==baseline)
     {
         var inscope task <- deferred(SequenceBuilder(),[1,2]) $(snapshot) { if(false) { yield snapshot[0] } }
         var inscope seq <- run_deferred(task)

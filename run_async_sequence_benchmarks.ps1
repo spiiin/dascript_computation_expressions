@@ -63,7 +63,7 @@ $summary=foreach($workSize in @(0,$Work)) {
     }
 }
 $paths=@('benchmarks/benchmark_async_sequence.das','benchmarks/async_sequence_workloads.das')
-$paths+=@(Get-ChildItem -LiteralPath (Join-Path $SourceRoot 'lib') -Filter '*.das' | ForEach-Object {'lib/'+$_.Name})
+$paths+=@(Get-ChildItem -LiteralPath (Join-Path $SourceRoot 'packages') -Filter '*.das' -Recurse | ForEach-Object {'packages/'+$_.Directory.Name+'/'+$_.Name})
 $metadata=[ordered]@{
     RecordedAt=[DateTimeOffset]::Now.ToString('o');Mode=$(if($Jit){'jit'}else{'interpreter'})
     Elements=$Elements;Batches=$Batches;Samples=$Samples;WorkSizes=@(0,$Work);PendingPolls=@(0,1)

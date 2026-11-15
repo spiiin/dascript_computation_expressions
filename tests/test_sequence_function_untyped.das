@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 
 // The builder needs the element type before the body is known, so [sequence]
 // rejects a function that leaves its result to inference.

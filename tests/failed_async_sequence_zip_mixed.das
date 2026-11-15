@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/async_sequence_builder.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation_task/async_sequence_builder.das
 def numbers() {return <- computation(AsyncSequenceBuilder()) {yield 1}}
 [export]
 def main() {

@@ -1,6 +1,6 @@
 options gen2
-require ../lib/deferred_computation.das
-require ../lib/task_scheduler.das
+require ../packages/computation/deferred_computation.das
+require ../packages/computation_task/task_scheduler.das
 [export]
 def main() {
     var inscope saved <- deferred(TaskResultBuilder(type<array<int>>),[10,20,30]) $(snapshot) {

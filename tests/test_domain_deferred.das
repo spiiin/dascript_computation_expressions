@@ -1,9 +1,9 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/parser_builder.das
-require ../lib/search_builder.das
-require ../lib/query_builder.das
-require ../lib/deferred_computation.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation/parser_builder.das
+require ../packages/computation/search_builder.das
+require ../examples/builders/query_builder.das
+require ../packages/computation/deferred_computation.das
 require daslib/rtti
 def check() {
     var inscope parser <- deferred(ParserBuilder(text="42")) {

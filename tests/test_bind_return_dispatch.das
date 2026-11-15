@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/builder_protocol.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation/builder_protocol.das
 
 struct ProbeBuilder {}
 struct LegacyBuilder {}

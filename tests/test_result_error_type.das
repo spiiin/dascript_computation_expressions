@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 
 // ResultBuilder(type<E>) keeps the standard Result with any copyable error type.
 

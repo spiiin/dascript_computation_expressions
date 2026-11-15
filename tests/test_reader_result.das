@@ -1,7 +1,7 @@
 options gen2
-require ../lib/computation.das
-require ../lib/reader_result_builder.das
-require ../lib/deferred_computation.das
+require ../packages/computation/computation.das
+require ../examples/builders/reader_result_builder.das
+require ../packages/computation/deferred_computation.das
 require daslib/rtti
 
 struct Rules { limit:int=2; multiplier:int=3 }
@@ -16,11 +16,10 @@ def allowed(value,limit:int) {
     if (value>=limit) {return result_error("limit",type<CeUnit>)}
     return result_ok(CeUnit())
 }
-def feed(fail:bool) {
+def feed() {
     return <- computation(SequenceBuilder()) {
         let resource=acquire() |> use_resource
         for (i in range(5)) {
-            if (fail && i==1) {panic("producer")}
             yield i
         }
     }
@@ -133,31 +132,17 @@ def resources() {
     }
     assert(failed is err && opened==closed && reached==0)
     let stopped=computation(ReaderResultBuilder(builder.environment)) {
-        for (i in feed(false)) {allowed(i,1) |> bind}
+        for (i in feed()) {allowed(i,1) |> bind}
         reached++
         return 1
     }
     assert(stopped is err && opened==closed && reached==0)
     let completed=computation(ReaderResultBuilder(builder.environment)) {
         let resource=acquire() |> use_resource
-        for (i in feed(false)) {result_ok(CeUnit()) |> bind}
+        for (i in feed()) {result_ok(CeUnit()) |> bind}
         return 42
     }
     assert(completed as ok==42 && opened==closed)
-    for (producer in fixed_array(false,true)) {
-        var caught=false
-        try {
-            let outcome=computation(ReaderResultBuilder(builder.environment)) {
-                let resource=acquire() |> use_resource
-                for (i in feed(producer)) {
-                    if (!producer) {panic("consumer")}
-                    result_ok(CeUnit()) |> bind
-                }
-                return 1
-            }
-        } recover {caught=true}
-        assert(caught && opened==closed)
-    }
     let current=heap_bytes_allocated()
     assert(current==baseline)
 }

@@ -1,13 +1,14 @@
 # Computation expressions for Daslang
 
 F#-подобные computation expressions на AST-макросах Daslang: Result/Option,
-State/Writer, List/Sequence, Task/AsyncSequence и Parser/Search/Query.
+Validation, List/Sequence, Task/AsyncSequence и Parser/Search. State, Writer,
+Reader и Query — примеры собственных builders в [examples/builders](examples/builders/README.md).
 Типы операций проверяются при компиляции; ресурсы, отмена и move-only значения
 поддерживаются протоколом builders.
 
 ```das
 options gen2
-require ./lib/computation.das
+require computation/computation
 
 [export]
 def main() {
@@ -33,8 +34,10 @@ $env:DASLANG_EXE = & ./.github/scripts/install-daslang.ps1 -Destination ./.work/
 ```
 
 Существующий SDK можно выбрать через `-Daslang`, `DASLANG_EXE` или `PATH`.
-Скрипты находят исходники относительно своего каталога. В приложении используйте
-`require ./lib/computation.das`; из вложенного каталога — `require ../lib/computation.das`.
+Скрипты находят исходники относительно своего каталога. В приложении пакеты
+лежат в `modules/` и подключаются по имени: `require computation/computation`,
+`require computation_task/task_runtime`. Тесты и примеры этого репозитория
+подключают их относительным путём, например `require ../packages/computation/computation.das`.
 Для поставки библиотеки и небольшого приложения: `./export_library.ps1 -Destination C:/my_project/ce`.
 
 ## Документация и примеры
@@ -49,14 +52,14 @@ $env:DASLANG_EXE = & ./.github/scripts/install-daslang.ps1 -Destination ./.work/
 | Задача | Запускаемый пример |
 |---|---|
 | Ошибки и отсутствующие значения | [Result/Option](examples/computation_demo.das) |
-| Состояние, журнал и откат | [State/Writer/Result](examples/state_writer_result_demo.das) |
+| Состояние, журнал и откат (пример builder) | [State/Writer/Result](examples/state_writer_result_demo.das) |
 | Управление ресурсами | [use_resource и try_finally](examples/resources_demo.das) |
 | Ленивые последовательности | [Sequence](examples/sequence_demo.das) |
 | Асинхронные задачи, каналы и отмена | [Task toolkit](examples/task_toolkit_demo.das) |
 | Асинхронные последовательности | [AsyncSequence](examples/async_sequence_demo.das) |
 | Разбор текста | [Parser](examples/parser_demo.das) |
 | Перебор решений | [Search](examples/search_demo.das) |
-| Запросы к коллекциям | [Query](examples/query_full_demo.das) |
+| Запросы к коллекциям (пример builder) | [Query](examples/query_full_demo.das) |
 | Собственный builder | [Минимальное приложение](integration_example/main.das) |
 
 ## Проверки
@@ -69,17 +72,20 @@ $env:DASLANG_EXE = & ./.github/scripts/install-daslang.ps1 -Destination ./.work/
 ./run_aot.ps1
 ```
 
-Основной runner выполняет 309 проверок файлов, диагностику, экспорт и проверки
-раскрытия оптимизаций. Набор `mode_tests.json` содержит 76 тестов и примеров;
-строгий AOT-хост исполняет 67 из них. Генерация C++ отдельно не означает успех AOT runtime.
+Основной runner выполняет 291 проверку файлов, диагностику, экспорт и проверки
+раскрытия оптимизаций. Набор `mode_tests.json` содержит 73 теста и примера;
+строгий AOT-хост исполняет 66 из них. Генерация C++ отдельно не означает успех AOT runtime.
 Тесты TCP/HTTP/WebSocket используют локальные серверы; GLFW-тест создаёт скрытое окно.
 
 [GitHub Actions](https://github.com/spiiin/dascript_computation_expressions/actions)
 проверяет интерпретатор, JIT/AOT, AOT runtime и интеграции отдельными заданиями.
 Логи сохраняются как CI artifacts; локальные результаты игнорируются Git.
 
-`lib/` содержит 40 публичных модулей; `tests/` — регрессию и отдельные известные
-repro SDK; `examples/` — примеры; `support/` — их builders и тестовые серверы.
+`packages/computation` — ядро (20 модулей): макрос и builders Result/Option,
+Validation, List, Sequence, Coroutine, Parser и Search. `packages/computation_task` —
+Task-рантайм (16 модулей), отдельный пакет поверх ядра. `tests/` — регрессия и
+отдельные известные repro SDK; `examples/` — примеры, в `examples/builders` —
+примеры собственных builders; `support/` — builders примеров и тестовые серверы.
 `benchmarks/` содержит исходники нагрузок, используемые также функциональными
 проверками; `aot_host/` — строгий C++ host; `integration_example/` — шаблон экспорта.
 Исторические логи, замеры и дампы доступны в Git-истории, а не в рабочем дереве.

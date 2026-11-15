@@ -1,7 +1,8 @@
 options gen2
-require ../lib/computation.das
-require ../lib/validation_builder.das
-require ../lib/reader_builder.das
+require ../packages/computation/computation.das
+require ../examples/builders/computation_effects.das
+require ../packages/computation/validation_builder.das
+require ../examples/builders/reader_builder.das
 [export]
 def main() {
     let fast=computation(ResultBuilder()) { let x=result_ok(1) |> bind; return (value=x+1) }

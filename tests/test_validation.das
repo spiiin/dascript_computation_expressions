@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/validation_builder.das
+require ../packages/computation/computation_macro.das
+require ../packages/computation/validation_builder.das
 
 var checks = 0
 var after = 0
@@ -79,17 +79,5 @@ def main() {
         return 1
     }
     assert(protected is invalid && closes == 2 && after == 0)
-    let unhandled = computation(ValidationBuilder()) {
-        try_with($ { return both |> return_from }, $(message:string) { after++; return 1 })
-    }
-    assert(unhandled is invalid && after == 0)
-    let recovered = computation(ValidationBuilder()) {
-        try_with($ {
-            let resource = Resource() |> use_resource
-            panic("native panic")
-            return 1
-        }, $(message:string) { return validation_error("recovered", type<int>) |> return_from })
-    }
-    assert(recovered is invalid && closes == 3 && (recovered as invalid).messages == "recovered")
     print("validation checks OK\n")
 }

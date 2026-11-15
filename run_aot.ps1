@@ -14,13 +14,14 @@ if(-not(Test-Path -LiteralPath (Join-Path $dasPackage 'DASConfig.cmake'))){throw
 $OutputDirectory=[IO.Path]::GetFullPath($OutputDirectory)
 $BuildDirectory=[IO.Path]::GetFullPath($BuildDirectory)
 New-Item -ItemType Directory -Force $OutputDirectory | Out-Null
-$tests=if($Scripts.Count){$Scripts}else{@(Get-Content (Join-Path $PSScriptRoot 'mode_tests.json') -Raw | ConvertFrom-Json | Where-Object {$_ -match '^tests/test_(task|async_sequence|parser|search|query|domain_deferred)' -or $_ -eq 'tests/test_standard_outcomes.das' -or $_ -eq 'tests/test_move_ce.das' -or $_ -eq 'examples/query_full_demo.das' -or $_ -eq 'examples/task_runtime_channel_demo.das' -or $_ -eq 'examples/task_parallel_jobque_demo.das' -or $_ -eq 'examples/task_toolkit_demo.das'})}
+$tests=if($Scripts.Count){$Scripts}else{@((Get-Content (Join-Path $PSScriptRoot 'mode_tests.json') -Raw | ConvertFrom-Json) | ForEach-Object {$_} | Where-Object {$_ -match '^tests/test_(task|async_sequence|parser|search|query|domain_deferred)' -or $_ -eq 'tests/test_standard_outcomes.das' -or $_ -eq 'tests/test_move_ce.das' -or $_ -eq 'examples/query_full_demo.das' -or $_ -eq 'examples/task_runtime_channel_demo.das' -or $_ -eq 'examples/task_parallel_jobque_demo.das' -or $_ -eq 'examples/task_toolkit_demo.das'})}
 $files=@($tests | ForEach-Object {(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot $_)).Path.Replace('\','/')})
 $manifest=Join-Path $OutputDirectory 'scripts.txt'
 [IO.File]::WriteAllLines($manifest,$files)
 # Reject a build whose sources changed while CMake generated/compiled the stubs.
 function Get-AotSourceStamp {
-    $sources=@(Get-ChildItem (Join-Path $PSScriptRoot 'lib') -Filter '*.das' -File)
+    $sources=@(Get-ChildItem (Join-Path $PSScriptRoot 'packages') -Filter '*.das' -File -Recurse)
+    $sources+=@(Get-ChildItem (Join-Path $PSScriptRoot 'examples/builders') -Filter '*.das' -File)
     $sources+=@(Get-ChildItem (Join-Path $PSScriptRoot 'support') -Filter '*.das' -File -Recurse)
     $sources+=@($files | ForEach-Object {Get-Item -LiteralPath $_})
     return (($sources | Sort-Object FullName -Unique | ForEach-Object {

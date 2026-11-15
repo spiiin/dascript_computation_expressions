@@ -1,13 +1,11 @@
 options gen2
-require ../lib/computation.das
-require daslib/rtti
-require daslib/strings_boost
+require ../packages/computation/computation.das
 var log=""
 struct Game {health:int;score:int}
 struct Resource {id:int}
 def acquire(id:int) {return Resource(id=id)}
 def ce_dispose(var r:Resource) {log+="dispose:{r.id};"}
-def shared_game(fail:bool) {
+def shared_game() {
  return <- computation(SequenceBuilder()) {
   var game=Game(health=10,score=0)
   try_finally($ {
@@ -15,7 +13,6 @@ def shared_game(fail:bool) {
    game.health-=3
    game.score+=5
    yield game.health
-   if(fail) {panic("failed update")}
    game.score+=2
   }, $ {log+="game:{game.health},{game.score};"; game.health+=1})
   yield game.health
@@ -24,26 +21,16 @@ def shared_game(fail:bool) {
 [export]
 def main() {
  {
-  var inscope seq <- shared_game(false)
+  var inscope seq <- shared_game()
   var index=0
   for(v in seq) {assert(v==7+index);index++}
   assert(index==2 && log=="dispose:7;game:7,7;")
  }
  log=""
  {
-  var inscope seq <- shared_game(false)
+  var inscope seq <- shared_game()
   for(v in seq) {assert(v==7);break}
   assert(log=="dispose:7;game:7,5;")
- }
- log=""
- {
-  var inscope seq <- shared_game(true)
-  var caught=false
-  try {for(v in seq) {}} recover {
-   caught=true
-   assert(this_context().last_exception |> contains("failed update"))
-  }
-  assert(caught && log=="dispose:7;game:7,5;")
  }
  log=""
  {

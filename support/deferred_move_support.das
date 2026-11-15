@@ -1,7 +1,7 @@
 options gen2
 module deferred_move_support public
 require move_collection_support public
-require ../lib/deferred_computation.das public
+require ../packages/computation/deferred_computation.das public
 var snapshot_freed=0
 var lazy_steps=0
 var cleanup_count=0

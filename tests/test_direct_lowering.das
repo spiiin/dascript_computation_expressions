@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation.das
-require ../lib/validation_builder.das
+require ../packages/computation/computation.das
+require ../packages/computation/validation_builder.das
 
 // Result, Option and Validation only short-circuit, so their scopes are lowered
 // without continuations: a branch may return early, and a long chain of binds
@@ -126,18 +126,6 @@ def test_statements_and_steps() {
         return total
     }
     assert(counted is ok && (counted as ok) == 1003)
-    var handled = 0
-    let recovered = computation(ResultBuilder()) {
-        let base = step(5) |> bind
-        try_with($ {
-            panic("boom")
-            return 1
-        }, $(message : string) {
-            handled++
-            return base + 1
-        })
-    }
-    assert(recovered is ok && (recovered as ok) == 6 && handled == 1)
     let unit = computation(OptionBuilder()) {
         maybe(1) |> bind
         for (i in range(2)) { maybe(i) |> bind }

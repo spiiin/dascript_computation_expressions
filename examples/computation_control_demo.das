@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 
 def validate(value : int) {
     if (value == 3) { return result_error("rejected 3", type<int>) }

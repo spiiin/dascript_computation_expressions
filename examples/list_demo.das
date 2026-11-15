@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 [export]
 def main() {
     var inscope combinations <- computation(ListBuilder()) {

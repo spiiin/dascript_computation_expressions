@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation.das
-require ../lib/validation_builder.das
+require ../packages/computation/computation.das
+require ../packages/computation/validation_builder.das
 
 var maps=0
 var calls=0

@@ -1,6 +1,6 @@
 options gen2
-require ../lib/computation_macro.das
-require ../lib/reader_result_builder.das
+require ../packages/computation/computation_macro.das
+require ../examples/builders/reader_result_builder.das
 struct Rules {limit:int=2}
 [export]
 def main() {

@@ -1,5 +1,5 @@
 options gen2
-require ../lib/computation.das
+require ../packages/computation/computation.das
 require daslib/rtti
 struct Record {a:int; b:int; c:int; d:int; e:int; f:int}
 [export]
