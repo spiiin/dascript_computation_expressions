@@ -32,6 +32,7 @@ def validation_zip(left : variant<valid:auto(A);invalid:ValidationErrors>;
 }
 
 def ce_protocol(builder : ValidationBuilder) { return CeDirectProtocol() }
+[inline]
 def ce_direct_failed(builder : ValidationBuilder; source : variant<valid:auto(T);invalid:ValidationErrors>) : bool {
     return source is invalid
 }
@@ -39,9 +40,11 @@ def ce_direct_failure(builder : ValidationBuilder; source : variant<valid:auto(T
                       witness : auto(R)?) : R {
     return variant type<R>(invalid=source as invalid)
 }
+[inline]
 def ce_unwrap(builder : ValidationBuilder; source : variant<valid:auto(T);invalid:ValidationErrors>) : T {
     return source as valid
 }
+[inline]
 def ce_return(builder : ValidationBuilder; value : auto(T)) { return validation_ok(value) }
 def ce_return_from(builder : ValidationBuilder; source : variant<valid:auto(T);invalid:ValidationErrors>) : variant<valid:T -const -&;invalid:ValidationErrors> { return source }
 def ce_zero(builder : ValidationBuilder) { return validation_ok(CeUnit()) }
