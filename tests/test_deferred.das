@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation/deferred_computation.das
 require ../support/report_builder.das
@@ -93,4 +94,9 @@ def main() {
     let after=heap_bytes_allocated()
     assert(after==baseline)
     print("deferred behavior and lifetime checks OK\n")
+}
+
+[test]
+def test_deferred() {
+    main()
 }

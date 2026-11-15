@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation/list_builder.das
 struct ForOnly {}
@@ -100,4 +101,9 @@ def main() {
     let current=heap_bytes_allocated()
     assert(current==baseline)
     print("loop dispatch checks OK\n")
+}
+
+[test]
+def test_loop_dispatch() {
+    main()
 }

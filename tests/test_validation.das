@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation/validation_builder.das
 
@@ -80,4 +81,9 @@ def main() {
     }
     assert(protected is invalid && closes == 2 && after == 0)
     print("validation checks OK\n")
+}
+
+[test]
+def test_validation() {
+    main()
 }

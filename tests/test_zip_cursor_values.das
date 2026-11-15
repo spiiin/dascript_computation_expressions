@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require daslib/rtti
 struct Record {a:int; b:int; c:int; d:int; e:int; f:int}
@@ -28,4 +29,9 @@ def main() {
     let current=heap_bytes_allocated()
     assert(current==baseline)
     print("zip cursor value checks OK\n")
+}
+
+[test]
+def test_zip_cursor_values() {
+    main()
 }

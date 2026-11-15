@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 struct Resource { id:int }
 var opens=0
@@ -103,5 +104,7 @@ def main() {
  print("sequence resource checks OK\n")
 }
 
-
-
+[test]
+def test_sequence_resource() {
+    main()
+}

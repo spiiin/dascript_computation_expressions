@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../examples/builders/state_result_builder.das
 require ../examples/builders/reader_result_builder.das
@@ -58,4 +59,9 @@ def main() {
     let b=run_deferred(delayed)
     assert(a as ok==8 && b as ok==8 && factories==1)
     print("saved builder checks OK\n")
+}
+
+[test]
+def test_saved_builder() {
+    main()
 }

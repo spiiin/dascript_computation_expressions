@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../examples/builders/query_builder.das
 require daslib/rtti
@@ -55,4 +56,9 @@ def main() {
     let baseline=heap_bytes_allocated()
     for(i in range(10)) {check();verify(heap_bytes_allocated()==baseline)}
     print("Query checks OK\n")
+}
+
+[test]
+def test_query() {
+    main()
 }

@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../support/protocol_test_builders.das
 require ../support/protocol_collect_fixture.das
@@ -39,3 +40,7 @@ def main() {
     print("builder protocol checks OK\n")
 }
 
+[test]
+def test_builder_protocol() {
+    main()
+}

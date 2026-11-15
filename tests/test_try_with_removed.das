@@ -1,4 +1,7 @@
 options gen2
+expect 30231
+expect 50503
+// diagnostic: try_with is not supported: a panic is fatal
 require ../packages/computation/computation.das
 
 // A panic is fatal: nothing catches it, so there is no handler to write.

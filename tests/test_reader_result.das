@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../examples/builders/reader_result_builder.das
 require ../packages/computation/deferred_computation.das
@@ -180,4 +181,7 @@ def main() {
     print("reader/result checks OK\n")
 }
 
-
+[test]
+def test_reader_result() {
+    main()
+}

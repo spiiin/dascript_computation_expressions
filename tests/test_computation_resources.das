@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../examples/builders/writer_result_builder.das
 require ../examples/builders/state_result_builder.das
@@ -15,7 +16,7 @@ def ce_dispose(var handle : TestResource) {
 def fail_source(builder : ResultBuilder) { return result_error("stop", type<int>) }
 def fail_source(builder : OptionBuilder) { return none(type<int>) }
 def fail_source(builder : WriterResultBuilder) { return result_error("stop", type<int>) }
-def fail_source(builder : tuple<kind : StateResultContext; initial : auto(S); state : S>) {
+def fail_source(builder : tuple<kind : StateResultContext; initial : auto(SS); state : SS>) {
     return result_error("stop", type<int>)
 }
 def test_success(builder : auto) {
@@ -133,3 +134,7 @@ def main() {
     print("resources checks OK: six builders, LIFO, loops, short circuit\n")
 }
 
+[test]
+def test_computation_resources() {
+    main()
+}

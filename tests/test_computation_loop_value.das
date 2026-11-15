@@ -1,4 +1,6 @@
 options gen2
+expect 30941
+// diagnostic: variant<err:string;ok:int>
 require ../packages/computation/computation.das
 [export]
 def main() {

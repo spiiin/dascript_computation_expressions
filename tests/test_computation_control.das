@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 
 struct Trace {
@@ -195,3 +196,7 @@ def main() {
     print("control flow checks OK: Result/Option, branches, empty scopes, for/while, nested loops, exact effects\n")
 }
 
+[test]
+def test_computation_control() {
+    main()
+}

@@ -1,4 +1,8 @@
 options gen2
+expect 30222
+expect 30941
+expect 31400
+// diagnostic: move-only bind needs 'var value & = source |> bind'
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/async_sequence_builder.das
 [export]

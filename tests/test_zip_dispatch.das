@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation/list_builder.das
 require daslib/rtti
@@ -78,4 +79,9 @@ def main() {
         assert(length(values)==2 && values[0]==0 && values[1]==2)
     }
     print("zip dispatch checks OK\n")
+}
+
+[test]
+def test_zip_dispatch() {
+    main()
 }

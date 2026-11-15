@@ -1,4 +1,7 @@
 options gen2
+expect 30231
+expect 30341
+// diagnostic: ce_combine
 require ../packages/computation/computation.das
 require ../examples/builders/computation_effects.das
 [export]

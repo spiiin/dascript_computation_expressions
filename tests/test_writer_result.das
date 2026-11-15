@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../support/purchase_example.das
 struct Trace { calls : int; completed : int; after : int; condition : int; source : int; builder : int }
 def step(var trace : Trace; index, fail_at : int) {
@@ -171,4 +172,9 @@ def main() {
     for (fail_at in range(-1, 4)) { test_nested(fail_at) }
     test_lifts()
     print("writer/result checks OK: first failure, retained logs, exact order, lifts, branches, nested loops\n")
+}
+
+[test]
+def test_writer_result() {
+    main()
 }

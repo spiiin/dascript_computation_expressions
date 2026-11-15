@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation/deferred_computation.das
 def inventory() {
@@ -218,4 +219,9 @@ def main() {
     for(round in range(5)) {success();failures();groups();control();more_ownership();finally_ownership();owned_loops()}
     assert(disposed==5)
     print("move-only CE checks OK\n")
+}
+
+[test]
+def test_move_ce() {
+    main()
 }

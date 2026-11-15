@@ -1,4 +1,8 @@
 options gen2
+expect 31403
+// diagnostic: ce_merge_sources
+// diagnostic: and_bind is unsupported for builder
+// anchor: and_bind
 require ../packages/computation/computation.das
 [export]
 def main() {

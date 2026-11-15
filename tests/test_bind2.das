@@ -1,9 +1,10 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation/validation_builder.das
 var order=""
 var calls=0
-def observed(n:int; value:auto(T)) : T { order+="{n}"; return value }
+def observed(n:int; value:auto(TT)) : TT { order+="{n}"; return value }
 def later() { calls++; return 7 }
 [export]
 def main() {
@@ -155,3 +156,8 @@ def main() {
     print("bind2 value checks OK\n")
 }
 def explode() : Result<int;string> { panic("source failed"); return result_ok(0) }
+
+[test]
+def test_bind2() {
+    main()
+}

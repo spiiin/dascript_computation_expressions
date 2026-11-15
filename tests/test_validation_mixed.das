@@ -1,4 +1,6 @@
 options gen2
+expect 31400
+// diagnostic: ce_unwrap
 require ../packages/computation/computation.das
 require ../packages/computation/validation_builder.das
 [export]

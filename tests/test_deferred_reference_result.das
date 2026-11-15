@@ -1,4 +1,6 @@
 options gen2
+expect 31211
+// diagnostic: iterator elements must own their data
 require ../packages/computation/computation.das
 require ../packages/computation/deferred_computation.das
 var external=42

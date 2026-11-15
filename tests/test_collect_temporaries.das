@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 [export]
 def main() {
@@ -25,4 +26,9 @@ def main() {
         assert(after==baseline)
     }
     print("collect temporary checks OK\n")
+}
+
+[test]
+def test_collect_temporaries() {
+    main()
 }

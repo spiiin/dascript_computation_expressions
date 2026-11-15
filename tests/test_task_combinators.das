@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_combinators.das
 require daslib/strings_boost
@@ -50,4 +51,9 @@ def main() {
     verify(task_poll(failed)==TaskStatus.Failed && trace=="a:start;a:done;")
     verify(starts_with(task_error(failed),"child failed"))
     print("Task composition checks OK\n")
+}
+
+[test]
+def test_task_combinators() {
+    main()
 }

@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../support/move_collection_support.das
 
 def lists() {
@@ -121,4 +122,9 @@ def nested_arrays() {
 def main() {
     for(round in range(5)) {lists();sequence_completion_and_break();take_ownership();forwarding();nested_consumer_break();list_cleanup();nested_arrays()}
     print("move-only collection checks OK\n")
+}
+
+[test]
+def test_move_collections() {
+    main()
 }

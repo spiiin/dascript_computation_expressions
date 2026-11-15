@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation_task/task_runtime.das
 require ../packages/computation_task/task_channel.das
@@ -19,4 +20,9 @@ def main() {
  var inscope end <- task_channel_receive(ch);task_poll(end)
  verify((end.value as ok) is none)
  print("Task runtime channel checks OK\n")
+}
+
+[test]
+def test_task_runtime_channel() {
+    main()
 }

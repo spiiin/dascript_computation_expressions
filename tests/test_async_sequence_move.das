@@ -1,5 +1,6 @@
 options gen2
 options max_infer_passes=128
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/async_sequence_builder.das
 require ../packages/computation_task/task_scheduler.das
@@ -192,4 +193,9 @@ def main() {
     for(i in range(24)) {checks()}
     verify(heap_bytes_allocated()==baseline)
     print("Async sequence move checks OK\n")
+}
+
+[test]
+def test_async_sequence_move() {
+    main()
 }

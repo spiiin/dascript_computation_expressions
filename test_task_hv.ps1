@@ -7,7 +7,7 @@ if($Jit){$arguments+='--jit'}
 if($Example -or $AndBind){
     $script=if($Example){
         if($AndBind){'examples/task_hv_and_bind_demo.das'}else{'examples/task_hv_demo.das'}
-    }else{'tests/test_task_hv_and_bind.das'}
+    }else{'tests/integration/test_task_hv_and_bind.das'}
     $arguments+=@('--script',(Join-Path $PSScriptRoot $script))
 }
 & python @arguments

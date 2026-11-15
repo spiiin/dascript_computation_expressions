@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../support/game_transaction.das
 struct Trace { attempted : int; after : int; condition : int; source : int; builder : int }
 def checked_step(var trace : Trace; index, fail_at : int) {
@@ -195,4 +196,9 @@ def main() {
     test_composition()
     test_edges()
     print("state/result checks OK: whole-transaction rollback, nested boundaries, exact effects, loops, snapshots\n")
+}
+
+[test]
+def test_state_result() {
+    main()
 }

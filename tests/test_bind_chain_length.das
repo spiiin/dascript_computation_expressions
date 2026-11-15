@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../examples/builders/computation_effects.das
 
@@ -87,4 +88,9 @@ def main() {
     verify(chained is ok && (chained as ok) == 40)
     print("bind chain length checks OK
 ")
+}
+
+[test]
+def test_bind_chain_length() {
+    main()
 }

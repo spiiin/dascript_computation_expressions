@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 
 var fastBytes=0ul
@@ -72,4 +73,9 @@ def main() {
     let after=heap_bytes_allocated()
     assert(after==baseline)
     print("bind2 list checks OK: heap before first map {fastBytes} < {slowBytes}\n")
+}
+
+[test]
+def test_bind2_list() {
+    main()
 }

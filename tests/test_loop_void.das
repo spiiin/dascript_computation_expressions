@@ -1,4 +1,8 @@
 options gen2
+expect 30231
+expect 30341
+expect 50503
+// diagnostic: loop hook must return a builder outcome
 require ../packages/computation/computation_macro.das
 struct InvalidLoop {}
 def ce_protocol(builder:InvalidLoop) {return CeValueProtocol()}

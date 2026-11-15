@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation/validation_builder.das
 
@@ -274,4 +275,9 @@ def main() {
     test_validation()
     test_long_chain()
     print("direct lowering checks OK\n")
+}
+
+[test]
+def test_direct_lowering() {
+    main()
 }

@@ -1,6 +1,7 @@
 options gen2
 options max_infer_passes=1024
 options stack=524288
+require dastest/testing_boost public
 require daslib/result
 require daslib/option
 require ../packages/computation/computation.das
@@ -93,4 +94,9 @@ def main() {
     for(i in range(3)) {checks()}
     verify(heap_bytes_allocated()==baseline)
     print("Standard outcome interoperability checks OK\n")
+}
+
+[test]
+def test_standard_outcomes() {
+    main()
 }

@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../support/move_resource_support.das
 require ../packages/computation/deferred_computation.das
 
@@ -100,4 +101,9 @@ def deferred_resources() {
 def main() {
     for(round in range(5)) {eager();sequences();deferred_resources()}
     print("move-only resource checks OK\n")
+}
+
+[test]
+def test_move_resources() {
+    main()
 }

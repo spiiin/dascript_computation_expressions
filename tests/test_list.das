@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 struct Counters { builder : int; source : int; next_source : int; finish : int }
 struct Item { id : int }
@@ -134,3 +135,7 @@ def main() {
     print("list checks OK: products, order, empty sources, effects, typed results, loops, resources\n")
 }
 
+[test]
+def test_list() {
+    main()
+}

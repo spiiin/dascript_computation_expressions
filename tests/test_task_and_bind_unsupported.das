@@ -1,4 +1,7 @@
 options gen2
+expect 31403
+// diagnostic: and_bind is unsupported for builder
+// anchor: and_bind
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_combinators.das
 [export]

@@ -1,4 +1,10 @@
 options gen2
+expect 30231
+expect 30341:2
+expect 30838
+// diagnostic: can't locate variable 'missing_writer'
+// anchor: missing_writer
+// first
 require ../packages/computation/computation.das
 require ../examples/builders/computation_effects.das
 

@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require daslib/rtti
 var trace=""
@@ -96,4 +97,9 @@ def main() {
     let after=heap_bytes_allocated()
     assert(after==baseline && opened==closed)
     print("Composition laws OK\n")
+}
+
+[test]
+def test_composition_laws() {
+    main()
 }

@@ -1,5 +1,6 @@
 options gen2
 options max_infer_passes=512
+require dastest/testing_boost public
 require ../benchmarks/async_sequence_workloads.das
 require daslib/rtti
 [export]
@@ -28,4 +29,9 @@ def main() {
     }
     verify(heap_bytes_allocated()==before)
     print("Async sequence benchmark checks OK\n")
+}
+
+[test]
+def test_async_sequence_benchmarks() {
+    main()
 }

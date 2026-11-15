@@ -1,4 +1,6 @@
 options gen2
+expect 30915
+// diagnostic: can only copy compatible type
 require ../packages/computation/computation.das
 [export]
 def main() {

@@ -1,5 +1,6 @@
 options gen2
 options stack = 1048576
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation/parser_builder.das
 var rightCalls=0
@@ -159,4 +160,9 @@ def main() {
     }
     assert((optionalGroup as parsed).value==7)
     print("Parser combinator checks OK\n")
+}
+
+[test]
+def test_parser_combinators() {
+    main()
 }

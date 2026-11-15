@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_builder.das
 require daslib/async_boost
@@ -187,4 +188,9 @@ def main() {
     verify(heap_bytes_allocated()==baseline)
     verify(opened==closed && parentOpened==parentClosed)
     print("Task async adapter lifetime checks OK\n")
+}
+
+[test]
+def test_task_from_async_lifetime() {
+    main()
 }

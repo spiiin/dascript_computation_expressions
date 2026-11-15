@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 
 def borrowed(var values:array<int>) : array<int>& { unsafe { return values } }
@@ -23,4 +24,9 @@ def main() {
     let after=heap_bytes_allocated()
     assert(after==baseline)
     print("and_bind reference checks OK\n")
+}
+
+[test]
+def test_and_bind_references() {
+    main()
 }

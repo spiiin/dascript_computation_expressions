@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation_task/task_runtime.das
 require ../packages/computation_task/task_channel.das
@@ -52,7 +53,7 @@ def doubled(value : int) : Task<int> {
         return value * 2
     }
 }
-def finish(var task : Task<auto(T)>) : T {
+def finish(var task : Task<auto(TT)>) : TT {
     while (task_poll(task) == TaskStatus.Waiting) {}
     return task_value(task)
 }
@@ -137,4 +138,9 @@ def main() {
     delete scheduler
     delete runtime
     print("Task type name checks OK\n")
+}
+
+[test]
+def test_task_type_names() {
+    main()
 }

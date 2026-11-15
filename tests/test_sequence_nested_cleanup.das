@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation/deferred_computation.das
 require daslib/strings_boost
@@ -157,4 +158,9 @@ def main() {
     }
     deferred_case()
     print("nested Sequence cleanup checks OK\n")
+}
+
+[test]
+def test_sequence_nested_cleanup() {
+    main()
 }

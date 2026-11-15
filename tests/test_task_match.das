@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_scheduler.das
 require daslib/match
@@ -205,4 +206,9 @@ def main() {
     verify(released == before_sequence + 1)
     delete trace
     print("CE match OK: nested bind, patterns, shadowing, guards, loops, resources, errors, cancellation\n")
+}
+
+[test]
+def test_task_match() {
+    main()
 }

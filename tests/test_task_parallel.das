@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation_task/task_runtime.das
 require ../packages/computation_task/task_parallel.das
@@ -31,4 +32,9 @@ def main() {
  for(i in range(4)) {task_poll(results)}
  verify(results.status==TaskStatus.Succeeded && length(results.value as ok)==2)
  print("Task parallel checks OK\n")
+}
+
+[test]
+def test_task_parallel() {
+    main()
 }

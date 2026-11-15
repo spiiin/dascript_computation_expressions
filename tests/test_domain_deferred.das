@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation/parser_builder.das
 require ../packages/computation/search_builder.das
@@ -37,4 +38,9 @@ def main() {
     let baseline=heap_bytes_allocated()
     for(i in range(10)) {check();verify(heap_bytes_allocated()==baseline)}
     print("Domain deferred checks OK\n")
+}
+
+[test]
+def test_domain_deferred() {
+    main()
 }

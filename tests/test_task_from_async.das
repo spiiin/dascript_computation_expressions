@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_builder.das
 require daslib/async_boost
@@ -150,3 +151,8 @@ def error_checks() {
 }
 [export]
 def main() {order_checks();error_checks();print("Task async adapter checks OK\n")}
+
+[test]
+def test_task_from_async() {
+    main()
+}

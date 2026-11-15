@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation/coroutine_builder.das
 require ../packages/computation/deferred_computation.das
@@ -170,4 +171,9 @@ def main() {
         deferred_runs()
     }
     print("coroutine checks OK\n")
+}
+
+[test]
+def test_coroutine() {
+    main()
 }

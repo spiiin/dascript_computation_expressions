@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation_task/task_runtime.das
 require ../packages/computation/deferred_computation.das
@@ -65,7 +66,7 @@ def both(first, second : int) : Result<int;LoadError> {
     return pair.first + pair.second + timed.first
 }
 
-def finish(var task : Task<auto(T)>) {
+def finish(var task : Task<auto(TT)>) {
     while (task_poll(task) == TaskStatus.Waiting) {}
     return task_value(task)
 }
@@ -133,4 +134,9 @@ def main() {
     let outcome = finish(run)
     verify(outcome is err && (outcome as err) == LoadError.NotFound)
     print("Task error type checks OK\n")
+}
+
+[test]
+def test_task_error_type() {
+    main()
 }

@@ -30,7 +30,7 @@ def main():
     execution=ap.add_mutually_exclusive_group(required=True)
     execution.add_argument('--daslang');execution.add_argument('--aot-host')
     ap.add_argument('--sdk-root');ap.add_argument('--report')
-    ap.add_argument('--script',default=str(Path(__file__).resolve().parents[1]/'tests/test_task_hv.das'))
+    ap.add_argument('--script',default=str(Path(__file__).resolve().parents[1]/'tests/integration/test_task_hv.das'))
     ap.add_argument('--jit',action='store_true');args=ap.parse_args()
     if args.aot_host and (not args.sdk_root or args.jit):ap.error('--aot-host requires --sdk-root and cannot use --jit')
     with tempfile.TemporaryDirectory(prefix='ce-hv-') as folder, socket.socket() as server:

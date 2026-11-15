@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation_task/task_scheduler.das
 var events=""
 var polled=0
@@ -101,4 +102,9 @@ def limits_and_failures() {
 def main() {
     boundaries();ordering();timer_removal();limits_and_failures()
     print("Task timeout checks OK\n")
+}
+
+[test]
+def test_task_timeouts() {
+    main()
 }

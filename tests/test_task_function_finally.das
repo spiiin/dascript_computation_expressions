@@ -1,4 +1,7 @@
 options gen2
+expect 20800
+// diagnostic: a task body has no native finally
+// anchor: [task_result]
 require ../packages/computation/computation.das
 require ../packages/computation_task/task_runtime.das
 

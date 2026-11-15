@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_builder.das
 require daslib/strings_boost
@@ -56,4 +57,9 @@ def main() {
     let loopError=task_value(loop)
     verify(loopError is err && loopError as err=="stop loop")
     print("TaskResult checks OK\n")
+}
+
+[test]
+def test_task_result() {
+    main()
 }

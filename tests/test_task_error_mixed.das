@@ -1,4 +1,7 @@
 options gen2
+expect 31400
+// diagnostic: this task fails with string, and the computation with LoadError
+// anchor: fetch(id) |> bind
 require ../packages/computation/computation.das
 require ../packages/computation_task/task_runtime.das
 

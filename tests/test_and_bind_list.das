@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 
 var sources = 0
@@ -74,3 +75,7 @@ def main() {
     print("and_bind list lifetime checks OK\n")
 }
 
+[test]
+def test_and_bind_list() {
+    main()
+}

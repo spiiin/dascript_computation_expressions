@@ -1,5 +1,6 @@
 options gen2
 options max_infer_passes=512
+require dastest/testing_boost public
 require ../packages/computation/deferred_computation.das
 require ../packages/computation_task/async_sequence_builder.das
 require ../packages/computation_task/task_scheduler.das
@@ -333,4 +334,9 @@ def main() {
     for(i in range(16)) {checks()}
     verify(heap_bytes_allocated()==baseline)
     print("Async sequence For checks OK\n")
+}
+
+[test]
+def test_async_sequence_for() {
+    main()
 }

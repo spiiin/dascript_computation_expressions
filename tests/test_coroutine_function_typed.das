@@ -1,4 +1,7 @@
 options gen2
+expect 20800
+// diagnostic: produces no value
+// anchor: [coroutine]
 require ../packages/computation/computation.das
 require ../packages/computation/coroutine_builder.das
 

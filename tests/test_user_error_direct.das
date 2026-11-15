@@ -1,4 +1,12 @@
 options gen2
+expect 30231
+expect 30316
+expect 30341
+expect 30820
+expect 30838
+// diagnostic: can't locate variable 'missing_direct'
+// anchor: missing_direct
+// first
 require ../packages/computation/computation.das
 
 def half(value : int) : Result<int;string> {

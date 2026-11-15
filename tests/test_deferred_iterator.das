@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation/deferred_computation.das
 [export]
@@ -11,4 +12,9 @@ def main() {
         assert(sum==3)
     }
     print("deferred iterator checks OK\n")
+}
+
+[test]
+def test_deferred_iterator() {
+    main()
 }

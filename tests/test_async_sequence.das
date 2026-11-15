@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/async_sequence_builder.das
 
@@ -67,4 +68,9 @@ def main() {
         verify(task_value(item) as some==(i==0 ? 0 : (i==1 ? 2 : 99)))
     }
     print("Async sequence checks OK\n")
+}
+
+[test]
+def test_async_sequence() {
+    main()
 }

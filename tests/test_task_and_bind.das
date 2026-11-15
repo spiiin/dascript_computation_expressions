@@ -1,12 +1,13 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_combinators.das
 var trace=""
 var continued=0
 
-def child(name:string; waits:int; value:auto(T)) {
+def child(name:string; waits:int; value:auto(TT)) {
     trace+="{name}:create;"
-    return <- computation(TaskBuilder(type<T>)) {
+    return <- computation(TaskBuilder(type<TT>)) {
         trace+="{name}:start;"
         let n=task_after_polls(waits,value) |> bind
         trace+="{name}:done;"
@@ -94,4 +95,9 @@ def main() {
     verify(task_poll(unit)==TaskStatus.Waiting && continued==2)
     verify(task_poll(unit)==TaskStatus.Succeeded && continued==3 && task_value(unit)==42)
     print("Task and_bind checks OK\n")
+}
+
+[test]
+def test_task_and_bind() {
+    main()
 }

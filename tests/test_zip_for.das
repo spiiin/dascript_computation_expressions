@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../support/bounded_result_builder.das
 require ../packages/computation/deferred_computation.das
@@ -190,4 +191,9 @@ def main() {
     let second=run_deferred(task)
     assert(first as ok==31 && second as ok==62)
     print("zip for checks OK\n")
+}
+
+[test]
+def test_zip_for() {
+    main()
 }

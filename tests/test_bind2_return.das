@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation/validation_builder.das
 
@@ -26,4 +27,9 @@ def main() {
     assert((typeinfo typename(validationFast))==(typeinfo typename(validationSlow)) && "{validationFast}"=="{validationSlow}")
     assert(maps==6)
     print("bind2_return value checks OK\n")
+}
+
+[test]
+def test_bind2_return() {
+    main()
 }

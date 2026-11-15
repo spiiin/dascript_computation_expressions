@@ -1,4 +1,9 @@
 options gen2
+expect 30192
+expect 30295
+expect 30838
+expect 31003
+// diagnostic: implicit capture by move requires unsafe
 require ../packages/computation/computation.das
 [export]
 def main() {

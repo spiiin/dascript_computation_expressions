@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../support/game_source_builder.das
 require ../packages/computation/deferred_computation.das
@@ -30,7 +31,7 @@ def ce_source(builder:GameSourceBuilder; batch:Batch) {
     return <- [batch.first,batch.first+1]
 }
 def ce_unwrap(builder:GameSourceBuilder; source:array<int>) {return source[0]}
-def ce_bind(builder:GameSourceBuilder; source:array<int>; next:block<(value:int):auto(R)>) : R {
+def ce_bind(builder:GameSourceBuilder; source:array<int>; next:block<(value:int):auto(RR)>) : RR {
     return invoke(next,source[0])
 }
 struct MutableView {values:array<int>?}
@@ -142,4 +143,9 @@ def main() {
     basic()
     for(round in range(4)) {collection();value_owned();loops();lazy()}
     print("source protocol checks OK\n")
+}
+
+[test]
+def test_source_protocol() {
+    main()
 }

@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_scheduler.das
 require ../packages/computation_task/task_events.das
@@ -230,4 +231,9 @@ def main() {
         verify(heap_bytes_allocated()==baseline)
     }
     print("Task event checks OK\n")
+}
+
+[test]
+def test_task_events() {
+    main()
 }

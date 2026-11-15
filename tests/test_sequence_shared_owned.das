@@ -1,4 +1,6 @@
 options gen2
+expect 50503
+// diagnostic: shared locals require copyable values
 require ../packages/computation/computation.das
 [export]
 def main() {

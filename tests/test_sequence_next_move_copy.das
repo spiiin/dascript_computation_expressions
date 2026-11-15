@@ -1,4 +1,6 @@
 options gen2
+expect 31400
+// diagnostic: sequence_next_move requires a move-only element
 require ../packages/computation/computation.das
 [export]
 def main() {

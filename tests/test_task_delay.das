@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_scheduler.das
 require ../packages/computation_task/task_combinators.das
@@ -105,4 +106,9 @@ def clocks() {
 def main() {
     boundaries();budgets_and_result();clocks()
     print("Task delay checks OK\n")
+}
+
+[test]
+def test_task_delay() {
+    main()
 }

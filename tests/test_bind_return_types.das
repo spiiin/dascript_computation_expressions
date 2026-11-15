@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../examples/builders/computation_effects.das
 require ../packages/computation/validation_builder.das
@@ -28,3 +29,7 @@ def main() {
     print("bind_return type checks OK\n")
 }
 
+[test]
+def test_bind_return_types() {
+    main()
+}

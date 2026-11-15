@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation/deferred_computation.das
 var freed=0
@@ -98,4 +99,9 @@ def main() {
     let afterEmpty=heap_bytes_allocated()
     assert(afterEmpty==baseline)
     print("deferred sequence lifetime checks OK\n")
+}
+
+[test]
+def test_deferred_sequence() {
+    main()
 }

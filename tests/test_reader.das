@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../examples/builders/reader_builder.das
 
@@ -34,4 +35,9 @@ def main() {
     let empty = computation(ReaderBuilder(0)) {}
     let unit : CeUnit = empty.value
     print("reader checks OK\n")
+}
+
+[test]
+def test_reader() {
+    main()
 }

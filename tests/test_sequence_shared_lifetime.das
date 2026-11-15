@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 [export]
 def main() {
@@ -22,3 +23,7 @@ def main() {
  print("sequence cell lifetime checks OK\n")
 }
 
+[test]
+def test_sequence_shared_lifetime() {
+    main()
+}

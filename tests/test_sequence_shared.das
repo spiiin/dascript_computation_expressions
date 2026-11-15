@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 var log=""
 struct Game {health:int;score:int}
@@ -95,3 +96,7 @@ def main() {
  print("sequence shared capture checks OK\n")
 }
 
+[test]
+def test_sequence_shared() {
+    main()
+}

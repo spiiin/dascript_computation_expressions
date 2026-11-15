@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_scheduler.das
 var trace=""
@@ -80,4 +81,9 @@ def main() {
     let result=task_value(outcomes,domainError)
     verify(result is err && result as err=="denied")
     print("Task scheduler checks OK\n")
+}
+
+[test]
+def test_task_scheduler() {
+    main()
 }

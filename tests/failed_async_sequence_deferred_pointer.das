@@ -1,4 +1,6 @@
 options gen2
+expect 50503
+// diagnostic: builder and snapshot must own their data
 require ../packages/computation/deferred_computation.das
 require ../packages/computation_task/async_sequence_builder.das
 [export]

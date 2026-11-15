@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_scheduler.das
 require daslib/strings_boost
@@ -101,4 +102,9 @@ def main() {
     for(i in range(32)) {checks()}
     verify(heap_bytes_allocated()==baseline && opened==closed)
     print("Task delay lifetime checks OK\n")
+}
+
+[test]
+def test_task_delay_lifetime() {
+    main()
 }

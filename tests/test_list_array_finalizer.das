@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require daslib/rtti
 var frees=0
@@ -22,4 +23,9 @@ def main() {
     assert(before==frees)
     let current=heap_bytes_allocated();assert(current==baseline)
     print("List custom array finalizer checks OK\n")
+}
+
+[test]
+def test_list_array_finalizer() {
+    main()
 }

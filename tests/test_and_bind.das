@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation/validation_builder.das
 
@@ -87,3 +88,7 @@ def main() {
     print("and_bind value checks OK\n")
 }
 
+[test]
+def test_and_bind() {
+    main()
+}

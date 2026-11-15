@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation_task/task_runtime.das
 require ../packages/computation_task/task_jobque.das
@@ -142,4 +143,9 @@ def main() {
     for(i in range(3)) {checks()}
     verify(heap_bytes_allocated()==baseline)
     print("Task jobque stream checks OK\n")
+}
+
+[test]
+def test_task_jobque_stream() {
+    main()
 }

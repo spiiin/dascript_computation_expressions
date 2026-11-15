@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 // Stress nested producer/consumer/resource macros beyond the default 50 passes.
 options max_infer_passes=128
 require ../packages/computation/computation_macro.das
@@ -174,4 +175,9 @@ def main() {
     for(i in range(24)) {checks()}
     verify(heap_bytes_allocated()==baseline)
     print("Async sequence lifetime checks OK\n")
+}
+
+[test]
+def test_async_sequence_lifetime() {
+    main()
 }

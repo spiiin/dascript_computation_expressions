@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../benchmarks/benchmark_workloads.das
 require daslib/rtti
 [export]
@@ -19,4 +20,9 @@ def main() {
     let current=heap_bytes_allocated()
     assert(current==baseline)
     print("benchmark workload equivalence checks OK\n")
+}
+
+[test]
+def test_benchmark_workloads() {
+    main()
 }

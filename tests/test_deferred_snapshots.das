@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../examples/builders/computation_effects.das
 require ../packages/computation/deferred_computation.das
@@ -46,4 +47,9 @@ def main() {
     }
     assert(cloned==20)
     print("deferred snapshot checks OK\n")
+}
+
+[test]
+def test_deferred_snapshots() {
+    main()
 }

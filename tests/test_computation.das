@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 
 struct Counts {
@@ -104,4 +105,9 @@ def main() {
     }
     assert(forwarded_none is none)
     print("computation checks OK\n")
+}
+
+[test]
+def test_computation() {
+    main()
 }

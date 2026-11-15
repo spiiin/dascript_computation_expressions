@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/deferred_computation.das
 require ../packages/computation_task/task_builder.das
 require daslib/rtti
@@ -60,4 +61,9 @@ def main() {
     for(i in range(24)) {checks()}
     verify(heap_bytes_allocated()==baseline)
     print("Task deferred checks OK\n")
+}
+
+[test]
+def test_task_deferred() {
+    main()
 }

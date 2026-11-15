@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation/validation_builder.das
 
@@ -327,4 +328,9 @@ def main() {
     test_leaving_from_scopes()
     test_other_direct_builders()
     print("direct loop checks OK\n")
+}
+
+[test]
+def test_direct_loops() {
+    main()
 }

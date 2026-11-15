@@ -1,5 +1,5 @@
 options gen2
-require ../support/task_glfw_keyboard.das
+require ../../support/task_glfw_keyboard.das
 require daslib/rtti
 
 def key(code:int;action:int=int(GLFW_PRESS)) {glfw_post_key(glfw_keyboard_window(),code,0,action,0)}

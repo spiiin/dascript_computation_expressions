@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../examples/builders/writer_result_builder.das
 require ../examples/builders/state_result_builder.das
@@ -93,3 +94,7 @@ def main() {
     print("effect bind_return checks OK\n")
 }
 
+[test]
+def test_effect_bind_return() {
+    main()
+}

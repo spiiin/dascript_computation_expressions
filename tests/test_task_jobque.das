@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation_task/task_runtime.das
 require ../packages/computation_task/task_jobque.das
@@ -26,4 +27,9 @@ def main() {
  }
  verify(task_jobque_channels()==0)
  print("Task jobque checks OK\n")
+}
+
+[test]
+def test_task_jobque() {
+    main()
 }

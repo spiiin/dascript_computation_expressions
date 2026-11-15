@@ -1,4 +1,6 @@
 options gen2
+expect 30341
+// diagnostic: ce_loop_append
 require ../packages/computation/computation.das
 require ../examples/builders/writer_result_builder.das
 [export]

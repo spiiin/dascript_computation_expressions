@@ -1,4 +1,7 @@
 options gen2
+expect 30231
+expect 30341:2
+// diagnostic: and_bind
 require ../packages/computation/computation.das
 [export]
 def main() {

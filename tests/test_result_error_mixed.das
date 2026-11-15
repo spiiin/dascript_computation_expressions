@@ -1,4 +1,6 @@
 options gen2
+expect 31400
+// diagnostic: LoadError
 require ../packages/computation/computation.das
 
 enum LoadError {

@@ -1,4 +1,6 @@
 options gen2
+expect 31403
+// diagnostic: and_bind is unsupported for builder
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/async_sequence_builder.das
 [export]

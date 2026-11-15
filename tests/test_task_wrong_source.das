@@ -1,4 +1,7 @@
 options gen2
+expect 31400
+// diagnostic: a task cannot bind a source of type variant<err:string;ok:int>
+// anchor: |> bind
 require ../packages/computation/computation.das
 require ../packages/computation_task/task_runtime.das
 

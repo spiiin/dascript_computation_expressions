@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../support/report_builder.das
 var events=""
@@ -12,11 +13,11 @@ def make_probe() { creations++; return Probe() }
 def ce_protocol(builder:Probe) { return CeValueProtocol() }
 def ce_return(builder:Probe; value:auto) { return result_ok(value) }
 def ce_zero(builder:Probe) { return result_ok(CeUnit()) }
-def ce_bind(builder:Probe; source:Result<auto(T);string>; next:block<(value:T):auto(R)>) : R {
+def ce_bind(builder:Probe; source:Result<auto(TT);string>; next:block<(value:TT):auto(RR)>) : RR {
     return ce_bind(ResultBuilder(),source,next)
 }
-def ce_unwrap(builder:Probe; source:Result<auto(T);string>) : T { return source as ok }
-def ce_run(builder:Probe; outcome:Result<auto(T);string>) {
+def ce_unwrap(builder:Probe; source:Result<auto(TT);string>) : TT { return source as ok }
+def ce_run(builder:Probe; outcome:Result<auto(TT);string>) {
     runs++; events+="run;"
     return (success=outcome is ok,outcome=outcome)
 }
@@ -98,4 +99,9 @@ def main() {
     }
     assert(closes==11 && runs==34)
     print("run protocol checks OK\n")
+}
+
+[test]
+def test_run() {
+    main()
 }

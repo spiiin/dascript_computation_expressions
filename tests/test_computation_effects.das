@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../support/game_state_example.das
 
 struct OtherState { number : int }
@@ -189,3 +190,7 @@ def main() {
     print("state/writer checks OK: snapshots, isolation, composition, loops, exact log order\n")
 }
 
+[test]
+def test_computation_effects() {
+    main()
+}

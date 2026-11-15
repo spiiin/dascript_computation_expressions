@@ -1,4 +1,7 @@
 options gen2
+expect 20800
+// diagnostic: needs the type of the task value
+// anchor: [task]
 require ../packages/computation/computation.das
 require ../packages/computation_task/task_runtime.das
 

@@ -1,4 +1,7 @@
 options gen2
+expect 30231
+expect 30341
+// diagnostic: ce_try_finally
 require ../packages/computation/computation.das
 [export]
 def main() {

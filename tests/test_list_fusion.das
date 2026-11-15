@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../benchmarks/list_benchmark_workloads.das
 require daslib/rtti
@@ -123,4 +124,9 @@ def main() {
         trace="";owned_case(true,nested);assert(trace==expected)
     }
     print("List fusion effects and ownership OK\n")
+}
+
+[test]
+def test_list_fusion() {
+    main()
 }
