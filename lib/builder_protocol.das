@@ -142,6 +142,21 @@ def ce_source(builder:auto; source:auto) {return CeSourceFallback()}
 // Eager outcomes with explicit ownership and consuming bind.
 struct CeOwnedProtocol {_ce_marker:uint8}
 
+// A Value builder whose bind and Combine only short-circuit. Its scope is
+// lowered without continuations: besides the Value operations it defines
+// ce_direct_failed(builder, source) : bool and ce_direct_failure(builder,
+// source, witness : auto(R)?) : R, and its ce_unwrap really extracts the value.
+struct CeDirectProtocol {_ce_marker:uint8}
+
+// Type-only helpers for direct lowering: what the optional ce_source hook makes
+// of a source, and what a bind of that source produces. They pick the hook's
+// result by overload, so the type is known without rewriting the call.
+// `_::` looks the builder's own operations up where the scope is compiled.
+def ce_direct_picked(source:auto(S); hook:CeSourceFallback) : S -const -& {return source}
+def ce_direct_picked(source:auto; hook:auto(H)) : H -const -& {return hook}
+def ce_direct_resolved(builder:auto; source:auto) {return ce_direct_picked(source,_::ce_source(builder,source))}
+def ce_direct_typed(builder:auto; source:auto) {return _::ce_unwrap(builder,ce_direct_resolved(builder,source))}
+
 // Opt-in linear bind/return collection fusion. Descriptor calls are type-only.
 struct CeCollectSink {_ce_marker:uint8}
 struct CeCollectSinkFallback {_ce_marker:uint8}
