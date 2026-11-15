@@ -4,7 +4,7 @@ require ./computation_effects.das public
 
 struct WriterResultBuilder {_ce_marker:uint8}
 
-def writer_result(value : $Result<auto(T);string>; log : string = "") {
+def writer_result(value : Result<auto(T);string>; log : string = "") {
     return (result = value, log = log)
 }
 def writer_result_ok(value : auto(T); log : string = "") {
@@ -22,10 +22,10 @@ def private wr_failure(message, log : string; unused : type<auto(R)>) : R {
 }
 
 def ce_unwrap(builder : WriterResultBuilder;
-              value : tuple<result : $Result<auto(T);string>; log : string>) : T {
+              value : tuple<result : Result<auto(T);string>; log : string>) : T {
     return value.result as ok
 }
-def ce_unwrap(builder : WriterResultBuilder; value : $Result<auto(T);string>) : T {
+def ce_unwrap(builder : WriterResultBuilder; value : Result<auto(T);string>) : T {
     return value as ok
 }
 // Lift tell (Writer<Unit>) only; arbitrary Writer payloads require explicit conversion.
@@ -33,7 +33,7 @@ def ce_unwrap(builder : WriterResultBuilder; value : tuple<value : CeUnit; log :
     return CeUnit()
 }
 def ce_bind(builder : WriterResultBuilder;
-            value : tuple<result : $Result<auto(T);string>; log : string>;
+            value : tuple<result : Result<auto(T);string>; log : string>;
             next : block<(item : T) : auto(R)>) : R {
     if (value.result is err) {
         return wr_failure(value.result as err, value.log, type<R>)
@@ -42,7 +42,7 @@ def ce_bind(builder : WriterResultBuilder;
     rest.log = value.log + rest.log
     return rest
 }
-def ce_bind(builder : WriterResultBuilder; value : $Result<auto(T);string>;
+def ce_bind(builder : WriterResultBuilder; value : Result<auto(T);string>;
             next : block<(item : T) : auto(R)>) : R {
     return ce_bind(builder, writer_result(value), next)
 }
@@ -57,17 +57,17 @@ def ce_zero(builder : WriterResultBuilder) {
     return writer_result(ce_zero(ResultBuilder()))
 }
 def ce_return_from(builder : WriterResultBuilder;
-                   value : tuple<result : $Result<auto(T);string>; log : string>) {
+                   value : tuple<result : Result<auto(T);string>; log : string>) {
     return value
 }
-def ce_return_from(builder : WriterResultBuilder; value : $Result<auto(T);string>) {
+def ce_return_from(builder : WriterResultBuilder; value : Result<auto(T);string>) {
     return writer_result(value)
 }
 def ce_return_from(builder : WriterResultBuilder; value : tuple<value : CeUnit; log : string>) {
     return writer_result(ce_zero(ResultBuilder()), value.log)
 }
 def ce_combine(builder : WriterResultBuilder;
-               first : tuple<result : $Result<CeUnit;string>; log : string>;
+               first : tuple<result : Result<CeUnit;string>; log : string>;
                next : block<() : auto(R)>) : R {
     if (first.result is err) {
         return wr_failure(first.result as err, first.log, type<R>)
@@ -77,11 +77,11 @@ def ce_combine(builder : WriterResultBuilder;
     return rest
 }
 def ce_loop_failed(builder : WriterResultBuilder;
-                   step : tuple<result : $Result<CeUnit;string>; log : string>) : bool {
+                   step : tuple<result : Result<CeUnit;string>; log : string>) : bool {
     return step.result is err
 }
 def ce_loop_append(builder : WriterResultBuilder;
-                   first, step : tuple<result : $Result<CeUnit;string>; log : string>) {
+                   first, step : tuple<result : Result<CeUnit;string>; log : string>) {
     if (first.result is err) { return first }
     return writer_result(step.result, first.log + step.log)
 }
@@ -89,7 +89,7 @@ def ce_loop_append(builder : WriterResultBuilder;
 def ce_protocol(builder : WriterResultBuilder) { return CeValueProtocol() }
 
 def ce_bind_return(builder:WriterResultBuilder;
-                   source:tuple<result:$Result<auto(T);string>;log:string>;
+                   source:tuple<result:Result<auto(T);string>;log:string>;
                    mapper:block<(value:T):auto(U)>) : typedecl(ce_return(builder,default<U>)) {
     if (source.result is err) {
         return wr_failure(source.result as err,source.log,type<typedecl(ce_return(builder,default<U>))>)
@@ -97,7 +97,7 @@ def ce_bind_return(builder:WriterResultBuilder;
     let mapped=invoke(mapper,source.result as ok)
     return writer_result_ok(mapped,source.log)
 }
-def ce_bind_return(builder:WriterResultBuilder; source:$Result<auto(T);string>;
+def ce_bind_return(builder:WriterResultBuilder; source:Result<auto(T);string>;
                    mapper:block<(value:T):auto(U)>) : typedecl(ce_return(builder,default<U>)) {
     if (source is err) { return wr_failure(source as err,"",type<typedecl(ce_return(builder,default<U>))>) }
     let mapped=invoke(mapper,source as ok)

@@ -29,7 +29,7 @@ def no_result() : int {await_next_frame()}
 [async]
 def standard_void() : void {trace+="v1;";await_next_frame();trace+="v2;"}
 [async]
-def standard_error(fail:bool) : $Result<int;string> {
+def standard_error(fail:bool) : Result<int;string> {
     await_next_frame()
     yield fail ? result_error("denied",type<int>) : result_ok(7)
     trace+="error-tail;"
@@ -42,7 +42,7 @@ def standard_throw(afterResult:bool) : int {
     yield 0
 }
 [async]
-def result_throw() : $Result<int;string> {
+def result_throw() : Result<int;string> {
     await_next_frame()
     panic("result async threw")
     yield result_ok(0)
@@ -50,7 +50,7 @@ def result_throw() : $Result<int;string> {
 [async]
 def empty_void() : void {}
 [async]
-def changing_result() : $Result<int;string> {
+def changing_result() : Result<int;string> {
     yield result_error("intermediate",type<int>)
     await_next_frame()
     yield result_ok(11)

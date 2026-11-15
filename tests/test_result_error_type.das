@@ -14,13 +14,13 @@ struct Rejection {
 
 var evaluated = 0
 
-def find(id : int) : $Result<int;LoadError> {
+def find(id : int) : Result<int;LoadError> {
     evaluated++
     if (id < 0) { return err(LoadError.NotFound, type<int>) }
     if (id > 100) { return err(LoadError.Denied, type<int>) }
     return ok(id, type<LoadError>)
 }
-def admit(age : int) : $Result<int;Rejection> {
+def admit(age : int) : Result<int;Rejection> {
     if (age < 18) { return err(Rejection(code=age, reason="minor"), type<int>) }
     return ok(age, type<Rejection>)
 }

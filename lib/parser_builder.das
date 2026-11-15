@@ -249,7 +249,7 @@ def parser_read(builder:ParserBuilder; op:tuple<parserOptional:parserOptionalTag
     var cursor=builder
     cursor.committed=false
     var inscope result <- parser_read(cursor,op.source)
-    var inscope value:$Option<typedecl((result as parsed).value) -const -&>
+    var inscope value:Option<typedecl((result as parsed).value) -const -&>
     if(result is failure) {
         if(!parser_absent(result as failure,builder.position)) {
             var diagnostic=result as failure

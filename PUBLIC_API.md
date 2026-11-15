@@ -1,7 +1,7 @@
 # Публичный API computation expressions
 
 Проверенный SDK — Daslang v0.6.5-RC2 со стандартной daslib. SDK не включён в экспорт.
-Result и Option теперь являются стандартными `$Result<T;string>` / `$Option<T>`.
+Result и Option теперь являются стандартными `Result<T;string>` / `Option<T>`.
 Миграция и правила владения: [семантика builders](CE_SEMANTICS.md).
 Необязательный `./lib/task_hv.das` требует установленный `dashv/dashv_boost`.
 API: `hv_websocket`, `ws_connect`, `ws_send_text`, `ws_receive_text`,
@@ -28,7 +28,7 @@ task_result_when_all, task_race и [and_bind для Task](CE_SEMANTICS.md); см
 
 | Builder | Результат |
 |---|---|
-| ResultBuilder / OptionBuilder | `$Result<T;string>` (err/ok) / `$Option<T>` (none/some) |
+| ResultBuilder / OptionBuilder | `Result<T;string>` (err/ok) / `Option<T>` (none/some) |
 | MoveResultBuilder / MoveOptionBuilder | Те же варианты с передаваемым владением |
 | StateBuilder(initial) | `(value, state)` |
 | WriterBuilder | `(value, log)` |
@@ -141,7 +141,7 @@ task_when_all(tasks) потребляет массив Task с одинаков�
 
 | Имя | Что возвращает такое значение |
 | --- | --- |
-| `Task<T>` | `computation(TaskBuilder(type<T>))`; для TaskResultBuilder это `Task<$Result<T;string>>` |
+| `Task<T>` | `computation(TaskBuilder(type<T>))`; для TaskResultBuilder это `Task<Result<T;string>>` |
 | `TaskEvent<T>` | Один шаг задачи |
 | `TaskChannel<T>` | `task_channel(type<T>, capacity)` |
 | `TaskProgress<T>` | `task_progress(type<T>)` |

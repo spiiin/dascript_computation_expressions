@@ -142,7 +142,7 @@ def pack() {
     p.items |> push(42)
     return <- move_ok(p)
 }
-def explode() : $Result<array<int>;string> {panic("source panic");return <- move_error("unreachable",type<array<int>>)}
+def explode() : Result<array<int>;string> {panic("source panic");return <- move_error("unreachable",type<array<int>>)}
 def more_ownership() {
     let baseline=heap_bytes_allocated()
     {

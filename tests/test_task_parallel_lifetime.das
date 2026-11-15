@@ -9,8 +9,8 @@ def tracked(n:int;waits:int=2;fail:bool=false;crash:bool=false) {
     opened++;active++;if(active>peak) {peak=active}
     order+="{n};"
     var data <- [n,n+1]
-    var source <- generator<tuple<tag:TaskEventTag;ready:bool;value:$Result<int;string>>> capture(copy(n),copy(waits),copy(fail),copy(crash),<-data) {
-        for(i in range(waits)) {yield task_pending(type<$Result<int;string>>)}
+    var source <- generator<tuple<tag:TaskEventTag;ready:bool;value:Result<int;string>>> capture(copy(n),copy(waits),copy(fail),copy(crash),<-data) {
+        for(i in range(waits)) {yield task_pending(type<Result<int;string>>)}
         if(crash) {panic("native failure")}
         yield task_ready(fail ? result_error("denied {n}",type<int>) : result_ok(n));return false
     } finally {ce_sequence_finalize($ {active--;closed++;delete data})}

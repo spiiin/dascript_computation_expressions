@@ -99,7 +99,7 @@ def private ce_jobque_poll(var op:auto(O)?) {unsafe {
         let work=op.work
         var inscope input_owner <- (value <- op.input)
         new_job() @() {
-            var inscope outcome:$Result<JobValue;string>
+            var inscope outcome:Result<JobValue;string>
             try {
                 var inscope value_owner:tuple<value:JobValue>
                 static_if(typeinfo can_copy(type<JobValue>)) {value_owner.value=invoke(work,input_owner.value)}
@@ -111,11 +111,11 @@ def private ce_jobque_poll(var op:auto(O)?) {unsafe {
             ch |> notify_and_release
         }
     }
-    var result:$Result<JobValue;string>
+    var result:Result<JobValue;string>
     var ch=op.state.records[op.index].channel
-    let ready=try_pop_clone(ch,$(packet:tuple<result:$Result<JobValue;string>>#) {result := packet.result})
+    let ready=try_pop_clone(ch,$(packet:tuple<result:Result<JobValue;string>>#) {result := packet.result})
     if(ready) {return <- task_ready_move(result)}
-    return <- task_pending(type<$Result<JobValue;string>>)
+    return <- task_pending(type<Result<JobValue;string>>)
 }}
 // Work is a function pointer, not a closure borrowing main-thread state.
 // The SDK clones input/result across contexts; no cooperative channel is shared.
@@ -186,7 +186,7 @@ def private ce_jobque_poll_sink(var op:auto(O)?) {unsafe {
         let work=op.work
         var inscope input_owner <- (value <- op.input)
         new_job() @() {
-            var inscope outcome:$Result<JobValue;string>
+            var inscope outcome:Result<JobValue;string>
             try {
                 let sink=TaskJobSink(cancel=cancel)
                 var inscope value_owner:tuple<value:JobValue>
@@ -199,11 +199,11 @@ def private ce_jobque_poll_sink(var op:auto(O)?) {unsafe {
             ch |> notify_and_release
         }
     }
-    var result:$Result<JobValue;string>
+    var result:Result<JobValue;string>
     var ch=op.state.records[op.index].channel
-    let ready=try_pop_clone(ch,$(packet:tuple<result:$Result<JobValue;string>>#) {result := packet.result})
+    let ready=try_pop_clone(ch,$(packet:tuple<result:Result<JobValue;string>>#) {result := packet.result})
     if(ready) {return <- task_ready_move(result)}
-    return <- task_pending(type<$Result<JobValue;string>>)
+    return <- task_pending(type<Result<JobValue;string>>)
 }}
 // Like task_jobque, but work also receives a TaskJobSink: cancelling or timing out
 // the Task (or queue shutdown) makes task_job_cancelled(sink) true in the worker.
@@ -288,7 +288,7 @@ def private ce_jobque_stream_pop(var op:auto(O)?;var result:auto&) : bool {unsaf
     if(!empty(error)) {
         op.failure=error
         ce_jobque_stream_stop(op)
-        result <- move_error(error,type<$Option<Item>>)
+        result <- move_error(error,type<Option<Item>>)
         return true
     }
     op.state.records[op.index].pending |> dec
@@ -298,8 +298,8 @@ def private ce_jobque_stream_pop(var op:auto(O)?;var result:auto&) : bool {unsaf
 }}
 def private ce_jobque_next_poll(var op:auto(O)?) {unsafe {
     typedef Item=typedecl(op.witness) -const -&
-    var result:$Result<$Option<Item>;string>
-    if(!empty(op.failure)) {result <- move_error(op.failure,type<$Option<Item>>);return <- task_ready_move(result)}
+    var result:Result<Option<Item>;string>
+    if(!empty(op.failure)) {result <- move_error(op.failure,type<Option<Item>>);return <- task_ready_move(result)}
     if(op.stopped) {var nothing=none(type<Item>);result <- move_ok(nothing);return <- task_ready_move(result)}
     if(!op.started) {ce_jobque_stream_start(op)}
     if(ce_jobque_stream_pop(op,result)) {return <- task_ready_move(result)}
@@ -312,7 +312,7 @@ def private ce_jobque_next_poll(var op:auto(O)?) {unsafe {
         var nothing=none(type<Item>);result <- move_ok(nothing)
         return <- task_ready_move(result)
     }
-    return <- task_pending(type<$Result<$Option<Item>;string>>)
+    return <- task_pending(type<Result<Option<Item>;string>>)
 }}
 // Cold stream: the worker starts on the first task_jobque_next poll. work(input,sink)
 // publishes values with task_job_emit(sink,value) and checks task_job_cancelled.

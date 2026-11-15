@@ -20,7 +20,7 @@ def balanced() {
 }
 def success_checks() {
     var inscope source <- task_event_source(type<string>)
-    var inscope scheduler <- task_scheduler(type<$Result<string;string>>)
+    var inscope scheduler <- task_scheduler(type<Result<string;string>>)
     let before=applied
     verify(task_event_emit(source,"before subscribing")==0)
     let a=task_spawn(scheduler,confirm(source))
@@ -43,7 +43,7 @@ def success_checks() {
 def cancellation_checks() {
     var inscope source <- task_event_source(type<string>)
     var inscope token <- cancellation_token()
-    var inscope scheduler <- task_scheduler(type<$Result<string;string>>)
+    var inscope scheduler <- task_scheduler(type<Result<string;string>>)
     let before=applied
     let a=task_spawn(scheduler,task_with_cancellation(confirm(source),token))
     let b=task_spawn(scheduler,task_with_cancellation(confirm(source),token))
@@ -58,7 +58,7 @@ def cancellation_checks() {
 }
 def timeout_checks() {
     var inscope source <- task_event_source(type<string>)
-    var inscope scheduler <- task_scheduler(type<$Result<string;string>>)
+    var inscope scheduler <- task_scheduler(type<Result<string;string>>)
     let before=applied
     let a=task_spawn(scheduler,confirm(source),TaskTimeout(after_ms=5))
     verify(task_tick(scheduler,100)==1 && task_event_subscriber_count(source)==1)
@@ -105,7 +105,7 @@ def composition_checks() {
             verify(task_event_subscriber_count(events)==0)
         }
         {
-            var inscope scheduler <- task_scheduler(type<$Result<string;string>>)
+            var inscope scheduler <- task_scheduler(type<Result<string;string>>)
             let a=task_spawn(scheduler,confirm(events))
             let b=task_spawn(scheduler,confirm(events))
             verify(task_tick(scheduler,0)==2)

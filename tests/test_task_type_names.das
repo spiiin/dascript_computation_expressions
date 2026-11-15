@@ -18,7 +18,7 @@ var workers : TaskJobQueue
 
 struct Level {
     title : string
-    load : Task<$Result<int;string>>
+    load : Task<Result<int;string>>
 }
 
 def doubled(value : int) : Task<int> {
@@ -36,7 +36,7 @@ def total(var tasks : array<Task<int>>) : int {
     return sum
 }
 // A task body owns what it captures, so it reads the handle from the global.
-def first_message() : Task<$Result<string;string>> {
+def first_message() : Task<Result<string;string>> {
     return <- computation(TaskResultBuilder(type<string>)) {
         let message = task_channel_receive(inbox) |> bind
         return message ?? "closed"

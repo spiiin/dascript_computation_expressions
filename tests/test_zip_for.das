@@ -15,16 +15,16 @@ var closed=fixed_array(0,0,0)
 def source(id:int; count:int) {order+="{id}"; return range(count)}
 def step(builder:ResultBuilder; i,failAt:int) {
     attempts++
-    if (i==failAt) {return variant type<$Result<int;string>>(err="stop {i}")}
-    return variant type<$Result<int;string>>(ok=i)
+    if (i==failAt) {return variant type<Result<int;string>>(err="stop {i}")}
+    return variant type<Result<int;string>>(ok=i)
 }
 def step(builder:OptionBuilder; i,failAt:int) {
     attempts++
-    if (i==failAt) {return default<$Option<int>>}
-    return variant type<$Option<int>>(some=i)
+    if (i==failAt) {return default<Option<int>>}
+    return variant type<Option<int>>(some=i)
 }
-def failed(value:$Result<auto;string>) {return value is err}
-def failed(value:$Option<auto>) {return value is none}
+def failed(value:Result<auto;string>) {return value is err}
+def failed(value:Option<auto>) {return value is none}
 def reset() {
     order=""; attempts=0; completed=0; after=0
     for (v in pulled) {v=0}
@@ -173,7 +173,7 @@ def main() {
     reset()
     let bounded=computation(BoundedResultBuilder(limit=2)) {
         for (a,b,c,d in range(5),range(6),range(7),range(8)) {
-            variant type<$Result<int;string>>(ok=a+b+c+d) |> bind
+            variant type<Result<int;string>>(ok=a+b+c+d) |> bind
             completed++
         }
         after++
