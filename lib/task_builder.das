@@ -6,6 +6,9 @@ require ./resumable_lowering.das public
 require ./cancellation_token.das public
 require ./move_builders.das public
 require daslib/rtti
+require daslib/templates
+require daslib/templates_boost
+require daslib/typemacro_boost
 
 enum TaskStatus {
     Created
@@ -16,6 +19,25 @@ enum TaskStatus {
 }
 struct TaskTag {_ce_marker:uint8}
 struct TaskEventTag {_ce_marker:uint8}
+
+// Names for the task types: `$Task<T>` is the cold single-shot task that
+// computation(TaskBuilder(type<T>)) returns, `$TaskEvent<T>` one step of it.
+// Both are named tuples, so a value built field by field has the same type.
+[template_tuple(T)]
+struct template TaskEvent {
+    tag : TaskEventTag
+    ready : bool
+    value : T
+}
+[template_tuple(T)]
+struct template Task {
+    tag : TaskTag
+    source : iterator<tuple<tag:TaskEventTag;ready:bool;value:T>>
+    status : TaskStatus
+    value : T
+    error : string
+    polling : bool
+}
 struct TaskContext {_ce_marker:uint8}
 struct TaskResultContext {_ce_marker:uint8}
 def ce_task_local_delete(var value:auto) {static_if(typeinfo can_delete(value)) {delete value}}

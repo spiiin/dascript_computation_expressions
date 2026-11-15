@@ -1,10 +1,21 @@
 options gen2
 module task_progress public
 require ./task_builder.das public
+require daslib/templates
+require daslib/templates_boost
+require daslib/typemacro_boost
 
 // Progress cell: the latest reported value wins, readers never queue history.
 // Waits complete with the first report newer than the version they observed.
 struct TaskProgressTag {_ce_marker:uint8}
+// `$TaskProgress<T>` names the handle that task_progress(type<T>) returns. The
+// state layout is repeated in task_progress; its declared result type keeps
+// the two in step.
+[template_tuple(T)]
+struct template TaskProgress {
+    tag : TaskProgressTag
+    owner : iterator<tuple<references:uint64;closed:bool;version:uint64;value:T>?>
+}
 
 def private ce_progress_lease(var state:auto(S)?;owner:bool=false) {
     return <- generator<S?> capture(copy(state),copy(owner)) {
@@ -23,7 +34,7 @@ def private ce_progress_state(progress:tuple<tag:TaskProgressTag;owner:iterator<
         return state
     }
 }
-def task_progress(unused:type<auto(T)>) {
+def task_progress(unused:type<auto(T)>) : $TaskProgress<T -const -&> {
     static_assert(typeinfo ce_resumable_payload(default<T -const -&>))
     concept_assert(typeinfo can_copy(type<T>),"task progress: payload must be copyable")
     unsafe {
