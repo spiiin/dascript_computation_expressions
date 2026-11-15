@@ -222,12 +222,26 @@ let description = computation(OptionBuilder()) {
 - `let resource = acquire() |> use_resource` и `try_finally(body, cleanup)`; см. [семантика builders](CE_SEMANTICS.md).
 
 Result, Option и Validation раскрываются напрямую, без продолжений: bind
-превращается в проверку и выход из блока области, а `if` и вложенные блоки
-остаются нативными. Поэтому в них `return` внутри ветки завершает всю
-computation: запись `if (...) { return 42 }; return 7` допустима. Типы всех
-`return` области должны совпадать. Из тела цикла, `try_with`, `try_finally`
+превращается в проверку и выход из блока области, а `if`, вложенные блоки и
+циклы остаются нативными. Поэтому в них `return` внутри ветки или тела цикла
+завершает всю computation: запись `if (...) { return 42 }; return 7`
+допустима, а в циклах работают `break` и `continue`:
+
+```das
+let found = computation(OptionBuilder()) {
+    for (item in items) {
+        if (item.hidden) { continue }
+        let price = lookup(item) |> bind      // none завершает всю computation
+        if (price > limit) { return item.id } // ранний выход с результатом
+    }
+    return -1
+}
+```
+
+Типы всех `return` области должны совпадать. Из тела `try_with`, `try_finally`
 и области после `use_resource` досрочно выйти нельзя: это отдельные области,
-и перед последующим кодом они должны вычислять Unit.
+и перед последующим кодом они должны вычислять Unit. По той же причине
+`break` и `continue` после `use_resource` в том же теле цикла не поддержаны.
 
 У остальных Value-builders тело цикла и промежуточная ветка перед последующим
 кодом должны вычислять Unit. Обычно для этого достаточно не писать return.
@@ -237,8 +251,8 @@ computation: запись `if (...) { return 42 }; return 7` допустима.
 
 `return` перед другими инструкциями своей области выдаёт диагностику макроса.
 
-Для обычных Result/Option `break`/`continue`, pattern matching как отдельная
-конструкция CE и `yield` не поддержаны. Вместо F# `use` и `and!` есть
+Pattern matching как отдельная конструкция CE и `yield` для Result/Option
+не поддержаны. Вместо F# `use` и `and!` есть
 `use_resource` и пайповый `and_bind`; для native finally используется
 `try_finally`. Error остаётся значением, а не исключением языка.
 Обычные ResultBuilder/OptionBuilder требуют копируемого payload; move-only
