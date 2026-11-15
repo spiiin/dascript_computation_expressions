@@ -264,3 +264,71 @@ def ce_for_zip(builder:OptionBuilder; arity:int;
     })
     return result
 }
+
+// Result with any copyable error type: ResultBuilder(type<E>). `return value`
+// says nothing about the error type, so the builder carries it. ResultBuilder()
+// is the same computation with string errors.
+struct ResultErrorContext {_ce_marker:uint8}
+def ResultBuilder(unused : type<auto(E)>) {
+    static_assert(typeinfo can_copy(type<E>), "ResultBuilder(type<E>): the error type must be copyable")
+    var marker : E -const -&?
+    return (kind=ResultErrorContext(), error=marker)
+}
+def ce_protocol(builder : tuple<kind:ResultErrorContext;error:auto(E)?>) { return CeDirectProtocol() }
+def ce_unwrap(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; value : $Result<auto(T);E>) : T {
+    return value as ok
+}
+def ce_return(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; value : auto(T)) {
+    return <- result::ok(value, type<E>)
+}
+def ce_return_from(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; value : $Result<auto(T);E>) {
+    return value
+}
+def ce_zero(builder : tuple<kind:ResultErrorContext;error:auto(E)?>) {
+    return variant type<$Result<CeUnit;E>>(ok=CeUnit())
+}
+def ce_direct_failed(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; source : $Result<auto(T);E>) : bool {
+    return source is err
+}
+def ce_direct_failure(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; source : $Result<auto(T);E>;
+                      witness : auto(R)?) : R {
+    return variant type<R>(err=source as err)
+}
+def ce_loop_failed(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; step : $Result<CeUnit;E>) : bool {
+    return step is err
+}
+def ce_loop_append(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; first, step : $Result<CeUnit;E>) {
+    if (first is err) { return first }
+    return step
+}
+def ce_merge_sources(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; left : $Result<auto;E>;
+                     right : $Result<auto;E>) {
+    unsafe {
+        if(left is err) {return typeinfo ce_canonical(variant type<$Result<typedecl(ce_source_pair(left as ok,right as ok));E>>(err=left as err))}
+        if(right is err) {return typeinfo ce_canonical(variant type<$Result<typedecl(ce_source_pair(left as ok,right as ok));E>>(err=right as err))}
+        return typeinfo ce_canonical(result::ok(ce_source_pair(left as ok,right as ok), type<E>))
+    }
+}
+// The source expression runs once; a failed body stops before the next item.
+def ce_for(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; source:auto; body:auto) { return ce_for_values(builder,source,body) }
+def ce_for(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; var source:array<auto> ==const; body:auto) { return ce_for_mutable_array(builder,source,body) }
+def ce_for(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; var source:auto[] ==const; body:auto) { return ce_for_mutable_array(builder,source,body) }
+def ce_for(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; var source:iterator<auto>; body:auto) { return ce_for_iterator(builder,source,body) }
+def ce_while(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; condition:block<():bool>;
+             body:block<():$Result<CeUnit;E>>) {
+    var result=ce_zero(builder)
+    while (invoke(condition)) {
+        result=ce_loop_append(builder,result,invoke(body))
+        if (ce_loop_failed(builder,result)) { return result }
+    }
+    return result
+}
+def ce_for_zip(builder : tuple<kind:ResultErrorContext;error:auto(E)?>; arity:int;
+               traverse:block<(visit:block<(body:block<():$Result<CeUnit;E>>):bool>):void>) {
+    var result=ce_zero(builder)
+    invoke(traverse, $(body:block<():$Result<CeUnit;E>>) {
+        result=invoke(body)
+        return !ce_loop_failed(builder,result)
+    })
+    return result
+}
