@@ -272,7 +272,7 @@ try {
         Check 'tests/test_state_wrong_type.das' $false 'ce_unwrap'
         Check 'tests/test_writer_mixed.das' $false 'ce_unwrap'
         Check 'tests/test_writer_loop_value.das' $false 'ce_loop_append'
-        Check 'tests/test_state_loop_value.das' $false 'computation_effects::ce_for'
+        Check 'tests/test_state_loop_value.das' $false 'tuple<value:int;state:int>'
         Check 'tests/test_writer_result.das' $true 'writer/result checks OK'
         Check 'tests/test_writer_result_option.das' $false 'ce_unwrap'
         Check 'tests/test_writer_result_writer.das' $false 'ce_unwrap'

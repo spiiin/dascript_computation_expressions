@@ -4,6 +4,15 @@ require daslib/ast_boost
 require daslib/templates_boost
 require strings
 
+// A source position does not identify a generated name: nested pipes share one
+// position, and one lowered statement can nest inside another built from it.
+// The serial follows expansion order, so names stay stable between compiles.
+var private ce_unique_serial : int = 0
+def ce_unique_name(prefix : string; at : LineInfo) : string {
+    ce_unique_serial++
+    return "{make_unique_private_name(prefix, at)}_{ce_unique_serial}"
+}
+
 // Native AOT generator fields must have unique names even for locals declared
 // in different lexical loops. Respect shadowing when rewriting their tail.
 [macro_interface]
@@ -125,7 +134,7 @@ def ce_resumable_scope(node:ExpressionPtr; builder:string; var error:string&;
             var local=(stmt as ExprLet).variables[0]
             let original=string(local.name)
             if(!starts_with(original,"__task_local_")) {
-                let replacement=make_unique_private_name("__task_local_{original}",stmt.at)
+                let replacement=ce_unique_name("__task_local_{original}",stmt.at)
                 local.name := replacement
                 if(index+1<length(blk.list)) {
                     var tail:array<ExpressionPtr>
@@ -156,7 +165,7 @@ def ce_resumable_scope(node:ExpressionPtr; builder:string; var error:string&;
             if(length(call.arguments)!=1) {error="task: expected source |> bind";return blk}
             let source=invoke(await_source,call.arguments[0],true)
             if(!empty(error)) {return blk}
-            let event=make_unique_private_name("__await_event",stmt.at)
+            let event=ce_unique_name("__await_event",stmt.at)
             var tail:array<ExpressionPtr>
             if(stmt is ExprLet) {
                 var declaration=clone_expression(stmt) as ExprLet
@@ -185,7 +194,7 @@ def ce_resumable_scope(node:ExpressionPtr; builder:string; var error:string&;
             if(ret.subexpr!=null && ret.subexpr is ExprCall && (ret.subexpr as ExprCall).name=="return_from") {
                 let source=ret.subexpr as ExprCall
                 if(length(source.arguments)!=1) {error="task: expected 'return source |> return_from'";return blk}
-                let name=make_unique_private_name("__await_return_from",stmt.at)
+                let name=ce_unique_name("__await_return_from",stmt.at)
                 let forwarded=qmacro_block() {
                     var $i(name) & = $e(source.arguments[0]) |> bind
                     return <- $i(name)
@@ -204,7 +213,7 @@ def ce_resumable_scope(node:ExpressionPtr; builder:string; var error:string&;
             output |> push <| branch
         } elif(stmt is ExprFor) {
             var loop=stmt as ExprFor
-            let nested=make_unique_private_name("__task_for_control",stmt.at)
+            let nested=ce_unique_name("__task_for_control",stmt.at)
             let body=ce_resumable_scope(loop.body,builder,error,await_source,nested)
             loop.body=qmacro_block() {ce_task_loop_signal($i(nested),0);$e(body)}
             var originals:array<ExpressionPtr>
@@ -218,7 +227,7 @@ def ce_resumable_scope(node:ExpressionPtr; builder:string; var error:string&;
                 }))
             }
             if(!empty(originals)) {
-                let event=make_unique_private_name("__await_for_event",stmt.at)
+                let event=ce_unique_name("__await_for_event",stmt.at)
                 let arity=length(originals)
                 var input=clone_expression(originals[0])
                 var probe=clone_expression(originals[0])
@@ -228,7 +237,7 @@ def ce_resumable_scope(node:ExpressionPtr; builder:string; var error:string&;
                     let original=originals[i]
                     anyAsync=qmacro($e(anyAsync) || (typeinfo ce_has_resumable_for(ce_await_for_source($i(builder),$e(original),$i(nested)))))
                     if(arity>1) {
-                        let source=make_unique_private_name("__await_for_source_{i}",stmt.at)
+                        let source=ce_unique_name("__await_for_source_{i}",stmt.at)
                         var declaration=qmacro_expr() {var $i(source) & = use_task_local($e(original))}
                         declaration.at=stmt.at
                         declaration.at.column+=uint(2+arity+i)
@@ -241,7 +250,7 @@ def ce_resumable_scope(node:ExpressionPtr; builder:string; var error:string&;
                         }
                     }
                 }
-                let row=arity==1 ? string(loop.iterators[0]) : make_unique_private_name("__await_for_row",stmt.at)
+                let row=arity==1 ? string(loop.iterators[0]) : ce_unique_name("__await_for_row",stmt.at)
                 var iteration=clone_expression(body)
                 if(arity>1) {
                     for(i in range(arity)) {
@@ -294,7 +303,7 @@ def ce_resumable_scope(node:ExpressionPtr; builder:string; var error:string&;
             } else {output |> push <| ce_task_wrap_loop(loop,nested)}
         } elif(stmt is ExprWhile) {
             var loop=stmt as ExprWhile
-            let nested=make_unique_private_name("__task_while_control",stmt.at)
+            let nested=ce_unique_name("__task_while_control",stmt.at)
             let body=ce_resumable_scope(loop.body,builder,error,await_source,nested)
             loop.body=qmacro_block() {ce_task_loop_signal($i(nested),0);$e(body)}
             let condition=clone_expression(loop.cond)
@@ -324,7 +333,7 @@ def ce_resumable_scope(node:ExpressionPtr; builder:string; var error:string&;
         } elif(stmt is ExprCall && (stmt as ExprCall).name=="yield_from") {
             let call=stmt as ExprCall
             if(length(call.arguments)!=1) {error="async sequence: expected source |> yield_from";return blk}
-            let event=make_unique_private_name("__await_yield_from",stmt.at)
+            let event=ce_unique_name("__await_yield_from",stmt.at)
             var loop=qmacro_expr() {
                 for($i(event) in ce_await_yield_from($i(builder),$e(call.arguments[0]))) {
                     yield <- $i(event)

@@ -1,6 +1,7 @@
 options gen2
 module deferred_computation public
 require ./computation_macro.das public
+require ./resumable_lowering.das
 require ./deferred_runtime.das public
 require daslib/ast
 require daslib/ast_boost
@@ -107,10 +108,10 @@ class DeferredMacro : AstCallMacro {
         var builderType=clone_type(bt)
         builderType.flags.ref=false; builderType.flags.constant=false
         et.flags.ref=false; et.flags.constant=false
-        let en=empty(blk.arguments) ? make_unique_private_name("__deferred_data",expr.at) : string(blk.arguments[0].name)
+        let en=empty(blk.arguments) ? ce_unique_name("__deferred_data",expr.at) : string(blk.arguments[0].name)
         var raw=clone_expression(expr.arguments[count-1])
         ((raw as ExprMakeBlock)._block as ExprBlock).arguments |> clear()
-        let frame=make_unique_private_name("__deferred_frame",expr.at)
+        let frame=ce_unique_name("__deferred_frame",expr.at)
         raw=ce_sequence_replace_local(raw,en,frame)
         var inner=new ExprCallMacro(at=expr.at,name:="computation",macro=find_call_macro(find_module(prog,"computation_macro"),"computation"))
         inner.arguments |> push <| qmacro($i(frame).builder)
@@ -128,15 +129,15 @@ class DeferredMacro : AstCallMacro {
             })
         }
         if(taskBuilder || asyncSequence) {
-            let result=make_unique_private_name("__deferred_task",expr.at)
+            let result=ce_unique_name("__deferred_task",expr.at)
             callback=qmacro(@@($i(frame):tuple<marker:int;builder:$t(builderType);value:$t(et)>?) {
                 var $i(result) <- $e(inner)
                 static_assert(typeinfo ce_deferred_result($i(result)))
                 return <- $i(result)
             })
         }
-        let bsource=make_unique_private_name("__deferred_source_builder",expr.at)
-        let esource=make_unique_private_name("__deferred_source_data",expr.at)
+        let bsource=ce_unique_name("__deferred_source_builder",expr.at)
+        let esource=ce_unique_name("__deferred_source_data",expr.at)
         var make=qmacro($($i(esource):$t(et)) { return <- ce_deferred_create($i(bsource),$i(esource),$e(callback),CeDeferredValueBuilder()) })
         if (moveList || moveSequence) {
             make=qmacro($($i(esource):$t(et)) { return <- ce_deferred_create($i(bsource),$i(esource),$e(callback),CeDeferredTypeBuilder()) })
