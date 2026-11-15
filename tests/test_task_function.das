@@ -73,6 +73,13 @@ def twice(value : auto(T)) : T {
     return value + value
 }
 
+// The value type may itself be a template type.
+[task]
+def positive(value : int) : Option<int> {
+    let twiceValue = doubled(value) |> bind
+    return twiceValue > 0 ? some(twiceValue) : default<Option<int>>
+}
+
 // The result is declared, not inferred, so a task function can call itself.
 [task]
 def factorial(n : int) : int {
@@ -145,6 +152,13 @@ def main() {
     var inscope numbers <- twice(21)
     var inscope letters <- twice("ab")
     verify(finish(numbers) == 42 && finish(letters) == "abab")
+    // A generic's T is `string const` for a literal; the task value is plain.
+    var named : Task<string> <- twice("cd")
+    verify(finish(named) == "cdcd")
+    delete named
+    var inscope present <- positive(2)
+    var inscope absent <- positive(-2)
+    verify(finish(present) is some && finish(absent) is none)
     var inscope product <- factorial(5)
     verify(finish(product) == 120)
     var inscope greeting <- greet()

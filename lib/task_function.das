@@ -75,7 +75,11 @@ def private ce_task_function(var func : FunctionPtr; annotation, builder : strin
     // Generated nodes point at the function; the user's statements keep their lines.
     ce_restamp(lowered, at)
     func.body = lowered
+    // The builders store `T -const -&`. A generic's T can arrive as `string const`,
+    // and the declared result must name the same tuple or AOT sees two C++ types.
     var produced = clone_type(func.result)
+    produced.flags.removeConstant = true
+    produced.flags.removeRef = true
     if (fallible) {
         produced = ce_template_type("Result", at, produced, new TypeDecl(baseType=Type.tString, at=at))
     }
