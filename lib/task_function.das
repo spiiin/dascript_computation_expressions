@@ -74,10 +74,39 @@ def private ce_task_function(var func : FunctionPtr; annotation, builder : strin
     for (statement in body.list) {
         statements |> push <| statement
     }
+    // A `var` argument is the task's to keep: the generator captures it by
+    // move, and the body starts by taking it into a local of the same name. As
+    // a local it lives in the task's own storage, which every scope the body is
+    // lowered into can reach; a captured variable belongs to one generator.
+    var owned : array<string>
+    for (argument in func.arguments) {
+        if (argument._type == null) { continue }
+        if (!argument._type.flags.constant) {
+            owned |> push(string(argument.name))
+            continue
+        }
+        // The task copies what it captures. Where the type alone says that a
+        // copy is impossible, say what to do instead of failing in the generator.
+        let base = argument._type.baseType
+        if (base == Type.tArray || base == Type.tTable || base == Type.tIterator) {
+            errors := "[{annotation}] cannot copy argument '{argument.name}' into the task: declare it var to move it into the task"
+            return false
+        }
+    }
+    var taken : array<ExpressionPtr>
+    for (name in owned) { taken |> push <| qmacro_expr() { var $i(name) <- $i(name) } }
+    for (statement in statements) { taken |> push <| statement }
     var value = clone_type(func.result)
     var call = new ExprCallMacro(at=at, name:="computation", macro=find_call_macro(library, "computation"))
     call.arguments |> push <| qmacro($c(builder)(type<$t(value)>))
-    call.arguments |> push <| qmacro($ { $b(statements); })
+    call.arguments |> push <| qmacro($ { $b(taken); })
+    var capturing = call.arguments[1] as ExprMakeBlock
+    for (name in owned) {
+        let count = length(capturing._capture)
+        capturing._capture |> resize(count + 1)
+        capturing._capture[count].name := name
+        capturing._capture[count].mode = CaptureMode.capture_by_move
+    }
     // The macro reads from the block's position where the computation ends.
     // A function body records no such range, so it ends on the line after
     // the last one any of its code is on: normally the closing brace.

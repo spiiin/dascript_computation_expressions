@@ -99,6 +99,37 @@ def greet(name : string = "world"; times : int = 1) : string {
     return text
 }
 
+// A `var` argument is moved into the task, so it need not be copyable.
+[task]
+def total(var values : array<int>) : int {
+    var sum = 0
+    for (value in values) {
+        let twice = doubled(value) |> bind
+        sum += twice
+    }
+    return sum
+}
+
+[task]
+def drain(var tasks : array<Task<int>>) : int {
+    var sum = 0
+    for (index in range(length(tasks))) {
+        let value = tasks[index] |> bind
+        sum += value
+    }
+    return sum
+}
+
+// The task works on its own copy of a copyable `var` argument.
+[task]
+def counted(var count : int; step : int) : int {
+    while (count < 10) {
+        count += step
+        task_after_polls(1, CeUnit()) |> bind
+    }
+    return count
+}
+
 def finish(var task : Task<auto(T)>) {
     while (task_poll(task) == TaskStatus.Waiting) {}
     static_if (typeinfo can_copy(task.value)) {
@@ -164,5 +195,17 @@ def main() {
     var inscope greeting <- greet()
     var inscope greetings <- greet("das", 2)
     verify(finish(greeting) == "hello world " && finish(greetings) == "hello das hello das ")
+
+    var data <- [1, 2, 3]
+    var inscope summed <- total(data)
+    verify(empty(data) && finish(summed) == 12)
+    var jobs : array<Task<int>>
+    jobs |> emplace(doubled(1))
+    jobs |> emplace(doubled(2))
+    var inscope drained <- drain(jobs)
+    verify(empty(jobs) && finish(drained) == 6)
+    var start = 4
+    var inscope stepped <- counted(start, 3)
+    verify(finish(stepped) == 10 && start == 4)
     print("Task function checks OK\n")
 }

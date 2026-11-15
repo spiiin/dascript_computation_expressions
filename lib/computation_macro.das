@@ -2234,13 +2234,24 @@ class ComputationMacro : AstCallMacro {
             var builder_type = clone_type(bt)
             var run=ce_run_scope(name,qmacro(ce_sequence_run($i(name), source)),true,expr.at)
             ce_scope_tail = nowhere
-            return qmacro(invoke($($i(name) : $t(builder_type)) {
+            var lowered = qmacro(invoke($($i(name) : $t(builder_type)) {
                 var source <- generator<$t(element)> {
                     $e(body)
                     return false
                 }
                 $e(run);
             }, $e(expr.arguments[0])))
+            // What the block was told to capture, the generator it becomes captures:
+            // this is how a [task] function moves its `var` arguments into the task.
+            var holder = ((lowered as ExprInvoke).arguments[0] as ExprMakeBlock)._block as ExprBlock
+            var generated = (holder.list[0] as ExprLet).variables[0].init as ExprMakeGenerator
+            for (entry in (expr.arguments[2] as ExprMakeBlock)._capture) {
+                let count = length(generated._capture)
+                generated._capture |> resize(count + 1)
+                generated._capture[count].name := entry.name
+                generated._capture[count].mode = entry.mode
+            }
+            return lowered
         }
         let owned=ce_is_protocol(protocol,"CeOwnedProtocol")
         let collect_mode = ce_is_protocol(protocol, "CeCollectProtocol") || owned

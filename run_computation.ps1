@@ -31,6 +31,7 @@ try {
     Check 'tests/test_task_match.das' $true 'CE match OK'
     Check 'tests/test_task_function_untyped.das' $false 'needs the type of the task value'
     Check 'tests/test_task_function_finally.das' $false 'a task body has no native finally'
+    Check 'tests/test_task_function_const_argument.das' $false 'declare it var to move it into the task'
     Check 'tests/test_task_wrong_source.das' $false 'a task cannot bind a source of type'
     Check 'tests/test_task_jobque_stream.das' $true 'Task jobque stream checks OK'
     Check 'examples/task_toolkit_demo.das' $true 'Task toolkit demo OK'
