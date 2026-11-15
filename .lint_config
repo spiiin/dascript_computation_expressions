@@ -1,0 +1,7 @@
+# Lint policy of this repository, read by run_lint.ps1 through DAS_LINT_CONFIG_PATH.
+#
+# Every rule keeps the SDK's default. A finding is fixed in the code, or
+# suppressed on its own line with `// nolint:CODE - reason`; a rule is turned
+# off here only when it does not fit the library as a whole.
+
+[rules]
