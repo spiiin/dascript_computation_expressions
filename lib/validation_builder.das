@@ -31,7 +31,14 @@ def validation_zip(left : variant<valid:auto(A);invalid:ValidationErrors>;
     return variant<valid:tuple<first:A -const -&;second:B -const -&>;invalid:ValidationErrors>(valid=(first=left as valid, second=right as valid))
 }
 
-def ce_protocol(builder : ValidationBuilder) { return CeValueProtocol() }
+def ce_protocol(builder : ValidationBuilder) { return CeDirectProtocol() }
+def ce_direct_failed(builder : ValidationBuilder; source : variant<valid:auto(T);invalid:ValidationErrors>) : bool {
+    return source is invalid
+}
+def ce_direct_failure(builder : ValidationBuilder; source : variant<valid:auto(T);invalid:ValidationErrors>;
+                      witness : auto(R)?) : R {
+    return variant type<R>(invalid=source as invalid)
+}
 def ce_unwrap(builder : ValidationBuilder; source : variant<valid:auto(T);invalid:ValidationErrors>) : T {
     return source as valid
 }

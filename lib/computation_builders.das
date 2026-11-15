@@ -83,8 +83,22 @@ def ce_loop_append(builder : OptionBuilder; first, step : $Option<CeUnit>) {
     return step
 }
 
-def ce_protocol(builder : ResultBuilder) { return CeValueProtocol() }
-def ce_protocol(builder : OptionBuilder) { return CeValueProtocol() }
+def ce_protocol(builder : ResultBuilder) { return CeDirectProtocol() }
+def ce_protocol(builder : OptionBuilder) { return CeDirectProtocol() }
+
+// Direct lowering: a failed source leaves the scope as the scope's own type.
+def ce_direct_failed(builder : ResultBuilder; source : $Result<auto(T);string>) : bool {
+    return source is err
+}
+def ce_direct_failed(builder : OptionBuilder; source : $Option<auto(T)>) : bool {
+    return source is none
+}
+def ce_direct_failure(builder : ResultBuilder; source : $Result<auto(T);string>; witness : auto(R)?) : R {
+    return variant type<R>(err=source as err)
+}
+def ce_direct_failure(builder : OptionBuilder; source : $Option<auto(T)>; witness : auto(R)?) : R {
+    return default<R>
+}
 
 
 def ce_merge_sources(builder : ResultBuilder; left : $Result<auto;string>;
