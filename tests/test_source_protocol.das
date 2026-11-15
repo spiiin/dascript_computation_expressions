@@ -77,31 +77,13 @@ def collection() {
     }
     let current=heap_bytes_allocated()
     assert(baseline==current)
-    var caught=false
-    try {
-        var inscope output <- computation(ListBuilder()) {
-            let n=Batch(first=10) |> bind
-            panic("body")
-            yield n
-        }
-    } recover {caught=true}
-    let failedBytes=heap_bytes_allocated()
-    assert(caught && baseline==failedBytes)
 }
 def value_owned() {
     let baseline=heap_bytes_allocated()
     let result=computation(GameSourceBuilder()) {let n=Batch(first=7) |> bind;return n+1}
     assert(result as ok==8)
-    var caught=false
-    try {
-        let failed=computation(GameSourceBuilder()) {
-            let n=Batch(first=7) |> bind
-            panic("value body")
-            return n
-        }
-    } recover {caught=true}
     let current=heap_bytes_allocated()
-    assert(caught && baseline==current)
+    assert(baseline==current)
 }
 def loops() {
     var total=0

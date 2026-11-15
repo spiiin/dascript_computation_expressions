@@ -129,16 +129,6 @@ def resources() {
         result_error("stop",type<CeUnit>) |> bind
     }
     assert(failed.result is err && failed.state==10 && failed.log=="open;" && closed==before+1)
-    var caught=false
-    try {
-        let thrown=computation(StateWriterResultBuilder(10)) {
-            let resource=Resource() |> use_resource
-            tell("open;") |> bind
-            panic("native panic")
-            return 1
-        }
-    } recover {caught=true}
-    assert(caught && closed==before+2)
 }
 def make_task() {
     return <- deferred(StateWriterResultBuilder(10),2) $(amount) {

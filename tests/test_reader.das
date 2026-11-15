@@ -29,13 +29,6 @@ def main() {
     }
     assert(value.value == 47)
     assert(constructed == 1 && cleaned == 2)
-    let recovered = computation(ReaderBuilder("config")) {
-        try_with($ { panic("failure"); return "unreachable" }, $(message:string) {
-            let environment = reader_ask() |> bind
-            return environment
-        })
-    }
-    assert(recovered.value == "config")
     let forwarded = computation(ReaderBuilder(0)) { return reader_value(42) |> return_from }
     assert(forwarded.value == 42)
     let empty = computation(ReaderBuilder(0)) {}

@@ -2,8 +2,6 @@ options gen2
 require ../packages/computation/computation_macro.das
 require ../packages/computation/coroutine_builder.das
 require ../packages/computation/deferred_computation.das
-require daslib/rtti
-require daslib/strings_boost
 var trace=""
 var opened=0
 var closed=0
@@ -59,13 +57,12 @@ def timing() {
     expect_tick(looping,true); assert(trace=="01")
     expect_tick(looping,false)
 }
-def owned_script(fail:bool) {
+def owned_script() {
     return <- computation(CoroutineBuilder()) {
         var resource & = acquire(1) |> use_resource
         yield next_frame()
         resource.data |> push(30)
         assert(length(resource.data)==3)
-        if (fail) {panic("script failed")}
         yield next_frame()
     }
 }
@@ -73,13 +70,13 @@ def resources() {
     let baseline=heap_bytes_allocated()
     let before=opened
     {
-        var inscope unused <- owned_script(false)
+        var inscope unused <- owned_script()
         coroutine_cancel(unused)
         expect_tick(unused,false)
     }
     assert(opened==before)
     {
-        var inscope completed <- owned_script(false)
+        var inscope completed <- owned_script()
         expect_tick(completed,true)
         assert(opened==closed+1)
         expect_tick(completed,true)
@@ -87,7 +84,7 @@ def resources() {
         assert(opened==closed)
     }
     {
-        var inscope cancelled <- owned_script(false)
+        var inscope cancelled <- owned_script()
         expect_tick(cancelled,true)
         coroutine_cancel(cancelled)
         coroutine_cancel(cancelled)
@@ -95,70 +92,40 @@ def resources() {
         assert(opened==closed)
     }
     {
-        var inscope broken <- owned_script(false)
+        var inscope broken <- owned_script()
         for (frame in broken) {break}
         assert(opened==closed)
-    }
-    {
-        var inscope failed <- owned_script(true)
-        expect_tick(failed,true)
-        var caught=false
-        try {let active=coroutine_resume(failed)} recover {
-            caught=true
-            assert(starts_with(this_context().last_exception,"script failed"))
-        }
-        assert(caught && opened==closed)
-        expect_tick(failed,false)
-    }
-    {
-        var inscope invalid <- computation(CoroutineBuilder()) {
-            var resource & = acquire(1) |> use_resource
-            yield wait_frames(-1)
-        }
-        var caught=false
-        try {let active=coroutine_resume(invalid)} recover {
-            caught=true
-            assert(starts_with(this_context().last_exception,"wait_frames:"))
-        }
-        assert(caught && opened==closed)
     }
     let current=heap_bytes_allocated()
     assert(current==baseline)
 }
-def child(fail:bool) {
+def child() {
     return <- computation(CoroutineBuilder()) {
         var resource & = acquire(2) |> use_resource
         trace+="child;"
         yield wait_frames(2)
-        if (fail) {panic("child failed")}
         trace+="child done;"
     }
 }
-def parent(fail:bool) {
+def parent() {
     return <- computation(CoroutineBuilder()) {
         var resource & = acquire(1) |> use_resource
-        child(fail) |> yield_from
+        child() |> yield_from
         trace+="parent done;"
     }
 }
 def nesting() {
     let baseline=heap_bytes_allocated()
-    for (mode in range(3)) {
+    for (mode in range(2)) {
         trace=""; closeOrder=""
-        var inscope task <- parent(mode==2)
+        var inscope task <- parent()
         expect_tick(task,true)
         assert(trace=="child;" && opened==closed+2)
         if (mode==0) {coroutine_cancel(task)}
         else {
             expect_tick(task,true)
-            if (mode==1) {
-                expect_tick(task,false)
-                assert(trace=="child;child done;parent done;")
-            } else {
-                var caught=false
-                try {let active=coroutine_resume(task)} recover {caught=true}
-                assert(caught && trace=="child;")
-            }
+            expect_tick(task,false)
+            assert(trace=="child;child done;parent done;")
         }
         assert(opened==closed && closeOrder=="21")
     }

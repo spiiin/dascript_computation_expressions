@@ -200,7 +200,6 @@ def task_result_when_all_limited(var inputs:array<auto(Input)>;limit:int;var fac
 }
 
 def private ce_task_parallel_close(var child:auto) {
-    let cancelled=task_cancel(child)
-    if(cancelled && task_status(child)==TaskStatus.Failed) {ce_task_cleanup_error(task_error(child))}
+    task_cancel(child)
     delete child
 }

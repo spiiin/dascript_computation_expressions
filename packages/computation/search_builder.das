@@ -25,11 +25,7 @@ def search_once(var source:iterator<auto(T)>) : iterator<T> {
     return <- generator<T> capture(<-source) {
         var value:T
         var more=false
-        try {more=ce_sequence_next_value(source,value)} recover {
-            let message="{this_context().last_exception}"
-            sequence_close(source)
-            panic(message)
-        }
+        more=ce_sequence_next_value(source,value)
         sequence_close(source)
         if(more) {yield value}
         return false
@@ -54,11 +50,7 @@ def search_take(var source:iterator<auto(T)>; limit:int) : iterator<T> {
         while(remaining>0) {
             var value:T
             var more=false
-            try {more=ce_sequence_next_value(source,value)} recover {
-                let message="{this_context().last_exception}"
-                sequence_close(source)
-                panic(message)
-            }
+            more=ce_sequence_next_value(source,value)
             if(!more) {break}
             remaining--
             if(remaining==0) {sequence_close(source)}
@@ -69,14 +61,9 @@ def search_take(var source:iterator<auto(T)>; limit:int) : iterator<T> {
     } finally {ce_sequence_finalize($ {sequence_close(source)})}
 }
 
-// Always attempt both closes, even if one finalizer throws.
 def ce_search_close_pair(var left:iterator<auto(T)>;var right:iterator<T>) {
-    var failure=""
-    try {sequence_close(left)} recover {failure="{this_context().last_exception}"}
-    try {sequence_close(right)} recover {
-        if(failure=="") {failure="{this_context().last_exception}"}
-    }
-    if(failure!="") {panic(failure)}
+    sequence_close(left)
+    sequence_close(right)
 }
 
 // Ordered alternatives: exhaust left, then right. Duplicates are retained.
@@ -87,14 +74,8 @@ def search_append(var left:iterator<auto(T)>;var right:iterator<T>) : iterator<T
             while(true) {
                 var value:T
                 var more=false
-                try {
-                    if(side==0) {more=ce_sequence_next_value(left,value)}
-                    else {more=ce_sequence_next_value(right,value)}
-                } recover {
-                    let message="{this_context().last_exception}"
-                    ce_search_close_pair(left,right)
-                    panic(message)
-                }
+                if(side==0) {more=ce_sequence_next_value(left,value)}
+                else {more=ce_sequence_next_value(right,value)}
                 if(!more) {break}
                 yield value
             }

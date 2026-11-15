@@ -69,8 +69,8 @@ task_error, task_cancel, task_scope, task_from_poll, task_after_polls.
 | `validation_ok(value)`, `validation_error(message,type<T>)`, `left |> validation_zip(right)` | Проверки и объединение независимых ошибок |
 | `deferred(builder,data) $(snapshot) {...}`, `deferred(builder) {...}` | Владеющий снимок для повторных запусков |
 | `run_deferred(task)` | Новый запуск; task передаётся изменяемым владельцем |
-| `sequence_each(source, action)` | Защищённый обход и закрытие источника, включая исключение action |
-| `sequence_each_move(source, action)` | Защищённый обход owning-элементов по ссылке |
+| `sequence_each(source, action)` | Обход и закрытие источника |
+| `sequence_each_move(source, action)` | Обход owning-элементов по ссылке и закрытие источника |
 | `sequence_next_move(source, value)` | Получить следующий элемент перемещением, возвращает bool |
 | `sequence_close(source)` | Явное закрытие итератора |
 | `next_frame()`, `wait_frames(count)` | События ожидания Coroutine, выдаются через yield |
@@ -93,16 +93,17 @@ handles и stack blocks; каждый run клонирует рабочие да
 - `coroutine_forget`, `coroutine_prune` — удалить завершённые записи;
 - `coroutine_task_count`, `coroutine_slot_count` — число задач / слотов;
 - `coroutine_close(scheduler)` — закрыть все задачи;
-- `coroutine_scope($(var scheduler:CoroutineScheduler) {...})` — защищённая область scheduler.
+- `coroutine_scope($(var scheduler:CoroutineScheduler) {...})` — область scheduler: при выходе закрывает его задачи.
 
 ## CE-маркеры и расширение
 
 `source |> bind`, `left |> and_bind(right) |> bind`, `return value`,
 `return source |> return_from`, `yield value`, `source |> yield_from`,
-`resource |> use_resource`, `try_finally(body,cleanup)`, `try_with(body,handler)`
+`resource |> use_resource`, `try_finally(body,cleanup)`
 раскрываются макросом. Поддержка зависит от builder. and_bind вычисляет фабрики
 достигнутой группы слева направо; у Task затем кооперативно опрашивает детей. Не запускает
-потоки; Error/None не являются исключениями.
+потоки. Error/None — значения; panic фатален и не перехватывается, `try_with`
+удалён, см. [семантика builders](CE_SEMANTICS.md).
 
 `identity_builder.das` и `main.das` в экспортированном примере показывают
 минимальный CeValueProtocol с ce_bind/ce_unwrap/ce_return/ce_zero/ce_combine.

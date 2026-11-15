@@ -72,9 +72,9 @@ $env:DASLANG_EXE = & ./.github/scripts/install-daslang.ps1 -Destination ./.work/
 ./run_aot.ps1
 ```
 
-Основной runner выполняет 308 проверок файлов, диагностику, экспорт и проверки
-раскрытия оптимизаций. Набор `mode_tests.json` содержит 76 тестов и примеров;
-строгий AOT-хост исполняет 68 из них. Генерация C++ отдельно не означает успех AOT runtime.
+Основной runner выполняет 291 проверку файлов, диагностику, экспорт и проверки
+раскрытия оптимизаций. Набор `mode_tests.json` содержит 73 теста и примера;
+строгий AOT-хост исполняет 66 из них. Генерация C++ отдельно не означает успех AOT runtime.
 Тесты TCP/HTTP/WebSocket используют локальные серверы; GLFW-тест создаёт скрытое окно.
 
 [GitHub Actions](https://github.com/spiiin/dascript_computation_expressions/actions)

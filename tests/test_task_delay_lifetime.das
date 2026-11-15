@@ -1,7 +1,6 @@
 options gen2
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_scheduler.das
-require daslib/rtti
 require daslib/strings_boost
 var opened=0
 var closed=0
@@ -73,13 +72,11 @@ def checks() {
     verify(opened==closed)
     {
         var scheduler <- task_scheduler(type<int>)
-        var caught=false
-        try {task_scheduler_scope(scheduler,$(var owner){
+        task_scheduler_scope(scheduler,$(var owner){
             let id=task_spawn(owner,job(100))
             verify(task_tick(owner,0)==1)
-            panic("host failed")
-        })} recover {caught=starts_with(this_context().last_exception,"host failed")}
-        verify(caught && opened==closed && effects==before)
+        })
+        verify(opened==closed && effects==before)
     }
     {
         var inscope scheduler <- task_scheduler(type<int>)

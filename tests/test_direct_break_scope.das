@@ -5,9 +5,9 @@ require ../packages/computation/computation.das
 [export]
 def main() {
     let result = computation(ResultBuilder()) {
-        try_with($ {
+        try_finally($ {
             break
-        }, $(message : string) {
+        }, $ {
         })
     }
     print("{result}\n")

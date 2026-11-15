@@ -211,21 +211,9 @@ def test_scopes_inside_a_loop() {
         }
     }
     assert(result is err && opened[0] == 1 && closed[0] == 1 && opened[1] == 1 && closed[1] == 1 && opened[2] == 0)
-    var recovered = 0
-    let guarded = computation(ResultBuilder()) {
-        for (i in range(3)) {
-            try_with($ {
-                if (i == 1) { panic("boom") }
-            }, $(message : string) {
-                recovered++
-            })
-        }
-        return recovered
-    }
-    assert(guarded is ok && (guarded as ok) == 1)
 }
 
-// try_with, try_finally and the scope after use_resource are blocks handed to
+// try_finally and the scope after use_resource are blocks handed to
 // the builder. A break or continue inside them still reaches the loop, and
 // the resource is released and the cleanup runs on the way out.
 def test_leaving_from_scopes() {
@@ -265,20 +253,21 @@ def test_leaving_from_scopes() {
     assert(opened[0] == 1 && closed[0] == 1 && opened[1] == 1 && closed[1] == 1 && opened[2] == 0)
     var total = 0
     var count = 0
+    cleanups = 0
     let guarded = computation(ResultBuilder()) {
         while (true) {
             count++
-            try_with($ {
+            try_finally($ {
                 if (count == 2) { continue }
                 if (count == 4) { break }
                 total += count
-            }, $(message : string) {
-                total = -1
+            }, $ {
+                cleanups++
             })
         }
         return total
     }
-    assert(guarded is ok && (guarded as ok) == 4 && count == 4)
+    assert(guarded is ok && (guarded as ok) == 4 && count == 4 && cleanups == 4)
     // Only the loop that holds the scope is left.
     var inner = 0
     var outer = 0

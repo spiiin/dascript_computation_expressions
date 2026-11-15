@@ -35,10 +35,7 @@ struct CoroutineTaskRecord {
 def private coroutine_stop_record(var record:CoroutineTaskRecord) {
     if (!record.occupied || record.status!=CoroutineStatus.Running) {return}
     record.status=CoroutineStatus.Cancelled
-    try {coroutine_cancel(record.source)} recover {
-        record.error="{this_context().last_exception}"
-        record.status=CoroutineStatus.Failed
-    }
+    coroutine_cancel(record.source)
 }
 def private coroutine_dispose_records(var records:array<CoroutineTaskRecord>; head:int) {
     ce_sequence_finalize($ {
@@ -79,34 +76,31 @@ def private coroutine_check_id(scheduler:CoroutineScheduler; id:CoroutineTaskId)
     if (!coroutine_valid(scheduler,id)) {panic("coroutine scheduler: invalid or stale task id")}
 }
 
-// Consumes source even if registration is rejected. IDs are local to a scheduler.
+// Consumes source even if registration is rejected: a rejected source is closed
+// before the panic, since nothing after a panic would close it. IDs are local
+// to a scheduler.
 def coroutine_spawn(var scheduler:CoroutineScheduler; var source:iterator<CoroutineFrame>) : CoroutineTaskId {
+    if (scheduler.busy || scheduler.closed) {coroutine_cancel(source)}
     var inscope record <- CoroutineTaskRecord(source <- source,status=CoroutineStatus.Running,error="",
         generation=uint64(1),occupied=true)
     var slot=0
-    try {
-        coroutine_check_idle(scheduler)
-        if (scheduler.closed) {panic("coroutine scheduler: scheduler is closed")}
-        if (scheduler.owner==uint64(0)) {scheduler.owner=coroutine_new_owner()}
-        if (scheduler.free_head!=0) {
-            slot=scheduler.free_head
-            scheduler.free_head=scheduler.tasks[slot-1].next_free
-            record.generation=scheduler.tasks[slot-1].generation+uint64(1)
-            scheduler.tasks[slot-1] <- record
-        } else {
-            scheduler.tasks |> emplace(record)
-            slot=length(scheduler.tasks)
-        }
-        scheduler.tasks[slot-1].previous=scheduler.tail
-        if (scheduler.tail!=0) {scheduler.tasks[scheduler.tail-1].next=slot}
-        else {scheduler.head=slot}
-        scheduler.tail=slot
-        scheduler.count++
-    } recover {
-        let message="{this_context().last_exception}"
-        coroutine_cancel(record.source)
-        panic(message)
+    coroutine_check_idle(scheduler)
+    if (scheduler.closed) {panic("coroutine scheduler: scheduler is closed")}
+    if (scheduler.owner==uint64(0)) {scheduler.owner=coroutine_new_owner()}
+    if (scheduler.free_head!=0) {
+        slot=scheduler.free_head
+        scheduler.free_head=scheduler.tasks[slot-1].next_free
+        record.generation=scheduler.tasks[slot-1].generation+uint64(1)
+        scheduler.tasks[slot-1] <- record
+    } else {
+        scheduler.tasks |> emplace(record)
+        slot=length(scheduler.tasks)
     }
+    scheduler.tasks[slot-1].previous=scheduler.tail
+    if (scheduler.tail!=0) {scheduler.tasks[scheduler.tail-1].next=slot}
+    else {scheduler.head=slot}
+    scheduler.tail=slot
+    scheduler.count++
     return CoroutineTaskId(owner=scheduler.owner,slot=slot,generation=scheduler.tasks[slot-1].generation)
 }
 def coroutine_status(scheduler:CoroutineScheduler; id:CoroutineTaskId) : CoroutineStatus {
@@ -127,7 +121,9 @@ def coroutine_cancel(var scheduler:CoroutineScheduler; id:CoroutineTaskId) : boo
     return true
 }
 
-// One resume per running task, in registration order. Failures are isolated.
+// One resume per running task, in registration order. A panic in a coroutine's
+// body is caught here, and nowhere else: the coroutine becomes Failed and is
+// closed, which releases what its body still owned.
 def coroutine_tick(var scheduler:CoroutineScheduler) : int {
     coroutine_check_idle(scheduler)
     if (scheduler.closed) {return 0}
@@ -146,6 +142,7 @@ def coroutine_tick(var scheduler:CoroutineScheduler) : int {
                     record.error="{this_context().last_exception}"
                     record.status=CoroutineStatus.Failed
                 }
+                if (record.status==CoroutineStatus.Failed) {coroutine_cancel(record.source)}
             }
             slot=record.next
         }
@@ -213,14 +210,10 @@ def coroutine_prune(var scheduler:CoroutineScheduler) : int {
 def coroutine_task_count(scheduler:CoroutineScheduler) : int {return scheduler.count}
 def coroutine_slot_count(scheduler:CoroutineScheduler) : int {return length(scheduler.tasks)}
 
-// Protect the owner from native exceptions in the host game loop too.
+// A scheduler for the length of a block: leaving the block closes its tasks.
 def coroutine_scope(body:block<(var scheduler:CoroutineScheduler):void>) {
     var scheduler:CoroutineScheduler
-    try {invoke(body,scheduler)} recover {
-        let message="{this_context().last_exception}"
-        delete scheduler
-        panic(message)
-    }
+    invoke(body,scheduler)
     delete scheduler
 }
 

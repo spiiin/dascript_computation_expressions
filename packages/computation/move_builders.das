@@ -44,7 +44,7 @@ def ce_bind(builder:MoveResultBuilder; var source:Result<auto(T);string>;
     var inscope owner <- source
     if (owner is err) {return <- variant type<R>(err=owner as err)}
     var inscope result:R
-    try {result <- invoke(next,owner as ok)} recover {ce_owned_source_rethrow(owner)}
+    result <- invoke(next,owner as ok)
     return <- result
 }
 def ce_combine(builder:MoveResultBuilder; first:Result<CeUnit;string>; next:block<():auto(R)>) : R {
@@ -54,7 +54,6 @@ def ce_combine(builder:MoveResultBuilder; first:Result<CeUnit;string>; next:bloc
 def ce_loop_failed(builder:MoveResultBuilder; result:Result<CeUnit;string>) {return result is err}
 def ce_collect_append(builder:MoveResultBuilder; var total:Result<CeUnit;string>;
                       step:Result<CeUnit;string>) {if (!(total is err)) {total=step}}
-def ce_collect_rethrow(builder:MoveResultBuilder; var result:auto) {ce_owned_source_rethrow(result)}
 def ce_merge_sources(builder:MoveResultBuilder; var left:Result<auto;string>;
                      var right:Result<auto;string>) {
     var inscope a <- left
@@ -87,7 +86,7 @@ def ce_bind(builder:MoveOptionBuilder; var source:Option<auto(T)>;
     var inscope owner <- source
     if (owner is none) {return <- default<R>}
     var inscope result:R
-    try {result <- invoke(next,owner as some)} recover {ce_owned_source_rethrow(owner)}
+    result <- invoke(next,owner as some)
     return <- result
 }
 def ce_combine(builder:MoveOptionBuilder; first:Option<CeUnit>; next:block<():auto(R)>) : R {
@@ -97,7 +96,6 @@ def ce_combine(builder:MoveOptionBuilder; first:Option<CeUnit>; next:block<():au
 def ce_loop_failed(builder:MoveOptionBuilder; result:Option<CeUnit>) {return result is none}
 def ce_collect_append(builder:MoveOptionBuilder; var total:Option<CeUnit>;
                       step:Option<CeUnit>) {if (!(total is none)) {total=step}}
-def ce_collect_rethrow(builder:MoveOptionBuilder; var result:auto) {ce_owned_source_rethrow(result)}
 def ce_merge_sources(builder:MoveOptionBuilder; var left:Option<auto>;
                      var right:Option<auto>) {
     var inscope a <- left
@@ -109,25 +107,10 @@ def ce_merge_sources(builder:MoveOptionBuilder; var left:Option<auto>;
     }
 }
 
-def ce_try_with(builder:MoveResultBuilder; body:block<():auto(R)>; handler:block<(message:string):R>) : R {
-    var inscope result:R
-    var failed=false
-    var message=""
-    try {result <- invoke(body)} recover {
-        message="{this_context().last_exception}"
-        failed=true
-    }
-    if(failed) {return <- invoke(handler,message)}
-    return <- result
-}
 def ce_try_finally(builder:MoveResultBuilder; body:block<():auto(R)>; cleanup:block<():void>) : R {
     var inscope result:R
-    try {result <- invoke(body)} recover {
-        let message="{this_context().last_exception}"
-        invoke(cleanup)
-        panic(message)
-    }
-    try {invoke(cleanup)} recover {ce_owned_source_rethrow(result)}
+    result <- invoke(body)
+    invoke(cleanup)
     return <- result
 }
 def ce_using(builder:MoveResultBuilder; resource:auto(T); body:block<(item:T):auto(R)>;
@@ -135,34 +118,15 @@ def ce_using(builder:MoveResultBuilder; resource:auto(T); body:block<(item:T):au
     concept_assert(typeinfo can_copy(type<T>),"owned CE: move-only payloads use bind; use_resource needs a copyable handle")
     var owner=resource
     var inscope result:R
-    try {result <- invoke(body,owner)} recover {
-        let message="{this_context().last_exception}"
-        invoke(cleanup,owner)
-        panic(message)
-    }
-    try {invoke(cleanup,owner)} recover {ce_owned_source_rethrow(result)}
+    result <- invoke(body,owner)
+    invoke(cleanup,owner)
     return <- result
 }
 
-def ce_try_with(builder:MoveOptionBuilder; body:block<():auto(R)>; handler:block<(message:string):R>) : R {
-    var inscope result:R
-    var failed=false
-    var message=""
-    try {result <- invoke(body)} recover {
-        message="{this_context().last_exception}"
-        failed=true
-    }
-    if(failed) {return <- invoke(handler,message)}
-    return <- result
-}
 def ce_try_finally(builder:MoveOptionBuilder; body:block<():auto(R)>; cleanup:block<():void>) : R {
     var inscope result:R
-    try {result <- invoke(body)} recover {
-        let message="{this_context().last_exception}"
-        invoke(cleanup)
-        panic(message)
-    }
-    try {invoke(cleanup)} recover {ce_owned_source_rethrow(result)}
+    result <- invoke(body)
+    invoke(cleanup)
     return <- result
 }
 def ce_using(builder:MoveOptionBuilder; resource:auto(T); body:block<(item:T):auto(R)>;
@@ -170,12 +134,8 @@ def ce_using(builder:MoveOptionBuilder; resource:auto(T); body:block<(item:T):au
     concept_assert(typeinfo can_copy(type<T>),"owned CE: move-only payloads use bind; use_resource needs a copyable handle")
     var owner=resource
     var inscope result:R
-    try {result <- invoke(body,owner)} recover {
-        let message="{this_context().last_exception}"
-        invoke(cleanup,owner)
-        panic(message)
-    }
-    try {invoke(cleanup,owner)} recover {ce_owned_source_rethrow(result)}
+    result <- invoke(body,owner)
+    invoke(cleanup,owner)
     return <- result
 }
 

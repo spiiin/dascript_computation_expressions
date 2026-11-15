@@ -32,8 +32,7 @@ def private ce_task_erased(var handle:auto) {
         }
         return false
     } finally {ce_sequence_finalize($ {
-        let cancelled=task_cancel(handle)
-        if(cancelled && task_status(handle)==TaskStatus.Failed) {ce_task_cleanup_error(task_error(handle))}
+        task_cancel(handle)
         delete handle
     })}
     return <- task_create(events)

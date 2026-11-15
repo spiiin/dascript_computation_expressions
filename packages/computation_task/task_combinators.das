@@ -66,10 +66,7 @@ def task_when_all(var children:array<auto(C)>) {
 }
 
 def private task_release_array(var children:array<auto>) {
-    for(child in children) {
-        let error=task_release_child(child)
-        if(!empty(error)) {ce_task_cleanup_error(error)}
-    }
+    for(child in children) {task_release_child(child)}
     delete children
 }
 
@@ -116,18 +113,13 @@ def private task_check_child(status:TaskStatus; error:string) : bool {
     if(status==TaskStatus.Cancelled || ce_task_cancellation_requested()) {ce_task_cancelled();return false}
     return true
 }
-def private task_release_child(var task:auto) : string {
-    let cancelled=task_cancel(task)
-    var error=""
-    if(cancelled && task_status(task)==TaskStatus.Failed) {error=task_error(task)}
+def private task_release_child(var task:auto) {
+    task_cancel(task)
     delete task
-    return error
 }
 def private task_release_pair(var left:auto; var right:auto) {
-    let first=task_release_child(left)
-    let second=task_release_child(right)
-    if(!empty(first)) {ce_task_cleanup_error(first)}
-    if(!empty(second)) {ce_task_cleanup_error(second)}
+    task_release_child(left)
+    task_release_child(right)
 }
 
 def private task_pair_pending(policy:auto; left:auto; right:auto) {
@@ -276,7 +268,7 @@ def task_result_race(var left:auto;var right:auto) {
             yield <- task_pending(type<Result<RacePayload;RaceFault>>)
         }
         return false
-    } finally {ce_sequence_finalize($ {let error=task_release_child(raced);if(!empty(error)){ce_task_cleanup_error(error)}})}
+    } finally {ce_sequence_finalize($ {task_release_child(raced)})}
     return <- task_create(events)
 }
 

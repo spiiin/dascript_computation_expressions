@@ -36,17 +36,13 @@ def ce_zip_cursor(var source:auto ==const) {
 def ce_zip_next(var cursor:tuple<stream:iterator<auto(T)>;slot:auto;mode:auto>) : bool {
     unsafe {return _builtin_iterator_iterate(cursor.stream,addr(cursor.slot))}
 }
-// Always attempt every close; preserve the original producer/consumer exception.
-def ce_zip_close(var cursor:tuple<stream:iterator<auto>;slot:auto;mode:auto>; var message:string&) {
-    try { sequence_close(cursor.stream) } recover {
-        if (empty(message)) {message="{this_context().last_exception}"}
-    }
+def ce_zip_close(var cursor:tuple<stream:iterator<auto>;slot:auto;mode:auto>) {
+    sequence_close(cursor.stream)
 }
 
-def ce_zip_exception() : string {return "{this_context().last_exception}"}
 
-// A loop that walks an array by index holds the lock itself, so that it can
-// give the lock back when the body panics. A fixed array has no lock.
+// A loop that walks an array by index holds the lock a native `for` would
+// hold, and gives it back after the loop. A fixed array has no lock.
 def ce_loop_lock(source:auto ==const) {
     static_if (typeinfo is_array(source)) { __builtin_array_lock_mutable(source) }
 }
@@ -60,30 +56,15 @@ def ce_loop_unlock(var source:auto ==const) {
     static_if (typeinfo is_array(source)) { __builtin_array_unlock(source) }
 }
 
-// Protect an iterator used as a nested Sequence source, preserving ref elements.
+// An iterator used as a nested Sequence source, preserving ref elements.
 def ce_sequence_input(var source:iterator<auto(T)>) : iterator<T> {
     var cursor <- ce_zip_cursor(source)
     return <- generator<T> capture(<-cursor) {
-        while (true) {
-            var more=false
-            var failed=false
-            var message=""
-            try {more=ce_zip_next(cursor)} recover {message=ce_zip_exception();failed=true}
-            if (failed) {
-                ce_zip_close(cursor,message)
-                panic(message)
-            }
-            if (!more) {break}
+        while (ce_zip_next(cursor)) {
             static_if (typeinfo is_ref_value(type<T>)) {
                 unsafe {yield *cursor.slot}
             } else {yield cursor.slot}
         }
         return false
-    } finally {
-        ce_sequence_finalize($ {
-            var message=""
-            ce_zip_close(cursor,message)
-            if (!empty(message)) {panic(message)}
-        })
-    }
+    } finally {ce_sequence_finalize($ {ce_zip_close(cursor)})}
 }

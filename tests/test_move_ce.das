@@ -1,8 +1,6 @@
 options gen2
 require ../packages/computation/computation.das
 require ../packages/computation/deferred_computation.das
-require daslib/rtti
-require daslib/strings_boost
 def inventory() {
     var inscope items <- [1,2,3]
     return <- move_ok(items)
@@ -66,20 +64,6 @@ def failures() {
     let current=heap_bytes_allocated()
     assert(baseline==current)
 }
-def panic_cleanup() {
-    let baseline=heap_bytes_allocated()
-    var caught=false
-    try {
-        var inscope result <- computation(MoveResultBuilder()) {
-            var items & = inventory() |> bind
-            panic("payload panic")
-            return <- items
-        }
-    } recover {caught=true;assert(starts_with(this_context().last_exception,"payload panic"))}
-    assert(caught)
-    let current=heap_bytes_allocated()
-    assert(baseline==current)
-}
 def groups() {
     let baseline=heap_bytes_allocated()
     {
@@ -115,14 +99,6 @@ def control() {
         assert(result is err && attempted==3 && after==0)
         var inscope forwarded <- computation(MoveResultBuilder()) {return inventory() |> return_from}
         assert(length(forwarded as ok)==3)
-        var inscope recovered <- computation(MoveResultBuilder()) {
-            try_with($ {
-                var items & = inventory() |> bind
-                panic("recover")
-                return <- items
-            }, $(message:string) {return inventory() |> return_from})
-        }
-        assert(length(recovered as ok)==3)
         var inscope scoped <- computation(MoveResultBuilder()) {
             let handle=Handle() |> use_resource
             var items & = inventory() |> bind
@@ -142,7 +118,6 @@ def pack() {
     p.items |> push(42)
     return <- move_ok(p)
 }
-def explode() : Result<array<int>;string> {panic("source panic");return <- move_error("unreachable",type<array<int>>)}
 def more_ownership() {
     let baseline=heap_bytes_allocated()
     {
@@ -186,14 +161,6 @@ def more_ownership() {
         (a as ok).items[0]=99
         assert((b as ok).items[0]==42 && (b as ok).items[1]==7)
     }
-    var caught=false
-    try {
-        var inscope bad <- computation(MoveResultBuilder()) {
-            var pair & = inventory() |> and_bind(explode()) |> bind
-            return <- pair
-        }
-    } recover {caught=true}
-    assert(caught)
     let current=heap_bytes_allocated()
     assert(current==baseline)
 }
@@ -206,13 +173,6 @@ def finally_ownership() {
         }
         assert(length(r as ok)==3 && closed==1)
     }
-    var caught=false
-    try {
-        var inscope r <- computation(MoveResultBuilder()) {
-            try_finally($ {var items & = inventory() |> bind;return <- items}, $ {closed++;panic("cleanup")})
-        }
-    } recover {caught=true}
-    assert(caught && closed==2)
     let current=heap_bytes_allocated()
     assert(current==baseline)
 }
@@ -248,17 +208,6 @@ def owned_loops() {
             }, $ {closed++})
         }
         assert(failed is err && closed==1)
-        var caught=false
-        try {
-            var inscope r <- computation(MoveOptionBuilder()) {
-                try_finally($ {
-                    var items & = optional_inventory() |> bind
-                    panic("option body")
-                    return <- items
-                }, $ {closed++})
-            }
-        } recover {caught=true}
-        assert(caught && closed==2)
     }
     let current=heap_bytes_allocated()
     assert(current==baseline)
@@ -266,7 +215,7 @@ def owned_loops() {
 
 [export]
 def main() {
-    for(round in range(5)) {success();failures();panic_cleanup();groups();control();more_ownership();finally_ownership();owned_loops()}
+    for(round in range(5)) {success();failures();groups();control();more_ownership();finally_ownership();owned_loops()}
     assert(disposed==5)
     print("move-only CE checks OK\n")
 }

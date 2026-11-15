@@ -90,33 +90,6 @@ def check() {
         if(asc[i-1].score==asc[i].score) {verify(asc[i-1].id<asc[i].id)}
         if(desc[i-1].score==desc[i].score) {verify(desc[i-1].id<desc[i].id)}
     }
-    // Owning group sources are released if a continuation throws.
-    var groupFailed=false
-    try {
-        var inscope badReport <- computation(QueryBuilder(type<string>)) {
-            var group & = source |> query_group_by <| $(row:Row) {return row.team} |> bind
-            if(group.key=="blue") {panic("group continuation")}
-            return group.key
-        }
-    } recover {groupFailed=true}
-    verify(groupFailed)
-    // All callbacks can throw after partial accumulation, without leaking.
-    var caught=false
-    var attempts=0
-    try {
-        var inscope bad <- source |> query_order_by(true) <| $(row:Row) {attempts++;if(row.id==3) {panic("order key")};return row.score}
-    } recover {caught=true}
-    verify(caught && attempts==3 && source[0].score==20)
-    caught=false;attempts=0
-    try {
-        var inscope bad <- source |> query_group_by <| $(row:Row) {attempts++;if(row.id==4) {panic("group key")};return row.team}
-    } recover {caught=true}
-    verify(caught && attempts==4)
-    caught=false;attempts=0
-    try {
-        var inscope bad <- source |> query_distinct <| $(row:Row) {attempts++;if(row.id==4) {panic("distinct key")};return row.team}
-    } recover {caught=true}
-    verify(caught && attempts==4)
 }
 [export]
 def main() {

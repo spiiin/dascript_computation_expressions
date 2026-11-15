@@ -11,7 +11,7 @@ var continued=0
 struct PendingState {remaining:int;data:array<int>}
 def finalize(var state:PendingState) {delete state.data}
 
-def owned(id,waits:int; value:auto(T); failNative:bool=false; failClose:bool=false) {
+def owned(id,waits:int; value:auto(T); failNative:bool=false) {
     opened[id]++
     var state=new PendingState(remaining=waits,data <- [1,2,3])
     return <- task_from_poll(@() {
@@ -23,7 +23,6 @@ def owned(id,waits:int; value:auto(T); failNative:bool=false; failClose:bool=fal
         closed[id]++
         order+="{id};"
         unsafe {delete state}
-        if(failClose) {panic("close {id} failed")}
     })
 }
 def reset() {
@@ -59,12 +58,6 @@ def checks() {
         var inscope task <- task_result_when_all(owned(0,0,result_ok(1),failNative=true),owned(1,3,result_ok(2)))
         verify(task_poll(task)==TaskStatus.Failed && polls[1]==0 && order=="0;1;")
         verify(starts_with(task_error(task),"child 0 failed"))
-    }
-    balanced();reset()
-    {
-        var inscope task <- task_result_when_all(owned(0,0,result_error("denied",type<int>)),owned(1,3,result_ok(2),failClose=true))
-        verify(task_poll(task)==TaskStatus.Failed && order=="0;1;")
-        verify(starts_with(task_error(task),"close 1 failed"))
     }
     balanced();reset()
     {
@@ -112,35 +105,6 @@ def checks() {
     {
         var inscope task <- task_when_all(owned(0,3,10),owned(1,3,20))
         verify(task_poll(task)==TaskStatus.Waiting)
-    }
-    balanced();reset()
-    {
-        var inscope task <- task_when_all(owned(0,3,10,failClose=true),owned(1,3,20,failClose=true))
-        verify(task_cancel(task) && task_status(task)==TaskStatus.Failed && order=="0;1;")
-        verify(starts_with(task_error(task),"close 0 failed"))
-    }
-    balanced();reset()
-    {
-        var inscope task <- task_when_all(owned(0,0,10,true),owned(1,3,20,failClose=true))
-        verify(task_poll(task)==TaskStatus.Failed && order=="0;1;")
-        verify(starts_with(task_error(task),"child 0 failed"))
-    }
-    balanced();reset()
-    {
-        var inscope task <- task_race(owned(0,0,10),owned(1,3,20,failClose=true))
-        verify(task_poll(task)==TaskStatus.Failed && order=="0;1;")
-        verify(starts_with(task_error(task),"close 1 failed"))
-    }
-    balanced();reset()
-    {
-        var inscope task <- owned(0,1,10)
-        var caught=false
-        try {var inscope invalid <- task_when_all(task,task)} recover {caught=true}
-        verify(caught && task_status(task)==TaskStatus.Created)
-        caught=false
-        try {var inscope invalid <- task_race(task,task)} recover {caught=true}
-        verify(caught && task_status(task)==TaskStatus.Created)
-        verify(task_cancel(task))
     }
     balanced();reset()
     {

@@ -49,46 +49,26 @@ def private ce_deferred_hold(var body:lambda<():auto(R)>) {
 def ce_deferred_create(builder:auto(B); data:auto(E); body:function<(frame:tuple<marker:int;builder:B -const -&;value:E -const -&>?):auto(R)>; policy:auto(P)) {
     var savedBuilder=default<B -const -&>
     var savedData=default<E -const -&>
-    try { ce_deferred_copy_builder(savedBuilder,builder,policy); savedData := data } recover {
-        let message="{this_context().last_exception}"
-        ce_deferred_delete(savedData)
-        ce_deferred_delete(savedBuilder)
-        panic(message)
-    }
+    ce_deferred_copy_builder(savedBuilder,builder,policy); savedData := data
     var thunk <- @ capture(move(savedBuilder),move(savedData),copy(body)) : R { {
         var frame = new tuple<marker:int;builder:B -const -&;value:E -const -&>()
         static_if (typeinfo is_iterator(type<R>)) {
             var source:R
-            try {
-                ce_deferred_copy_builder(frame.builder,savedBuilder,default<P>)
-                frame.value := savedData
-                source <- invoke(body,frame)
-            } recover {
-                let message="{this_context().last_exception}"
-                sequence_close(source)
-                unsafe { delete frame }
-                panic(message)
-            }
+            ce_deferred_copy_builder(frame.builder,savedBuilder,default<P>)
+            frame.value := savedData
+            source <- invoke(body,frame)
             // The child closes before cleanup so its resource finalizers can
             // still access the snapshot. The pointer is moved into its owner.
             var cleanup <- @ capture(move(frame)) { unsafe { delete frame } }
             return <- ce_deferred_wrap_sequence(source,cleanup)
         } static_elif (typeinfo can_copy(type<R>)) {
             var result=default<R>
-            try { ce_deferred_copy_builder(frame.builder,savedBuilder,default<P>); frame.value := savedData; result=invoke(body,frame) } recover {
-                let message="{this_context().last_exception}"
-                unsafe { delete frame }
-                panic(message)
-            }
+            ce_deferred_copy_builder(frame.builder,savedBuilder,default<P>); frame.value := savedData; result=invoke(body,frame)
             unsafe { delete frame }
             return result
         } else {
             var inscope result:R
-            try { ce_deferred_copy_builder(frame.builder,savedBuilder,default<P>); frame.value := savedData; result <- invoke(body,frame) } recover {
-                let message="{this_context().last_exception}"
-                unsafe { delete frame }
-                panic(message)
-            }
+            ce_deferred_copy_builder(frame.builder,savedBuilder,default<P>); frame.value := savedData; result <- invoke(body,frame)
             return <- ce_deferred_finish(result,frame,policy)
         }
     } } finally { ce_deferred_delete(savedData); ce_deferred_delete(savedBuilder) }
@@ -115,16 +95,7 @@ def ce_deferred_reference_scope(var source:iterator<auto(T)&>; var cleanup:lambd
         var slot:T -&?
         while (true) {
             var more=false
-            var failed=false
-            var message=""
-            try {unsafe {more=_builtin_iterator_iterate(state.source,addr(slot))}} recover {
-                message="{this_context().last_exception}"
-                failed=true
-            }
-            if (failed) {
-                ce_deferred_reference_close(state)
-                panic(message)
-            }
+            unsafe {more=_builtin_iterator_iterate(state.source,addr(slot))}
             if (!more) {ce_deferred_reference_close(state);break}
             unsafe {yield *slot}
         }

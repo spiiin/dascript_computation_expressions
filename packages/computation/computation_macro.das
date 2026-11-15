@@ -133,8 +133,7 @@ def ce_merge_source(node : ExpressionPtr; builder : string; var error : string&)
 }
 
 // Resumable sources transfer ownership before suspension. Materialize each
-// product once. Save exceptions before running any source finalizer, outside
-// recover, so a close callback cannot replace the original factory error.
+// product once.
 def ce_resumable_merge_source(node:ExpressionPtr; builder:string; var error:string&) : ExpressionPtr {
     if(!(node is ExprCall) || (node as ExprCall).name!="and_bind") {return ce_normalize_source(builder,node)}
     let call=node as ExprCall
@@ -145,36 +144,25 @@ def ce_resumable_merge_source(node:ExpressionPtr; builder:string; var error:stri
     let ln=ce_unique_name("__await_left",node.at)
     let rn=ce_unique_name("__await_right",node.at)
     let result=ce_unique_name("__await_product",node.at)
-    let failure=result+"_error"
-    let failed=result+"_failed"
     let location="{node.at.fileInfo.name}:{int(node.at.line)}:{int(node.at.column)}"
     ce_merge_locations |> insert(location,new ExprConstBool(at=node.at,value=true))
     let merged=qmacro(ce_merge_sources($i(builder),$i(ln),$i(rn)))
     let checked=qmacro(typeinfo ce_checked_merge(ce_merge_origin($i(result),$i(builder),$v(location),$i(ln))))
     let closeLeft=qmacro_expr() {static_if(typeinfo can_delete($i(ln))) {delete $i(ln)}}
     let closeRight=qmacro_expr() {static_if(typeinfo can_delete($i(rn))) {delete $i(rn)}}
-    let closeResult=qmacro_expr() {static_if(typeinfo can_delete($i(result))) {delete $i(result)}}
-    // These are explicit owners, not inscope: cleanup must run after the primary
-    // exception is saved, and a returned product already owns both children.
+    // These are explicit owners, not inscope: a returned product already owns
+    // both children.
     return qmacro(invoke($ {
         var $i(ln):typedecl($e(left))
         static_if(typeinfo can_copy($e(left))) {$i(ln)=$e(left)}
         else {$i(ln) <- $e(left)}
         var $i(rn):typedecl($e(right))
-        var $i(failure)=""
-        var $i(failed)=false
-        try {
-            static_if(typeinfo can_copy($e(right))) {$i(rn)=$e(right)}
-            else {$i(rn) <- $e(right)}
-        } recover {$i(failed)=true;$i(failure)=ce_exception_message()}
-        if($i(failed)) {$e(closeLeft);$e(closeRight);panic($i(failure))}
+        static_if(typeinfo can_copy($e(right))) {$i(rn)=$e(right)}
+        else {$i(rn) <- $e(right)}
         var $i(result):typedecl($e(merged))
-        try {
-            static_if(typeinfo can_copy($e(merged))) {$i(result)=$e(merged)}
-            else {$i(result) <- $e(merged)}
-        } recover {$i(failed)=true;$i(failure)=ce_exception_message()}
+        static_if(typeinfo can_copy($e(merged))) {$i(result)=$e(merged)}
+        else {$i(result) <- $e(merged)}
         $e(closeLeft);$e(closeRight)
-        if($i(failed)) {$e(closeResult);panic($i(failure))}
         return <- $e(checked)
     }))
 }
@@ -422,7 +410,7 @@ def private ce_stage_retype_argument(var next : ExpressionPtr; source : TypeDecl
 }
 
 // Run a continuation while keeping an owned temporary alive. Borrowed arrays
-// remain borrowed; factories and intermediate products are released on panic too.
+// remain borrowed; factories and intermediate products are released after it.
 // `retype` is false when the continuation's argument is not typedecl(source).
 def ce_source_apply(source, next : ExpressionPtr; collect : bool; move_result:bool=true; retype:bool=true) : ExpressionPtr {
     if (!collect) { return qmacro(invoke($e(next), $e(source))) }
@@ -435,7 +423,7 @@ def ce_source_apply(source, next : ExpressionPtr; collect : bool; move_result:bo
     return ce_stage("apply", source.at, probes, payload)
 }
 // Copyable and borrowed sources go straight to the continuation; an owned
-// temporary is scoped here and released if the continuation throws.
+// temporary is scoped here and released when the continuation returns.
 def private ce_stage_apply_emit(source, next : ExpressionPtr; move_result : bool; at : LineInfo) : ExpressionPtr {
     if (source._type.canCopy || ce_stage_borrowed(source)) {
         return qmacro(invoke($e(next), $e(source)))
@@ -743,9 +731,7 @@ def private ce_loop_fallback(builder, accumulated : string; loop : ExpressionPtr
     if (collect_mode) {
         return qmacro(ce_delay($i(builder), $ {
             var inscope $i(accumulated) <- ce_zero($i(builder))
-            try { $e(loop); } recover {
-                ce_collect_rethrow($i(builder), $i(accumulated))
-            }
+            $e(loop);
             return <- $i(accumulated)
         }))
     }
@@ -789,12 +775,11 @@ def private ce_loop_for_fallback(original : ExprFor?; sources : array<Expression
 }
 // `inlined`: the body is a direct scope's own statements, not a computation to
 // hand to a hook. Only a for needs the stage then, to type its sources.
-// One array or fixed array, walked by index with the body inline. A native
-// `for` would hold the array's lock itself and keep it if the body panics.
+// One array or fixed array, walked by index with the body inline, under the
+// same lock a native `for` holds.
 def private ce_loop_indexed(original : ExprFor?; source, body : ExpressionPtr; at : LineInfo) : ExpressionPtr {
     let name = ce_unique_name("__ce_loop_array", at)
     let index = ce_unique_name("__ce_loop_index", at)
-    let message = ce_unique_name("__ce_loop_error", at)
     var element = qmacro($i(name)[$i(index)])
     element.genFlags.alwaysSafe = true
     var alias = qmacro_expr() { var $i(string(original.iterators[0])) & = $e(element) } as ExprLet
@@ -806,24 +791,16 @@ def private ce_loop_indexed(original : ExprFor?; source, body : ExpressionPtr; a
     var next : ExpressionPtr
     if (source._type.isConst) {
         next = qmacro($($i(name) : typedecl($e(source))) {
-            var $i(message) = ""
             ce_loop_lock($i(name))
-            try {
-                for ($i(index) in range(length($i(name)))) { $b(statements); }
-            } recover { $i(message) = ce_zip_exception() }
+            for ($i(index) in range(length($i(name)))) { $b(statements); }
             ce_loop_unlock($i(name))
-            if (!empty($i(message))) { panic($i(message)) }
             return true
         })
     } else {
         next = qmacro($(var $i(name) : typedecl($e(source))) {
-            var $i(message) = ""
             ce_loop_lock($i(name))
-            try {
-                for ($i(index) in range(length($i(name)))) { $b(statements); }
-            } recover { $i(message) = ce_zip_exception() }
+            for ($i(index) in range(length($i(name)))) { $b(statements); }
             ce_loop_unlock($i(name))
-            if (!empty($i(message))) { panic($i(message)) }
             return true
         })
     }
@@ -905,8 +882,8 @@ def private ce_stage_for(var expr : ExprCallMacro?; var error : string&) : Expre
         if (arity == 1 && (only.isGoodArrayType || only.baseType == Type.tFixedArray)) {
             return ce_loop_indexed(original, sources[0], ce_stage_statement(expr, 1), ce_stage_at(expr))
         }
-        // The traversal itself is the loop: its cursors still close when a
-        // source or the body panics, and the body runs in the enclosing scope.
+        // The traversal itself is the loop: its cursors close when it ends,
+        // and the body runs in the enclosing scope.
         var names : array<string>
         for (index in range(arity)) {
             names |> push(ce_unique_name("__ce_loop_source_{index}", ce_stage_at(expr)))
@@ -936,8 +913,8 @@ def private ce_stage_for(var expr : ExprCallMacro?; var error : string&) : Expre
     if (!hook) {
         return ce_loop_for_fallback(original, sources, body, builder, collect_mode, ce_stage_flag(expr, 4), ce_stage_at(expr))
     }
-    // Preserve native zip ordering with explicitly owned cursors so
-    // producer and consumer panics cannot strand hidden iterators.
+    // Preserve native zip ordering with explicitly owned cursors, closed
+    // when the traversal ends.
     let visitor = ce_unique_name("__ce_zip_visit", ce_stage_at(expr))
     var sourceNames : array<string>
     for (index in range(arity)) {
@@ -1141,7 +1118,7 @@ class CeZipValue : AstTypeInfoMacro {
     }
 }
 
-// Explicit cursor storage remains accessible when next() or the consumer panics.
+// Explicit cursor storage: the traversal closes each cursor when it ends.
 def ce_zip_traversal(original:ExprFor?; names:array<string>; iteration:ExpressionPtr; visitor:string; directBody:ExpressionPtr) : ExpressionPtr {
     var declarations:array<ExpressionPtr>
     var initialize:array<ExpressionPtr>
@@ -1150,7 +1127,6 @@ def ce_zip_traversal(original:ExprFor?; names:array<string>; iteration:Expressio
     var cleanup:array<ExpressionPtr>
     let first=ce_unique_name("__ce_zip_first",original.at)
     let more=ce_unique_name("__ce_zip_more",original.at)
-    let message=ce_unique_name("__ce_zip_error",original.at)
     for (index in range(length(names))) {
         let source=names[index]
         let cursor=ce_unique_name("__ce_zip_cursor_{index}",original.at)
@@ -1167,7 +1143,7 @@ def ce_zip_traversal(original:ExprFor?; names:array<string>; iteration:Expressio
         binding.variables[0]._type.flags.removeConstant=false
         binding.variables[0]._type.flags.constant=false
         aliases |> push <| binding
-        cleanup |> push <| qmacro_expr() {ce_zip_close($i(cursor),$i(message))}
+        cleanup |> push <| qmacro_expr() {ce_zip_close($i(cursor))}
     }
     var consume:ExprBlock?
     if (directBody!=null) {consume=clone_expression(directBody) as ExprBlock}
@@ -1176,20 +1152,16 @@ def ce_zip_traversal(original:ExprFor?; names:array<string>; iteration:Expressio
     consume.list |> clear()
     for (statement in aliases) {consume.list |> push <| clone_expression(statement)}
     var execute=qmacro($ {
-        var $i(message)=""
-        try {
-            $b(initialize)
-            var $i(first)=true
-            while (true) {
-                var $i(more)=true
-                $b(advance)
-                $i(first)=false
-                if (!$i(more)) {break}
-                $e(consume)
-            }
-        } recover { $i(message)=ce_zip_exception() }
+        $b(initialize)
+        var $i(first)=true
+        while (true) {
+            var $i(more)=true
+            $b(advance)
+            $i(first)=false
+            if (!$i(more)) {break}
+            $e(consume)
+        }
         $b(cleanup)
-        if (!empty($i(message))) {panic($i(message))}
         return true
     })
     var executeBlock=(execute as ExprMakeBlock)._block as ExprBlock
@@ -1308,17 +1280,9 @@ def ce_collect_emit_scope(blk:ExprBlock?; start:int; builder,sink:string; owned:
     return qmacro_block(){return $e(execution)}
 }
 
-def private ce_lower_try_with(call : ExprCall?; builder : string; collect_mode, owned, direct : bool; var error : string&;
-                              escape : string = "") : ExpressionPtr {
-    if (!ce_validate_try_with(call, error)) { return null }
-    var protected_body = ce_scope((call.arguments[0] as ExprMakeBlock)._block, builder, collect_mode, error, owned, direct, escape)
-    var handler = clone_expression(call.arguments[1]) as ExprMakeBlock
-    var handler_body = handler._block as ExprBlock
-    var lowered = ce_scope(handler_body, builder, collect_mode, error, owned, direct, escape) as ExprBlock
-    handler_body.list |> clear()
-    for (entry in lowered.list) { handler_body.list |> push <| clone_expression(entry) }
-    return qmacro(ce_try_with($i(builder), $ { $e(protected_body); }, $e(handler)))
-}
+// try_with was a handler for a panic. A panic is fatal: nothing between it and
+// a handler would be released, so there is no handler.
+let CE_TRY_WITH_REMOVED = "computation: try_with is not supported: a panic is fatal and is never caught; report a failure as a value, e.g. a Result"
 def private ce_lower_try_finally(call : ExprCall?; builder : string; collect_mode, owned, direct : bool; var error : string&;
                                  escape : string = "") : ExpressionPtr {
     if (length(call.arguments) != 2 || !(call.arguments[0] is ExprMakeBlock)
@@ -1375,11 +1339,10 @@ def private ce_lower_use_resource(stmt : ExpressionPtr; call : ExprCall?; var re
 // break or continue. try_with, try_finally and use_resource still go through
 // the builder's operations.
 //
-// A `for` keeps the traversal that owns its cursors, so a panic in a source or
-// in the body still closes them; its body is the scope's own statements. A
-// return there would skip that cleanup, and a return inside try/recover is not
-// reliable under JIT, so inside a loop the scope's result is parked in an
-// outcome slot and the loop is left with break.
+// A `for` keeps the traversal that owns its cursors and closes them when it
+// ends; its body is the scope's own statements. A return there would skip
+// that cleanup, so inside a loop the scope's result is parked in an outcome
+// slot and the loop is left with break.
 //
 // The result type is not known where a failure returns: it is the type of the
 // scope's last statement. `witness` is a null pointer to that type; it is typed
@@ -1516,7 +1479,7 @@ def private ce_direct_replica(blk : ExprBlock?; start : int; builder : string) :
             // Every branch has the scope's type; the first one is enough.
             var inner <- ce_direct_replica(ce_direct_block(last is ExprIfThenElse ? (last as ExprIfThenElse).if_true : last), 0, builder)
             terminal = qmacro_block() { $b(inner); }
-        } elif (last is ExprCall && ((last as ExprCall).name == "try_with" || (last as ExprCall).name == "try_finally")
+        } elif (last is ExprCall && (last as ExprCall).name == "try_finally"
                 && length((last as ExprCall).arguments) == 2 && (last as ExprCall).arguments[0] is ExprMakeBlock) {
             var inner <- ce_direct_replica(((last as ExprCall).arguments[0] as ExprMakeBlock)._block as ExprBlock, 0, builder)
             terminal = qmacro_block() { $b(inner); }
@@ -1733,7 +1696,7 @@ def private ce_direct_statement(blk : ExprBlock?; index : int; builder, witness,
     }
     var computation : ExpressionPtr
     if (stmt is ExprCall && (stmt as ExprCall).name == "try_with") {
-        computation = ce_lower_try_with(stmt as ExprCall, builder, false, false, true, error, nested)
+        error = CE_TRY_WITH_REMOVED
     } elif (stmt is ExprCall && (stmt as ExprCall).name == "try_finally") {
         computation = ce_lower_try_finally(stmt as ExprCall, builder, false, false, true, error, nested)
     }
@@ -2022,8 +1985,8 @@ def private ce_lower_statement(blk : ExprBlock?; index : int; builder : string; 
     }
     var computation : ExpressionPtr
     if (stmt is ExprCall && (stmt as ExprCall).name == "try_with") {
-        computation = ce_lower_try_with(stmt as ExprCall, builder, collect_mode, owned, false, error)
-        if (!empty(error)) { return true }
+        error = CE_TRY_WITH_REMOVED
+        return true
     }
     if (stmt is ExprCall && (stmt as ExprCall).name == "try_finally") {
         computation = ce_lower_try_finally(stmt as ExprCall, builder, collect_mode, owned, false, error)
@@ -2115,11 +2078,11 @@ def ce_run_scope(builder:string; outcome:ExpressionPtr; owned:bool; at:LineInfo)
             static_if ($e(supported)) {
                 static_if (typeinfo can_copy(ce_run($i(builder),$i(input)))) {
                     var $i(result)=default<typedecl(ce_run($i(builder),$i(input)))>
-                    try { $i(result)=ce_run($i(builder),$i(input)) } recover { ce_owned_source_rethrow($i(input)) }
+                    $i(result)=ce_run($i(builder),$i(input))
                     return $i(result)
                 } else {
                     var inscope $i(result):typedecl(ce_run($i(builder),$i(input)))
-                    try { $i(result) <- ce_run($i(builder),$i(input)) } recover { ce_owned_source_rethrow($i(input)) }
+                    $i(result) <- ce_run($i(builder),$i(input))
                     return <- $i(result)
                 }
             } else { return <- $i(input) }
@@ -2470,35 +2433,8 @@ def ce_sequence_scope(node : ExpressionPtr; start : int; element : TypeDeclPtr; 
                 continue
             }
             if (call.name == "try_with") {
-                if (!ce_validate_try_with(call, error)) { return blk }
-                var body = ce_sequence_scope((call.arguments[0] as ExprMakeBlock)._block, 0, element, share, error, builder)
-                var handler = clone_expression(call.arguments[1]) as ExprMakeBlock
-                var handler_body = handler._block as ExprBlock
-                var fallback = ce_sequence_scope(handler_body, 0, element, share, error, builder)
-                var generated = qmacro_expr() {
-                    return <- generator<$t(element)> { $e(fallback); return false }
-                }
-                handler_body.list |> clear()
-                handler_body.list |> push <| generated
-                handler.mmFlags.isLambda = true
-                handler_body.blockFlags.isLambdaBlock = true
-                let item = ce_unique_name("__seq_recovered", stmt.at)
-                let input = ce_unique_name("__seq_try_source", stmt.at)
-                let recovery = ce_unique_name("__seq_try_handler", stmt.at)
-                var source = qmacro(invoke($ {
-                    var $i(input) <- generator<$t(element)> { $e(body); return false }
-                    var $i(recovery) <- $e(handler)
-                    return <- ce_sequence_recover($i(input), $i(recovery))
-                }))
-                var loop = qmacro_expr() { for ($i(item) in $e(source)) {} }
-                (loop as ExprFor).body = qmacro_block() {
-                    static_if (typeinfo can_copy(type<$t(element)>)) {yield $i(item)}
-                    else {yield <- $i(item)}
-                }
-                loop.at=stmt.at
-                (loop as ExprFor).body.at=stmt.at
-                output |> push <| ce_sequence_protect_loop(loop)
-                continue
+                error = CE_TRY_WITH_REMOVED
+                return blk
             }
             if (call.name == "bind") {
                 if (length(call.arguments)!=1) {
@@ -2689,20 +2625,6 @@ def ce_sequence_replace_local(body : ExpressionPtr; original, cell : string) : E
 
 
 
-def ce_validate_try_with(call : ExprCall?; var error : string&) : bool {
-    if (length(call.arguments)!=2 || !(call.arguments[0] is ExprMakeBlock)
-            || !(call.arguments[1] is ExprMakeBlock)) {
-        error="computation: try_with expects a body block and a handler block"
-        return false
-    }
-    let body=(call.arguments[0] as ExprMakeBlock)._block as ExprBlock
-    let handler=(call.arguments[1] as ExprMakeBlock)._block as ExprBlock
-    if (!empty(body.arguments) || length(handler.arguments)!=1) {
-        error="computation: try_with body takes no arguments; handler takes one string message"
-        return false
-    }
-    return true
-}
 
 
 // Only descriptors are recognized here, never concrete builder types/modules.

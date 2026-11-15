@@ -14,11 +14,7 @@ var private task_clock_samples:array<TaskClockSample>
 def ce_task_clock_scope(owner:uint64; now_ms:int64; action:block<():void>) : uint64 {
     let depth=length(task_clock_samples)
     task_clock_samples |> push(TaskClockSample(owner=owner,now_ms=now_ms))
-    try {invoke(action)} recover {
-        let message="{this_context().last_exception}"
-        task_clock_samples.resize(depth)
-        panic(message)
-    }
+    invoke(action)
     let wake=task_clock_samples[depth].wake_ms
     task_clock_samples.resize(depth)
     return wake

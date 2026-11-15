@@ -3,7 +3,6 @@ require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_combinators.das
 require daslib/strings_boost
 var effects=0
-var recovered=0
 var closed=0
 var group:CancellationToken
 
@@ -27,16 +26,6 @@ def checks() {
         var inscope task <- layer(layer(layer(cancelled_child())))
         verify(task_poll(task)==TaskStatus.Cancelled && effects==before)
         verify(empty(task_error(task)) && task_poll(task)==TaskStatus.Cancelled)
-    }
-    {
-        var inscope task <- computation(TaskBuilder(type<int>)) {
-            try_with($ {
-                let n=cancelled_child() |> bind
-                effects++
-                return n
-            },$(message:string){recovered++;return 99})
-        }
-        verify(task_poll(task)==TaskStatus.Cancelled && recovered==0 && effects==before)
     }
     group <- cancellation_token()
     {

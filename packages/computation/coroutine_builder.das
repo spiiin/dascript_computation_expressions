@@ -16,8 +16,8 @@ def wait_frames(frames:int) {
 }
 def ce_protocol(builder:CoroutineBuilder) {return ce_sequence_protocol(type<CoroutineWait>)}
 
-// Expand each suspension into exactly N frame boundaries. A yield is never
-// inside try/recover; the outer protected iterator closes this owner on panic.
+// Expand each suspension into exactly N frame boundaries. The outer iterator
+// closes this owner when it is closed.
 def ce_sequence_run(builder:CoroutineBuilder; var source:iterator<CoroutineWait>) : iterator<CoroutineFrame> {
     var frames <- generator<CoroutineFrame> capture(<-source) {
         var request=CoroutineWait()
@@ -45,11 +45,7 @@ def ce_source(builder:CoroutineBuilder; var child:iterator<CoroutineFrame>) : it
 def coroutine_resume(var task:iterator<CoroutineFrame>) : bool {
     var frame=CoroutineFrame()
     var more=false
-    try {more=ce_sequence_next_value(task,frame)} recover {
-        let message="{this_context().last_exception}"
-        sequence_close(task)
-        panic(message)
-    }
+    more=ce_sequence_next_value(task,frame)
     if (!more) {sequence_close(task)}
     return more
 }

@@ -66,14 +66,5 @@ def main() {
     }
     finished(scoped)
     verify(task_value(scoped)==7 && closes==1)
-    var inscope recovered <- computation(TaskBuilder(type<int>)) {
-        try_with($ {
-            task_after_polls(1,0) |> bind
-            panic("recover me")
-            return 1
-        },$(message:string) {return 9})
-    }
-    finished(recovered)
-    verify(task_value(recovered)==9)
     print("Task control checks OK\n")
 }

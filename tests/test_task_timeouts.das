@@ -1,14 +1,11 @@
 options gen2
 require ../packages/computation_task/task_scheduler.das
-require daslib/strings_boost
-require daslib/rtti
 var events=""
 var polled=0
 var closed=0
-def pending(name:string; fail_close:bool=false) {
+def pending(name:string) {
     return <- task_from_poll(@(){polled++;events+=name;return task_pending(type<int>)},@(){
         closed++;events+="!"+name
-        if(fail_close) {panic("timeout cleanup failed")}
     })
 }
 def boundaries() {
@@ -82,18 +79,8 @@ def timer_removal() {
 }
 def limits_and_failures() {
     var inscope scheduler <- task_scheduler(type<int>)
-    let before=closed
-    var caught=false
-    try {let id=task_spawn(scheduler,pending("bad"),TaskTimeout(after_ms=-1))} recover {
-        caught=starts_with(this_context().last_exception,"task scheduler: timeout must be non-negative")
-    }
-    verify(caught && closed==before+1 && task_count(scheduler)==0)
-    // A cleanup error preserves the timeout cause while reporting Failed.
-    let bad=task_spawn(scheduler,pending("bad",true),TaskTimeout(after_ms=0))
     let next=task_spawn(scheduler,pending("next"),TaskTimeout(after_ms=0))
     verify(task_tick(scheduler,50)==0)
-    verify(task_status(scheduler,bad)==TaskStatus.Failed && task_timed_out(scheduler,bad))
-    verify(starts_with(task_error(scheduler,bad),"timeout cleanup failed"))
     verify(task_status(scheduler,next)==TaskStatus.Cancelled && task_timed_out(scheduler,next))
     // A deadline beyond the representable signed clock must not wrap to past.
     let maxTime=9223372036854775807l

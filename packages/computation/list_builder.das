@@ -29,34 +29,22 @@ def ce_unwrap(builder : tuple<kind : ListContext; element : auto(T)>; source : a
 def ce_bind(builder : tuple<kind : ListContext; element : auto(T)>; source : auto(U)[];
             next : block<(item : U) : array<T>>) : array<T> {
     var inscope values : array<T>
-    try {
-        // Indexed traversal avoids leaving a native array iterator locked on panic.
-        for (sourceIndex in range(length(source))) {
-            let item = source[sourceIndex]
-            var inscope part <- invoke(next, item)
-            for (value in part) { values |> push(value) }
-        }
-    } recover {
-        let failure = "{this_context().last_exception}"
-        delete values
-        panic(failure)
+    // Walked by index, so the source is not locked while a continuation runs.
+    for (sourceIndex in range(length(source))) {
+        let item = source[sourceIndex]
+        var inscope part <- invoke(next, item)
+        for (value in part) { values |> push(value) }
     }
     return <- values
 }
 def ce_bind(builder : tuple<kind : ListContext; element : auto(T)>; source : array<auto(U)>;
             next : block<(item : U) : array<T>>) : array<T> {
     var inscope values : array<T>
-    try {
-        // Indexed traversal avoids leaving a native array iterator locked on panic.
-        for (sourceIndex in range(length(source))) {
-            let item = source[sourceIndex]
-            var inscope part <- invoke(next, item)
-            for (value in part) { values |> push(value) }
-        }
-    } recover {
-        let failure = "{this_context().last_exception}"
-        delete values
-        panic(failure)
+    // Walked by index, so the source is not locked while a continuation runs.
+    for (sourceIndex in range(length(source))) {
+        let item = source[sourceIndex]
+        var inscope part <- invoke(next, item)
+        for (value in part) { values |> push(value) }
     }
     return <- values
 }
@@ -77,14 +65,8 @@ def ce_combine(builder : tuple<kind : ListContext; element : auto(T)>; first : a
                next : block<() : array<T>>) : array<T> {
     var inscope values : array<T>
     for (value in first) { values |> push(value) }
-    try {
-        var inscope rest <- invoke(next)
-        for (value in rest) { values |> push(value) }
-    } recover {
-        let failure = "{this_context().last_exception}"
-        delete values
-        panic(failure)
-    }
+    var inscope rest <- invoke(next)
+    for (value in rest) { values |> push(value) }
     return <- values
 }
 def ce_list_append(var accumulated : array<auto(T)>; step : array<T>) {
@@ -93,63 +75,26 @@ def ce_list_append(var accumulated : array<auto(T)>; step : array<T>) {
 def ce_try_finally(builder : tuple<kind : ListContext; element : auto(T)>;
                    body : block<() : array<T>>; cleanup : block<() : void>) : array<T> {
     var inscope values : array<T>
-    try { values <- invoke(body) } recover {
-        let failure = "{this_context().last_exception}"
-        invoke(cleanup)
-        panic(failure)
-    }
-    try { invoke(cleanup) } recover {
-        let failure = "{this_context().last_exception}"
-        delete values
-        panic(failure)
-    }
+    values <- invoke(body)
+    invoke(cleanup)
     return <- values
 }
 def ce_using(builder : tuple<kind : ListContext; element : auto(T)>; resource : auto(U);
              body : block<(item : U) : array<T>>; cleanup : block<(var item : U) : void>) : array<T> {
     var owned = resource
     var inscope values : array<T>
-    try { values <- invoke(body, owned) } recover {
-        let failure = "{this_context().last_exception}"
-        invoke(cleanup, owned)
-        panic(failure)
-    }
-    try { invoke(cleanup, owned) } recover {
-        let failure = "{this_context().last_exception}"
-        delete values
-        panic(failure)
-    }
+    values <- invoke(body, owned)
+    invoke(cleanup, owned)
     return <- values
 }
 
 
 
-// Called from generated recovery without requiring rtti in the user's module.
-def ce_list_rethrow(var values : array<auto(T)>) {
-    let failure = "{this_context().last_exception}"
-    delete values
-    panic(failure)
-}
 
-def ce_try_with(builder : tuple<kind:ListContext;element:auto(T)>;
-                body : block<() : array<T>>; handler : block<(message:string) : array<T>>) : array<T> {
-    var inscope values : array<T>
-    var failed=false
-    var message=""
-    try { values <- invoke(body) } recover {
-        message = "{this_context().last_exception}"
-        failed=true
-    }
-    if(failed) {return <- invoke(handler, message)}
-    return <- values
-}
 
 def ce_protocol(builder : tuple<kind:ListContext;element:auto(T)>) { return CeCollectProtocol() }
 def ce_collect_append(builder : tuple<kind:ListContext;element:auto(T)>;
                       var accumulated : array<T>; step : array<T>) { ce_list_append(accumulated, step) }
-def ce_collect_rethrow(builder : tuple<kind:ListContext;element:auto(T)>; var accumulated : array<T>) {
-    ce_list_rethrow(accumulated)
-}
 
 def ce_list_merge_sources(left, right : auto) {
     var inscope values : array<typedecl(ce_source_pair(left[0], right[0]))>
@@ -175,13 +120,7 @@ def ce_merge_sources(builder : tuple<kind:ListContext;element:auto(T)>; left : a
 // One output array; no singleton arrays from ce_return for individual items.
 def ce_list_map(source : auto; mapper : block<(value:auto(U)):auto(T)>) : array<T -const -&> {
     var inscope values : array<T -const -&>
-    try {
-        for (index in range(length(source))) { values |> push(invoke(mapper, source[index])) }
-    } recover {
-        let message = "{this_context().last_exception}"
-        delete values
-        panic(message)
-    }
+    for (index in range(length(source))) { values |> push(invoke(mapper, source[index])) }
     return <- values
 }
 def ce_bind_return(builder : tuple<kind:ListContext;element:auto(T)>; source : array<auto(U)>;
@@ -196,20 +135,12 @@ def ce_list_map2(left,right:auto; mapper:block<(pair:tuple<first:auto(A);second:
     if (length(left)==0 || length(right)==0) { return <- values }
     var inscope leftSnapshot:array<A -const -&>
     var inscope rightSnapshot:array<B -const -&>
-    try {
-        for (i in range(length(left))) { leftSnapshot |> push(left[i]) }
-        for (j in range(length(right))) { rightSnapshot |> push(right[j]) }
-        for (i in range(length(leftSnapshot))) {
-            for (j in range(length(rightSnapshot))) {
-                values |> push(invoke(mapper,ce_source_pair(leftSnapshot[i],rightSnapshot[j])))
-            }
+    for (i in range(length(left))) { leftSnapshot |> push(left[i]) }
+    for (j in range(length(right))) { rightSnapshot |> push(right[j]) }
+    for (i in range(length(leftSnapshot))) {
+        for (j in range(length(rightSnapshot))) {
+            values |> push(invoke(mapper,ce_source_pair(leftSnapshot[i],rightSnapshot[j])))
         }
-    } recover {
-        let message="{this_context().last_exception}"
-        delete values
-        delete rightSnapshot
-        delete leftSnapshot
-        panic(message)
     }
     return <- values
 }
@@ -241,23 +172,14 @@ def ce_list_bind2(left,right:auto; mapper:block<(pair:tuple<first:auto(A);second
     if (length(left)==0 || length(right)==0) { return <- values }
     var inscope leftSnapshot:array<A -const -&>
     var inscope rightSnapshot:array<B -const -&>
-    try {
-        for (i in range(length(left))) { leftSnapshot |> push(left[i]) }
-        for (j in range(length(right))) { rightSnapshot |> push(right[j]) }
-        for (i in range(length(leftSnapshot))) {
-            for (j in range(length(rightSnapshot))) {
-                part <- invoke(mapper,ce_source_pair(leftSnapshot[i],rightSnapshot[j]))
-                for (k in range(length(part))) { values |> push(part[k]) }
-                delete part
-            }
+    for (i in range(length(left))) { leftSnapshot |> push(left[i]) }
+    for (j in range(length(right))) { rightSnapshot |> push(right[j]) }
+    for (i in range(length(leftSnapshot))) {
+        for (j in range(length(rightSnapshot))) {
+            part <- invoke(mapper,ce_source_pair(leftSnapshot[i],rightSnapshot[j]))
+            for (k in range(length(part))) { values |> push(part[k]) }
+            delete part
         }
-    } recover {
-        let message="{this_context().last_exception}"
-        delete part
-        delete values
-        delete rightSnapshot
-        delete leftSnapshot
-        panic(message)
     }
     return <- values
 }
@@ -307,18 +229,10 @@ def ce_bind(builder:tuple<kind:MoveListContext;element:auto(T)?>; var source:arr
     var inscope owner <- source
     var inscope values:array<T>
     var inscope part:array<T>
-    try {
-        for(i in range(length(owner))) {
-            part <- invoke(next,owner[i])
-            ce_move_list_append(values,part)
-            delete part
-        }
-    } recover {
-        let message="{this_context().last_exception}"
+    for(i in range(length(owner))) {
+        part <- invoke(next,owner[i])
+        ce_move_list_append(values,part)
         delete part
-        delete values
-        delete owner
-        panic(message)
     }
     return <- values
 }
@@ -328,16 +242,10 @@ def ce_combine(builder:tuple<kind:MoveListContext;element:auto(T)?>; var first:a
                next:block<():array<T>>) : array<T> {
     var inscope values <- first
     var inscope rest:array<T>
-    try {rest <- invoke(next);ce_move_list_append(values,rest)} recover {
-        let message="{this_context().last_exception}"
-        delete rest
-        delete values
-        panic(message)
-    }
+    rest <- invoke(next);ce_move_list_append(values,rest)
     return <- values
 }
 def ce_collect_append(builder:tuple<kind:MoveListContext;element:auto(T)?>; var values,step:array<T>) {ce_move_list_append(values,step)}
-def ce_collect_rethrow(builder:tuple<kind:MoveListContext;element:auto(T)?>; var values:array<T>) {ce_list_rethrow(values)}
 def ce_loop_failed(builder:tuple<kind:MoveListContext;element:auto(T)?>; values:array<T>) {return false}
 def ce_merge_sources(builder:tuple<kind:MoveListContext;element:auto(T)?>; left,right:auto) {
     concept_assert(typeinfo can_copy(left[0]) && typeinfo can_copy(right[0]),"move-only List: and_bind Cartesian product requires copyable input elements")
@@ -347,16 +255,8 @@ def ce_merge_sources(builder:tuple<kind:MoveListContext;element:auto(T)?>; left,
 def ce_try_finally(builder : tuple<kind : MoveListContext; element : auto(T)?>;
                    body : block<() : array<T>>; cleanup : block<() : void>) : array<T> {
     var inscope values : array<T>
-    try { values <- invoke(body) } recover {
-        let failure = "{this_context().last_exception}"
-        invoke(cleanup)
-        panic(failure)
-    }
-    try { invoke(cleanup) } recover {
-        let failure = "{this_context().last_exception}"
-        delete values
-        panic(failure)
-    }
+    values <- invoke(body)
+    invoke(cleanup)
     return <- values
 }
 
@@ -364,31 +264,11 @@ def ce_using(builder : tuple<kind : MoveListContext; element : auto(T)?>; resour
              body : block<(item : U) : array<T>>; cleanup : block<(var item : U) : void>) : array<T> {
     var owned = resource
     var inscope values : array<T>
-    try { values <- invoke(body, owned) } recover {
-        let failure = "{this_context().last_exception}"
-        invoke(cleanup, owned)
-        panic(failure)
-    }
-    try { invoke(cleanup, owned) } recover {
-        let failure = "{this_context().last_exception}"
-        delete values
-        panic(failure)
-    }
+    values <- invoke(body, owned)
+    invoke(cleanup, owned)
     return <- values
 }
 
-def ce_try_with(builder : tuple<kind:MoveListContext;element:auto(T)?>;
-                body : block<() : array<T>>; handler : block<(message:string) : array<T>>) : array<T> {
-    var inscope values : array<T>
-    var failed=false
-    var message=""
-    try { values <- invoke(body) } recover {
-        message = "{this_context().last_exception}"
-        failed=true
-    }
-    if(failed) {return <- invoke(handler, message)}
-    return <- values
-}
 
 // Opt-in consuming input with `var item & = source |> bind`, including maps
 // from owning items to ordinary copyable values.
@@ -398,18 +278,10 @@ def ce_bind(builder:tuple<kind:ListContext;element:auto(T)>; var source:array<au
     var inscope owner <- source
     var inscope values:array<T>
     var inscope part:array<T>
-    try {
-        for(i in range(length(owner))) {
-            part <- invoke(next,owner[i])
-            ce_move_list_append(values,part)
-            delete part
-        }
-    } recover {
-        let message="{this_context().last_exception}"
+    for(i in range(length(owner))) {
+        part <- invoke(next,owner[i])
+        ce_move_list_append(values,part)
         delete part
-        delete values
-        delete owner
-        panic(message)
     }
     return <- values
 }
@@ -425,7 +297,7 @@ def ce_bind(builder:tuple<kind:ListContext;element:auto(T)>; var source:auto(S)[
             next:block<(var item:auto(U)):auto(R)>) : R {
     var inscope owner:array<S>
     for(i in range(length(source))) {owner |> emplace(source[i])}
-    try {return <- ce_bind(builder,owner,next)} recover {ce_owned_source_rethrow(owner)}
+    return <- ce_bind(builder,owner,next)
     return <- default<R>
 }
 
@@ -433,7 +305,7 @@ def ce_bind(builder:tuple<kind:MoveListContext;element:auto(T)?>; var source:aut
             next:block<(var item:auto(U)):auto(R)>) : R {
     var inscope owner:array<S>
     for(i in range(length(source))) {owner |> emplace(source[i])}
-    try {return <- ce_bind(builder,owner,next)} recover {ce_owned_source_rethrow(owner)}
+    return <- ce_bind(builder,owner,next)
     return <- default<R>
 }
 
@@ -449,7 +321,7 @@ def ce_collect_sink(builder:tuple<kind:MoveListContext;element:auto(T)?>) {retur
 
 def ce_collect_into(builder:auto; body:block<(var output:array<auto(T)>):CeUnit>) : array<T> {
     var inscope output:array<T>
-    try {invoke(body,output)} recover {ce_list_rethrow(output)}
+    invoke(body,output)
     return <- output
 }
 def ce_collect_emit(builder:tuple<kind:ListContext;element:auto(T)>; var output:array<T>; value:T) {
@@ -477,14 +349,7 @@ def ce_collect_each(builder:tuple<kind:ListContext;element:auto(T)>; var output:
 // is destroyed before remaining input, matching the original owning ce_bind.
 def private ce_list_visit_owned(var output:array<auto(T)>; var source:array<auto(S)>; body:auto) : CeUnit {
     var inscope owner <- source
-    try {
-        for(i in range(length(owner))) {invoke(body,owner[i])}
-    } recover {
-        let message="{this_context().last_exception}"
-        delete output
-        delete owner
-        panic(message)
-    }
+    for(i in range(length(owner))) {invoke(body,owner[i])}
     return CeUnit()
 }
 def ce_collect_each_move(builder:tuple<kind:ListContext;element:auto(T)>; var output:array<T>;
@@ -499,13 +364,13 @@ def ce_collect_each_move(builder:tuple<kind:ListContext;element:auto(T)>; var ou
                     var source:auto(S)[]; body:block<(var item:auto(U)):CeUnit>) : CeUnit {
     var inscope owner:array<S>
     for(i in range(length(source))) {owner |> emplace(source[i])}
-    try {return ce_list_visit_owned(output,owner,body)} recover {ce_owned_source_rethrow(owner)}
+    return ce_list_visit_owned(output,owner,body)
     return CeUnit()
 }
 def ce_collect_each_move(builder:tuple<kind:MoveListContext;element:auto(T)?>; var output:array<T>;
                     var source:auto(S)[]; body:block<(var item:auto(U)):CeUnit>) : CeUnit {
     var inscope owner:array<S>
     for(i in range(length(source))) {owner |> emplace(source[i])}
-    try {return ce_list_visit_owned(output,owner,body)} recover {ce_owned_source_rethrow(owner)}
+    return ce_list_visit_owned(output,owner,body)
     return CeUnit()
 }

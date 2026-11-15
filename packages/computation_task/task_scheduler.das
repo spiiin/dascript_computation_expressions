@@ -189,39 +189,39 @@ def private task_scheduler_spawn(var scheduler:auto; var source:auto; timed:bool
         if(ce_task_is_polling(source)) {panic("task scheduler: cannot move a task being polled")}
         var inscope owned <- ce_task_source(source)
         var index=0
-        try {
-            task_scheduler_idle(scheduler)
-            if(timed && after_ms<int64(0)) {panic("task scheduler: timeout must be non-negative")}
-            var frame & = scheduler.frames[0]
-            if(frame.state.closed) {panic("task scheduler: scheduler is closed")}
-            if(frame.state.free_head!=0) {
-                index=frame.state.free_head
-                frame.state.free_head=frame.records[index-1].slot.next_free
-                frame.records[index-1].task <- owned
-                frame.records[index-1].slot=TaskSlot(generation=frame.records[index-1].slot.generation+uint64(1),occupied=true)
-            } else {
-                frame.records |> emplace((task <- owned,slot=TaskSlot(generation=uint64(1),occupied=true)))
-                index=length(frame.records)
-            }
-            frame.records[index-1].slot.name=name
-            frame.records[index-1].slot.spawned_ms=frame.state.has_time ? frame.state.now_ms : int64(-1)
-            if(task_scheduler_active(task_status(frame.records[index-1].task))) {
-                frame.records[index-1].slot.active=true
-                frame.records[index-1].slot.previous=frame.state.tail
-                if(frame.state.tail!=0) {frame.records[frame.state.tail-1].slot.next=index}
-                else {frame.state.head=index}
-                frame.state.tail=index
-                frame.state.active_count++
-                if(frame.state.cursor==0) {frame.state.cursor=index}
-                if(timed) {task_scheduler_add_timer(frame,index,after_ms)}
-            }
-            frame.state.count++
-        } recover {
-            let message="{this_context().last_exception}"
+        // A rejected registration still consumes the task: it is released before
+        // the panic, since nothing after a panic would release it.
+        task_scheduler_live(scheduler)
+        if(scheduler.frames[0].state.busy || scheduler.frames[0].state.closed || (timed && after_ms<int64(0))) {
             task_cancel(owned)
             delete owned
-            panic(message)
         }
+        task_scheduler_idle(scheduler)
+        if(timed && after_ms<int64(0)) {panic("task scheduler: timeout must be non-negative")}
+        var frame & = scheduler.frames[0]
+        if(frame.state.closed) {panic("task scheduler: scheduler is closed")}
+        if(frame.state.free_head!=0) {
+            index=frame.state.free_head
+            frame.state.free_head=frame.records[index-1].slot.next_free
+            frame.records[index-1].task <- owned
+            frame.records[index-1].slot=TaskSlot(generation=frame.records[index-1].slot.generation+uint64(1),occupied=true)
+        } else {
+            frame.records |> emplace((task <- owned,slot=TaskSlot(generation=uint64(1),occupied=true)))
+            index=length(frame.records)
+        }
+        frame.records[index-1].slot.name=name
+        frame.records[index-1].slot.spawned_ms=frame.state.has_time ? frame.state.now_ms : int64(-1)
+        if(task_scheduler_active(task_status(frame.records[index-1].task))) {
+            frame.records[index-1].slot.active=true
+            frame.records[index-1].slot.previous=frame.state.tail
+            if(frame.state.tail!=0) {frame.records[frame.state.tail-1].slot.next=index}
+            else {frame.state.head=index}
+            frame.state.tail=index
+            frame.state.active_count++
+            if(frame.state.cursor==0) {frame.state.cursor=index}
+            if(timed) {task_scheduler_add_timer(frame,index,after_ms)}
+        }
+        frame.state.count++
         return TaskId(owner=scheduler.frames[0].state.owner,slot=index,generation=scheduler.frames[0].records[index-1].slot.generation)
     }
 }
@@ -303,49 +303,47 @@ def task_tick(var scheduler:auto; now_ms:int64) : int {
         if(frame.state.closed) {return 0}
         if(now_ms<int64(0) || (frame.state.has_time && now_ms<frame.state.now_ms)) {panic("task scheduler: time must be non-negative and monotonic")}
         frame.state.busy=true
-        try {
-            let started=ref_time_ticks()
-            var starved=false
-            let wake=ce_task_clock_scope(frame.state.owner,now_ms,$ {
-                if(!frame.state.has_time) {
-                    var timer=frame.state.timer_head
-                    while(timer!=0) {
-                        frame.records[timer-1].slot.deadline_ms+=uint64(now_ms)
-                        timer=frame.records[timer-1].slot.timer_next
-                    }
-                    for(record in frame.records) {
-                        if(record.slot.occupied && record.slot.spawned_ms<int64(0)) {record.slot.spawned_ms=now_ms}
-                    }
+        let started=ref_time_ticks()
+        var starved=false
+        let wake=ce_task_clock_scope(frame.state.owner,now_ms,$ {
+            if(!frame.state.has_time) {
+                var timer=frame.state.timer_head
+                while(timer!=0) {
+                    frame.records[timer-1].slot.deadline_ms+=uint64(now_ms)
+                    timer=frame.records[timer-1].slot.timer_next
                 }
-                frame.state.now_ms=now_ms;frame.state.has_time=true
-                // All due timers close before any polling, independent of poll budget.
-                while(frame.state.timer_head!=0 && frame.records[frame.state.timer_head-1].slot.deadline_ms<=uint64(now_ms)) {
-                    let index=frame.state.timer_head
-                    frame.records[index-1].slot.timed_out=true
-                    task_cancel(frame.records[index-1].task)
-                    task_scheduler_unlink(frame,index)
+                for(record in frame.records) {
+                    if(record.slot.occupied && record.slot.spawned_ms<int64(0)) {record.slot.spawned_ms=now_ms}
                 }
-                let active_at_start=frame.state.active_count
-                let limit=frame.state.config.max_polls_per_tick<active_at_start ? frame.state.config.max_polls_per_tick : active_at_start
-                var budget=limit
-                let time_budget=frame.state.config.max_tick_usec
-                while(budget>0 && frame.state.active_count>0) {
-                    if(time_budget>0 && budget<limit && get_time_usec(started)>=time_budget) {break}
-                    let index=frame.state.cursor
-                    frame.state.cursor=frame.records[index-1].slot.next!=0 ? frame.records[index-1].slot.next : frame.state.head
-                    frame.records[index-1].slot.polls++
-                    frame.records[index-1].slot.last_poll_ms=now_ms
-                    let status=task_poll(frame.records[index-1].task)
-                    if(!task_scheduler_active(status)) {task_scheduler_unlink(frame,index)}
-                    budget--
-                }
-                // Poll budget smaller than the active set or an exhausted time budget
-                // leaves tasks that were not polled in this tick.
-                starved=frame.state.active_count>0 && limit-budget<active_at_start
-            })
-            frame.state.wake_ms=wake
-            frame.state.starved=starved
-        } recover {frame.state.busy=false;panic("{this_context().last_exception}")}
+            }
+            frame.state.now_ms=now_ms;frame.state.has_time=true
+            // All due timers close before any polling, independent of poll budget.
+            while(frame.state.timer_head!=0 && frame.records[frame.state.timer_head-1].slot.deadline_ms<=uint64(now_ms)) {
+                let index=frame.state.timer_head
+                frame.records[index-1].slot.timed_out=true
+                task_cancel(frame.records[index-1].task)
+                task_scheduler_unlink(frame,index)
+            }
+            let active_at_start=frame.state.active_count
+            let limit=frame.state.config.max_polls_per_tick<active_at_start ? frame.state.config.max_polls_per_tick : active_at_start
+            var budget=limit
+            let time_budget=frame.state.config.max_tick_usec
+            while(budget>0 && frame.state.active_count>0) {
+                if(time_budget>0 && budget<limit && get_time_usec(started)>=time_budget) {break}
+                let index=frame.state.cursor
+                frame.state.cursor=frame.records[index-1].slot.next!=0 ? frame.records[index-1].slot.next : frame.state.head
+                frame.records[index-1].slot.polls++
+                frame.records[index-1].slot.last_poll_ms=now_ms
+                let status=task_poll(frame.records[index-1].task)
+                if(!task_scheduler_active(status)) {task_scheduler_unlink(frame,index)}
+                budget--
+            }
+            // Poll budget smaller than the active set or an exhausted time budget
+            // leaves tasks that were not polled in this tick.
+            starved=frame.state.active_count>0 && limit-budget<active_at_start
+        })
+        frame.state.wake_ms=wake
+        frame.state.starved=starved
         frame.state.busy=false
         return frame.state.active_count
     }
@@ -397,11 +395,7 @@ def task_prune(var scheduler:auto) : int {
 }
 def task_scheduler_scope(var scheduler:auto(S); body:block<(var owner:S):void>) {
     var owned <- scheduler
-    try {invoke(body,owned)} recover {
-        let message="{this_context().last_exception}"
-        delete owned
-        panic(message)
-    }
+    invoke(body,owned)
     delete owned
 }
 

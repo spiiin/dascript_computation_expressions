@@ -77,16 +77,9 @@ def ce_await_input(builder:tuple<kind:AsyncSequenceContext;element:auto>;
     return <- generator<tuple<tag:TaskEventTag;ready:bool;value:T>&> capture(<-task) {
         var event:tuple<tag:TaskEventTag;ready:bool;value:T>
         while(true) {
-            var status=TaskStatus.Created
-            var message=""
-            var failed=false
-            try {status=task_poll(task)} recover {message="{this_context().last_exception}";failed=true}
-            if(status==TaskStatus.Failed) {message=task_error(task);failed=true}
-            if(failed) {
-                // Close immediately, before an enclosing try_with can resume.
-                ce_sequence_finalize($ {task_cancel(task);delete task})
-                panic(message)
-            }
+            let status=task_poll(task)
+            // A failed task fails the stream that awaits it.
+            if(status==TaskStatus.Failed) {panic(task_error(task))}
             if(status==TaskStatus.Cancelled || ce_task_cancellation_requested()) {
                 ce_task_cancelled()
                 yield event
@@ -104,8 +97,7 @@ def ce_await_input(builder:tuple<kind:AsyncSequenceContext;element:auto>;
         return false
     } finally {ce_sequence_finalize($ {
         static_if(typeinfo can_delete(event)) {delete event}
-        let cancelled=task_cancel(task)
-        if(cancelled && task_status(task)==TaskStatus.Failed) {ce_task_cleanup_error(task_error(task))}
+        task_cancel(task)
         delete task
     })}
 }
@@ -219,12 +211,7 @@ def private ce_async_sequence_close(var state:auto(State)?; cancelled:bool) {
         if(state.closed) {return}
         state.closed=true
         state.cancelled=cancelled
-        var message=""
-        try {sequence_close(state.source)} recover {message=ce_exception_message()}
-        if(!empty(message)) {
-            if(empty(state.error)) {state.error=message}
-            ce_task_cleanup_error(message)
-        }
+        sequence_close(state.source)
     }
 }
 def private ce_async_sequence_release(var state:auto(State)?) {
@@ -298,7 +285,9 @@ def async_sequence_next(stream:tuple<tag:AsyncSequenceTag;owner:iterator<auto(St
                 var more=false
                 var message=""
                 state.polling=true
-                try {more=ce_sequence_next_value(state.source,event)} recover {message=ce_exception_message()}
+                // Part of the task boundary: a producer that panics leaves a closed
+                // stream with its error, so later next-Tasks have something defined to report.
+                try {more=ce_sequence_next_value(state.source,event)} recover {message="{this_context().last_exception}"}
                 state.polling=false
                 if(!empty(message)) {
                     state.error=message

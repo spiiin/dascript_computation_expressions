@@ -60,18 +60,6 @@ def checks() {
         verify(retry.status==TaskStatus.Failed)
     }
     {
-        var inscope sem <- task_semaphore(1)
-        var inscope protected <- task_with_semaphore(sem,@() {
-            return <- task_from_poll(@(){return task_pending(type<int>)},@(){panic("cleanup failed")})
-        })
-        task_poll(protected);task_cancel(protected)
-        verify(protected.status==TaskStatus.Failed && task_channel_count(sem.channel)==1)
-        var inscope retry <- task_retry(@(attempt:int) {
-            return <- task_from_poll(@(){return task_pending(type<Result<int;string>>)},@(){panic("cleanup failed")})
-        },2)
-        task_poll(retry);task_cancel(retry);verify(retry.status==TaskStatus.Failed)
-    }
-    {
         var inscope ch <- task_channel(type<string>,1)
         unsafe {
             var inscope bytes <- [uint8('o'),uint8('k'),uint8(0)]

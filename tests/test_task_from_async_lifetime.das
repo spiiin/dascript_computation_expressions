@@ -2,7 +2,6 @@ options gen2
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_builder.das
 require daslib/async_boost
-require daslib/rtti
 require daslib/strings_boost
 var opened=0
 var closed=0
@@ -10,7 +9,6 @@ var parentOpened=0
 var parentClosed=0
 var after=0
 var order=""
-var callbackCount=0
 struct Buffer {values:array<int>;id:int}
 struct ParentResource {}
 def finalize(var buffer:Buffer) {
@@ -175,14 +173,10 @@ def ownership_checks() {
     verify(opened==closed)
     {
         var task <- owned_nested(false)
-        var caught=false
-        try {
-            task_scope(task,$(var owner) {
-                verify(task_poll(owner)==TaskStatus.Waiting)
-                panic("driver failed")
-            })
-        } recover {caught=starts_with("{this_context().last_exception}","driver failed")}
-        verify(caught && opened==closed)
+        task_scope(task,$(var owner) {
+            verify(task_poll(owner)==TaskStatus.Waiting)
+        })
+        verify(opened==closed)
     }
 }
 [export]
@@ -192,12 +186,5 @@ def main() {
     for(i in range(32)) {ownership_checks()}
     verify(heap_bytes_allocated()==baseline)
     verify(opened==closed && parentOpened==parentClosed)
-    {
-        var inscope task <- task_from_async(borrowed_value(null,false),@() {callbackCount++;panic("close failed")})
-        // Cancel before entering borrowed_value: the null handle is never read.
-        verify(task_cancel(task) && task_status(task)==TaskStatus.Failed && callbackCount==1)
-        verify(starts_with(task_error(task),"close failed"))
-        verify(!task_cancel(task) && callbackCount==1)
-    }
     print("Task async adapter lifetime checks OK\n")
 }

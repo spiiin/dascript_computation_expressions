@@ -64,24 +64,17 @@ def ce_source_pair(first:auto;second:auto) {
     unsafe {return typeinfo ce_canonical((first=first,second=second))}
 }
 
-// Release an owned source/result before rethrowing a native exception.
-def ce_exception_message() : string {return "{this_context().last_exception}"}
-def ce_owned_source_rethrow(var source : auto) {
-    let message = "{this_context().last_exception}"
-    delete source
-    panic(message)
-}
-// Run a continuation over an owned temporary source and release the source
-// before a native exception leaves. The continuation arrives as an argument,
+// Run a continuation over an owned temporary source, which is released when
+// the continuation returns. The continuation arrives as an argument,
 // so generated code names it once instead of once for its type and once to run.
 def ce_owned_apply_move(var source : auto; next : auto) {
     var inscope result : typedecl(invoke(next, source))
-    try { result <- invoke(next, source) } recover { ce_owned_source_rethrow(source) }
+    result <- invoke(next, source)
     return <- result
 }
 def ce_owned_apply_copy(var source : auto; next : auto) {
     var result : typedecl(invoke(next, source))
-    try { result = invoke(next, source) } recover { ce_owned_source_rethrow(source) }
+    result = invoke(next, source)
     return result
 }
 

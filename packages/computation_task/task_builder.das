@@ -60,17 +60,12 @@ def private ce_task_loop_input(var source:iterator<auto(T)>; state:CeTaskLoopCon
     var cursor <- ce_zip_cursor(source)
     return <- generator<T> capture(<-cursor,copy(state)) {
         while(ce_task_loop_not_broken(state)) {
-            var more=false
-            var failed=false
-            var message=""
-            try {more=ce_zip_next(cursor)} recover {failed=true;message=ce_exception_message()}
-            if(failed) {ce_zip_close(cursor,message);panic(message)}
-            if(!more) {break}
+            if(!ce_zip_next(cursor)) {break}
             static_if(typeinfo is_ref_value(type<T>)) {unsafe {yield *cursor.slot}}
             else {yield cursor.slot}
         }
         return false
-    } finally {ce_sequence_finalize($ {var message="";ce_zip_close(cursor,message);if(!empty(message)){ce_task_cleanup_error(message)}})}
+    } finally {ce_sequence_finalize($ {ce_zip_close(cursor)})}
 }
 def ce_task_loop_source(var source:iterator<auto>;state:CeTaskLoopControl?) {return <- ce_task_loop_input(source,state)}
 def ce_task_loop_source_owned(var source:iterator<auto>;state:CeTaskLoopControl?) {return <- ce_task_loop_input(source,state)}
@@ -93,19 +88,12 @@ def ce_await_borrow_value(builder:auto; source:auto) {
     concept_assert(false,"task: reference binding requires an owning array Task")
 }
 
-// Task is single-threaded. A nested error scope reports callback failures only
-// after native iterator finalizers have returned and released their closures.
-// Throwing directly from a 0.6.4 generator finalizer skips its deallocation.
-struct TaskPollScope {error:string;cancelled:bool}
+// Task is single-threaded. Each poll or cancel opens a scope that a nested
+// task uses to signal cancellation to it.
+struct TaskPollScope {cancelled:bool}
 var private task_cleanup_scopes:array<TaskPollScope>
 def private task_cleanup_begin() {task_cleanup_scopes |> push(TaskPollScope())}
-def ce_task_cleanup_error(message:string) {
-    let count=length(task_cleanup_scopes)
-    if(count>0 && empty(task_cleanup_scopes[count-1].error)) {task_cleanup_scopes[count-1].error=message}
-}
-// Task/AsyncSequence resource scopes must not throw from native generator
-// finalizers: the SDK then skips freeing the iterator closure. Record cleanup
-// failures in the surrounding poll/cancel scope after releasing every owner.
+// A resource scope inside a task: the event it holds may own its payload.
 def ce_sequence_scoped(var source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(ScopedTaskValue)>>;
     var cleanup:lambda<():void>) : iterator<tuple<tag:TaskEventTag;ready:bool;value:ScopedTaskValue>> {
     return <- generator<tuple<tag:TaskEventTag;ready:bool;value:ScopedTaskValue>> capture(<-source,<-cleanup) {
@@ -116,18 +104,14 @@ def ce_sequence_scoped(var source:iterator<tuple<tag:TaskEventTag;ready:bool;val
         }
         return false
     } finally {ce_sequence_finalize($ {
-        var message=""
-        try {sequence_close(source)} recover {message="{this_context().last_exception}"}
-        try {invoke(cleanup)} recover {if(empty(message)) {message="{this_context().last_exception}"}}
-        try {unsafe {delete cleanup}} recover {if(empty(message)) {message="{this_context().last_exception}"}}
-        static_if(typeinfo can_delete(event)) {
-            try {delete event} recover {if(empty(message)) {message="{this_context().last_exception}"}}
-        }
-        if(!empty(message)) {ce_task_cleanup_error(message)}
+        sequence_close(source)
+        invoke(cleanup)
+        unsafe {delete cleanup}
+        static_if(typeinfo can_delete(event)) {delete event}
     })}
 }
 
-// Cancellation is a scoped control signal, never a catchable panic/string.
+// Cancellation is a scoped control signal, never a panic.
 def ce_task_cancelled() {
     let count=length(task_cleanup_scopes)
     if(count>0) {task_cleanup_scopes[count-1].cancelled=true}
@@ -136,14 +120,8 @@ def private task_cleanup_cancelled() : bool {
     let count=length(task_cleanup_scopes)
     return count>0 && task_cleanup_scopes[count-1].cancelled
 }
-def private task_cleanup_current() : string {
-    let count=length(task_cleanup_scopes)
-    return count>0 ? task_cleanup_scopes[count-1].error : ""
-}
-def private task_cleanup_end() : string {
-    let message=task_cleanup_current()
+def private task_cleanup_end() {
     task_cleanup_scopes.resize(length(task_cleanup_scopes)-1)
-    return message
 }
 
 def task_pending(unused:type<auto(T)>) {
@@ -308,14 +286,15 @@ def task_cancel(var task:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTa
     if(task.status!=TaskStatus.Created && task.status!=TaskStatus.Waiting) {return false}
     task_cleanup_begin()
     task.status=TaskStatus.Cancelled
-    try {sequence_close(task.source)} recover {task.status=TaskStatus.Failed;task.error="{this_context().last_exception}"}
-    let cleanup=task_cleanup_end()
-    if(!empty(cleanup) && task.status!=TaskStatus.Failed) {task.status=TaskStatus.Failed;task.error=cleanup}
+    sequence_close(task.source)
+    task_cleanup_end()
     return true
 }
 
 // One poll drives the continuation to its next suspension or final result.
 // Terminal results are cached. There is no implicit busy-wait or worker thread.
+// A panic in the task's body is caught here, and nowhere else: the task becomes
+// Failed and is closed, which releases what its body still owned.
 def task_poll(var task:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(T)>>;status:TaskStatus;value:T;error:string;polling:bool>) : TaskStatus {
     if(task.polling) {panic("task_poll: reentrant polling is unsupported")}
     if(task.status!=TaskStatus.Created && task.status!=TaskStatus.Waiting) {return task.status}
@@ -338,13 +317,8 @@ def task_poll(var task:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;
     } recover {
         task.error="{this_context().last_exception}"
         task.status=TaskStatus.Failed
-        try {sequence_close(task.source)} recover {}
     }
-    let cleanup=task_cleanup_current()
-    if(!empty(cleanup) && task.status!=TaskStatus.Failed) {
-        task.status=TaskStatus.Failed;task.error=cleanup
-        try {sequence_close(task.source)} recover {}
-    }
+    if(task.status==TaskStatus.Failed) {sequence_close(task.source)}
     task_cleanup_end()
     task.polling=false
     static_if(typeinfo can_delete(event)) {delete event}
@@ -393,8 +367,7 @@ def ce_await_source(builder:auto; var task:tuple<tag:TaskTag;source:iterator<tup
         }
         return false
     } finally {ce_sequence_finalize($ {
-        let cancelled=task_cancel(task)
-        if(cancelled && task_status(task)==TaskStatus.Failed) {ce_task_cleanup_error(task_error(task))}
+        task_cancel(task)
         delete task
     })}
 }
@@ -419,8 +392,7 @@ def task_with_cancellation(var task:auto; token:CancellationToken) {
         }
         return false
     } finally {ce_sequence_finalize($ {
-        let cancelled=task_cancel(task)
-        if(cancelled && task_status(task)==TaskStatus.Failed) {ce_task_cleanup_error(task_error(task))}
+        task_cancel(task)
         delete task
         delete lease
     })}
@@ -428,12 +400,10 @@ def task_with_cancellation(var task:auto; token:CancellationToken) {
 }
 
 // Adapter for a nonblocking operation's poll callback. The lambda owns captures.
-// Each poll returns Pending or Ready; close runs on success, cancellation or panic.
+// Each poll returns Pending or Ready; close runs when the task ends, however it ends.
 def private task_close_callbacks(var poll:lambda<():auto(T)>; var close:lambda<():void>) {
-    var message=""
-    try {invoke(close)} recover {message="{this_context().last_exception}"}
+    invoke(close)
     unsafe {delete poll;delete close}
-    if(!empty(message)) {ce_task_cleanup_error(message)}
 }
 
 def task_from_poll(var poll:lambda<():tuple<tag:TaskEventTag;ready:bool;value:auto(T)>>; var close:lambda<():void>) {
@@ -472,7 +442,7 @@ def task_after_polls_move(count:int;var value:auto(OwnedValue)) {
 
 // Standard [async] generators can produce several res events. Like native await,
 // finish the producer and retain its last result; only wait events suspend us.
-// This also observes side effects and exceptions after the last yielded value.
+// This also observes side effects after the last yielded value.
 def task_from_async(var source:iterator<variant<res:auto(T);wait:bool>>) {
     static_assert(typeinfo ce_resumable_payload(default<T>))
     var events <- generator<tuple<tag:TaskEventTag;ready:bool;value:T -const -&>> capture(<-source) {
@@ -514,30 +484,20 @@ def task_from_async(var source:iterator<bool>) {
 // Own an external operation/resource until the async source is closed. The
 // Sequence owner runs close even for an unstarted source and frees the lambda.
 def task_from_async(var source:iterator<auto(T)>; var close:lambda<():void>) {
-    var safeClose <- @ capture(move(close)) {
-        var message=""
-        try {invoke(close)} recover {message="{this_context().last_exception}"}
+    var owner <- @ capture(move(close)) {
+        invoke(close)
         unsafe {delete close}
-        if(!empty(message)) {ce_task_cleanup_error(message)}
     }
-    var scoped <- ce_sequence_scoped(source,safeClose)
+    var scoped <- ce_sequence_scoped(source,owner)
     return <- task_from_async(scoped)
 }
 
-// Own a task across exceptions in the driving/event-loop code as well.
+// Own a task for the length of a block: it is cancelled, if still running, and released.
 def task_scope(var task:auto(T); body:block<(var owned:T):void>) {
     var owned <- task
-    try {invoke(body,owned)} recover {
-        let message="{this_context().last_exception}"
-        task_cancel(owned)
-        delete owned
-        panic(message)
-    }
-    let cancelled=task_cancel(owned)
-    var cleanup=""
-    if(cancelled && task_status(owned)==TaskStatus.Failed) {cleanup=task_error(owned)}
+    invoke(body,owned)
+    task_cancel(owned)
     delete owned
-    if(!empty(cleanup)) {panic(cleanup)}
 }
 
 struct TaskSharedTag {_ce_marker:uint8}
@@ -556,8 +516,7 @@ def private ce_task_shared_lease(var state:auto(SharedState)?) {
         unsafe {
             state.references--
             if(state.references==uint64(0)) {
-                let cancelled=task_cancel(state.task)
-                if(cancelled && task_status(state.task)==TaskStatus.Failed) {ce_task_cleanup_error(task_error(state.task))}
+                task_cancel(state.task)
                 delete state
             }
         }

@@ -130,14 +130,7 @@ var private cancellation_scopes:array<CancellationToken const?>
 // can still install its own explicit token inside this isolated synchronous poll.
 def ce_cancellation_isolate(action:block<():void>) {
     var saved <- cancellation_scopes
-    try {invoke(action)} recover {
-        let message="{this_context().last_exception}"
-        // Scope entries are borrowed; discard them before freeing only the array.
-        cancellation_scopes.resize(0)
-        __builtin_array_free(cancellation_scopes,typeinfo sizeof(cancellation_scopes[0]))
-        cancellation_scopes <- saved
-        panic(message)
-    }
+    invoke(action)
     cancellation_scopes.resize(0)
     __builtin_array_free(cancellation_scopes,typeinfo sizeof(cancellation_scopes[0]))
     cancellation_scopes <- saved
@@ -151,10 +144,6 @@ def ce_task_cancellation_requested() : bool {
 def ce_cancellation_scope(token:CancellationToken; action:block<():void>) {
     let depth=length(cancellation_scopes)
     unsafe {cancellation_scopes |> push(addr(token))}
-    try {invoke(action)} recover {
-        let message="{this_context().last_exception}"
-        cancellation_scopes.resize(depth)
-        panic(message)
-    }
+    invoke(action)
     cancellation_scopes.resize(depth)
 }

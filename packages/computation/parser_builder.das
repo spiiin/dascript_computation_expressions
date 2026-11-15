@@ -124,7 +124,6 @@ def parser_ok_move(var value:auto(T); position:int; committed:bool=false) {
 def parser_failure(diagnostic:ParseDiagnostic; unused:type<auto(T)>) {
     return <- variant<parsed:tuple<value:T -const -&;position:int;committed:bool>;failure:ParseDiagnostic>(failure=diagnostic)
 }
-def private parser_rethrow(var owner:auto) {ce_owned_source_rethrow(owner)}
 
 // Owning outcomes allow repetitions to return arrays without hidden cloning.
 def ce_protocol(builder:ParserBuilder) {return CeOwnedProtocol()}
@@ -146,7 +145,7 @@ def ce_bind(var builder:ParserBuilder; var source:variant<parsed:tuple<value:aut
     builder.position=(owner as parsed).position
     builder.committed = builder.committed || (owner as parsed).committed
     var inscope result:R
-    try {result <- invoke(next,(owner as parsed).value)} recover {parser_rethrow(owner)}
+    result <- invoke(next,(owner as parsed).value)
     return <- result
 }
 def ce_return_from(var builder:ParserBuilder; var source:variant<parsed:tuple<value:auto(T);position:int;committed:bool>;failure:ParseDiagnostic>) {
@@ -174,34 +173,17 @@ def ce_collect_append(var builder:ParserBuilder; var first:variant<parsed:tuple<
         builder.committed = builder.committed || (step as parsed).committed
     }
 }
-def ce_collect_rethrow(builder:ParserBuilder; var result:auto) {parser_rethrow(result)}
-def ce_try_with(builder:ParserBuilder; body:block<():auto(R)>; handler:block<(message:string):R>) : R {
-    var inscope result:R
-    var failed=false
-    var message=""
-    try {result <- invoke(body)} recover {message=ce_exception_message();failed=true}
-    if(failed) {return <- invoke(handler,message)}
-    return <- result
-}
 def ce_try_finally(builder:ParserBuilder; body:block<():auto(R)>; cleanup:block<():void>) : R {
     var inscope result:R
-    try {result <- invoke(body)} recover {
-        let message=ce_exception_message()
-        invoke(cleanup)
-        panic(message)
-    }
-    try {invoke(cleanup)} recover {parser_rethrow(result)}
+    result <- invoke(body)
+    invoke(cleanup)
     return <- result
 }
 def ce_using(builder:ParserBuilder; resource:auto(T); body:block<(item:T):auto(R)>; cleanup:block<(var item:T):void>) : R {
     var owner=resource
     var inscope result:R
-    try {result <- invoke(body,owner)} recover {
-        let message=ce_exception_message()
-        invoke(cleanup,owner)
-        panic(message)
-    }
-    try {invoke(cleanup,owner)} recover {parser_rethrow(result)}
+    result <- invoke(body,owner)
+    invoke(cleanup,owner)
     return <- result
 }
 
@@ -275,27 +257,24 @@ def parser_read(builder:ParserBuilder; op:tuple<parserRepeat:parserRepeatTag;sou
     var committed=builder.committed
     var failed=false
     var diagnostic:ParseDiagnostic
-    try {
-        while(true) {
-            var inscope result <- parser_read(cursor,op.source)
-            if(result is failure) {
-                if(length(values)>=op.minimum && parser_absent(result as failure,cursor.position)) {break}
-                diagnostic=result as failure
-                diagnostic.committed = diagnostic.committed || committed
-                failed=true
-                break
-            }
-            if((result as parsed).position<=cursor.position) {
-                diagnostic=parser_progress_diagnostic(cursor,op.minimum==0 ? "many" : "many1")
-                failed=true
-                break
-            }
-            values |> emplace <| (result as parsed).value
-            cursor.position=(result as parsed).position
-            committed = committed || (result as parsed).committed
+    while(true) {
+        var inscope result <- parser_read(cursor,op.source)
+        if(result is failure) {
+            if(length(values)>=op.minimum && parser_absent(result as failure,cursor.position)) {break}
+            diagnostic=result as failure
+            diagnostic.committed = diagnostic.committed || committed
+            failed=true
+            break
         }
-    } recover {parser_rethrow(values)}
-    // RC2 JIT cannot return owning CMRES values from inside try/recover.
+        if((result as parsed).position<=cursor.position) {
+            diagnostic=parser_progress_diagnostic(cursor,op.minimum==0 ? "many" : "many1")
+            failed=true
+            break
+        }
+        values |> emplace <| (result as parsed).value
+        cursor.position=(result as parsed).position
+        committed = committed || (result as parsed).committed
+    }
     if(failed) {return <- parser_failure(diagnostic,type<typedecl(values)>)}
     return <- parser_ok_move(values,cursor.position,committed)
 }
@@ -306,39 +285,37 @@ def parser_read(builder:ParserBuilder; op:tuple<parserSeparated:parserSeparatedT
     var committed=builder.committed
     var failed=false
     var diagnostic:ParseDiagnostic
-    try {
-        while(true) {
-            let start=cursor.position
-            if(!empty(values)) {
-                var inscope separator <- parser_read(cursor,op.separator)
-                if(separator is failure) {
-                    if(parser_absent(separator as failure,start)) {break}
-                    diagnostic=separator as failure
-                    diagnostic.committed = diagnostic.committed || committed
-                    failed=true
-                    break
-                }
-                cursor.position=(separator as parsed).position
-                committed = committed || (separator as parsed).committed
-            }
-            var inscope item <- parser_read(cursor,op.item)
-            if(item is failure) {
-                if(parser_absent(item as failure,start)) {break}
-                diagnostic=item as failure
+    while(true) {
+        let start=cursor.position
+        if(!empty(values)) {
+            var inscope separator <- parser_read(cursor,op.separator)
+            if(separator is failure) {
+                if(parser_absent(separator as failure,start)) {break}
+                diagnostic=separator as failure
                 diagnostic.committed = diagnostic.committed || committed
                 failed=true
                 break
             }
-            if((item as parsed).position<=cursor.position) {
-                diagnostic=parser_progress_diagnostic(cursor,"sep_by")
-                failed=true
-                break
-            }
-            values |> emplace <| (item as parsed).value
-            cursor.position=(item as parsed).position
-            committed = committed || (item as parsed).committed
+            cursor.position=(separator as parsed).position
+            committed = committed || (separator as parsed).committed
         }
-    } recover {parser_rethrow(values)}
+        var inscope item <- parser_read(cursor,op.item)
+        if(item is failure) {
+            if(parser_absent(item as failure,start)) {break}
+            diagnostic=item as failure
+            diagnostic.committed = diagnostic.committed || committed
+            failed=true
+            break
+        }
+        if((item as parsed).position<=cursor.position) {
+            diagnostic=parser_progress_diagnostic(cursor,"sep_by")
+            failed=true
+            break
+        }
+        values |> emplace <| (item as parsed).value
+        cursor.position=(item as parsed).position
+        committed = committed || (item as parsed).committed
+    }
     if(failed) {return <- parser_failure(diagnostic,type<typedecl(values)>)}
     return <- parser_ok_move(values,cursor.position,committed)
 }

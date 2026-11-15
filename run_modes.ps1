@@ -18,9 +18,7 @@ Push-Location $PSScriptRoot
 try {
     foreach($currentMode in $modes) {
         $files=@($tests)
-        if($IncludeKnownIssues){$files+=@('tests/repro/repro_jit_tuple_recover.das','tests/repro/repro_jit_state_recover.das')}
         foreach($file in $files) {
-            $known=[IO.Path]::GetFileName($file).StartsWith('repro_')
             $stem="$currentMode-$([IO.Path]::GetFileNameWithoutExtension($file))"
             $log=Join-Path $OutputDirectory ($stem+'.log')
             $cpp=Join-Path $OutputDirectory ($stem+'.cpp')
@@ -31,15 +29,7 @@ try {
             & $Daslang @arguments *> $log
             $code=$LASTEXITCODE
             $watch.Stop()
-            $knownReturn=$false
-            if($currentMode -eq 'Jit' -and $file -eq 'tests/repro/repro_jit_tuple_recover.das' -and $code -eq 1) {
-                $diagnostic=[IO.File]::ReadAllText($log)
-                $knownReturn=$diagnostic.Contains('LLVM JIT: return inside try/recover leaves the try arm, not the function.') -and
-                    $diagnostic -match 'EXCEPTION: assert failed[^\r\n]*repro_jit_tuple_recover\.das:24:4'
-            }
-            $status=if($code -eq 0){if($currentMode -eq 'AotGenerate'){'generated_not_executed'}else{'passed'}}
-                elseif($known -and $currentMode -eq 'Jit' -and $code -eq -1073741819){'known_access_violation'}
-                elseif($knownReturn){'known_return_in_recover'}else{'failed'}
+            $status=if($code -eq 0){if($currentMode -eq 'AotGenerate'){'generated_not_executed'}else{'passed'}}else{'failed'}
             $rows.Add([pscustomobject]@{Mode=$currentMode;File=$file;Status=$status;ExitCode=$code;ElapsedMs=$watch.Elapsed.TotalMilliseconds;Log=$log})
             Write-Host "$currentMode $file : $status (exit $code)"
         }
@@ -51,5 +41,4 @@ try {
         ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $OutputDirectory 'summary.json')
 }
 if(@($rows | Where-Object Status -eq 'failed').Count){throw 'Unexpected mode failure; see summary.json'}
-if(@($rows | Where-Object Status -like 'known_*').Count){Write-Warning 'Known native JIT limitations reproduced; these repros are not counted as passing. See RELIABILITY.md.'}
 if($modes -contains 'AotGenerate'){Write-Warning 'AOT C++ generated only. Compile/link into a host with strict AOT linking and run separately before claiming AOT runtime support.'}

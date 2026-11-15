@@ -381,11 +381,11 @@ def ce_resumable_scope(node:ExpressionPtr; builder:string; var error:string&;
             output |> push <| ce_task_wrap_loop(loop,nested)
         } elif(stmt is ExprBlock) {
             output |> push <| ce_resumable_scope(stmt,builder,error,await_source,control)
-        } elif(stmt is ExprCall && ((stmt as ExprCall).name=="try_finally" || (stmt as ExprCall).name=="try_with")) {
+        } elif(stmt is ExprCall && (stmt as ExprCall).name=="try_finally") {
             var call=stmt as ExprCall
-            // Cleanup is ordinary code; a recovery handler is another CE body.
+            // The body is another CE scope; cleanup is ordinary code.
             for(i in range(length(call.arguments))) {
-                if(i==1 && call.name=="try_finally") {continue}
+                if(i==1) {continue}
                 if(call.arguments[i] is ExprMakeBlock) {
                     var mb=call.arguments[i] as ExprMakeBlock
                     var original=mb._block as ExprBlock
@@ -426,7 +426,7 @@ def ce_resumable_scope(node:ExpressionPtr; builder:string; var error:string&;
         // await/resource generator. Keep lexical declarations in the same scope
         // and guard the whole remaining continuation, including source factories.
         if(!empty(control) && index+1<length(blk.list) && (ce_is_match_statement(stmt) || stmt is ExprIfThenElse || stmt is ExprBlock || stmt is ExprFor || stmt is ExprWhile
-            || (stmt is ExprCall && ((stmt as ExprCall).name=="try_finally" || (stmt as ExprCall).name=="try_with")))) {
+            || (stmt is ExprCall && (stmt as ExprCall).name=="try_finally"))) {
             var tail:array<ExpressionPtr>
             for(i in range(index+1,length(blk.list))) {tail |> push <| clone_expression(blk.list[i])}
             let rest=ce_resumable_scope(qmacro_block() {$b(tail);},builder,error,await_source,control)

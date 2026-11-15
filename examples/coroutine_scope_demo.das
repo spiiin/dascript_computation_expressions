@@ -11,16 +11,12 @@ def npc() {
 }
 [export]
 def main() {
-    var caught=false
-    try {
-        coroutine_scope($(var scheduler:CoroutineScheduler) {
-            let id=coroutine_spawn(scheduler,npc())
-            let active=coroutine_tick(scheduler)
-            assert(active==1)
-            // A host error outside the task still closes all owned tasks.
-            panic("game loop interrupted")
-        })
-    } recover {caught=true}
-    assert(caught && disposed==1)
+    coroutine_scope($(var scheduler:CoroutineScheduler) {
+        let id=coroutine_spawn(scheduler,npc())
+        let active=coroutine_tick(scheduler)
+        assert(active==1)
+        // Leaving the scope closes all owned tasks.
+    })
+    assert(disposed==1)
     print("coroutine scope demo OK\n")
 }
