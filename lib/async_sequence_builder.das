@@ -3,9 +3,22 @@ module async_sequence_builder public
 require ./task_combinators.das public
 require ./sequence_function.das public
 require daslib/rtti
+require daslib/typemacro_boost
 
 struct AsyncSequenceContext {_ce_marker:uint8}
 struct AsyncSequenceTag {_ce_marker:uint8}
+
+// `AsyncSequence<T>` names the stream that computation(AsyncSequenceBuilder(type<T>))
+// returns. ce_sequence_run declares it as its result, so the layout written
+// here and the value built there cannot drift apart. Option<T> is spelled as
+// its variant: a template type inside the layout would keep the name from
+// matching an argument.
+[template_tuple(T)]
+struct template AsyncSequence {
+    tag : AsyncSequenceTag
+    owner : iterator<tuple<source:iterator<tuple<tag:TaskEventTag;ready:bool;value:variant<none:void;some:T>>>;references:int;closed:bool;cancelled:bool;busy:bool;polling:bool;error:string>?>
+    element : iterator<T>
+}
 
 // Task grouping has TaskBuilder semantics: Result/Option payloads remain data.
 // Reuse its owning combinator for cooperative polling, cancellation and cleanup.
@@ -232,7 +245,7 @@ def private ce_async_sequence_lease(var state:auto(State)?; primary:bool) {
 // Explicit owner/Task types let nested CE bind infer their outputs immediately,
 // instead of spending inference passes expanding the implementation generators.
 def ce_sequence_run(builder:tuple<kind:AsyncSequenceContext;element:auto(T)?>;
-    var source:iterator<tuple<tag:TaskEventTag;ready:bool;value:Option<T>>>) : tuple<tag:AsyncSequenceTag;owner:iterator<tuple<source:iterator<tuple<tag:TaskEventTag;ready:bool;value:Option<T>>>;references:int;closed:bool;cancelled:bool;busy:bool;polling:bool;error:string>?>;element:iterator<T>> {
+    var source:iterator<tuple<tag:TaskEventTag;ready:bool;value:Option<T>>>) : AsyncSequence<T> {
     unsafe {
         var state=new tuple<source:iterator<tuple<tag:TaskEventTag;ready:bool;value:Option<T>>>;references:int;closed:bool;cancelled:bool;busy:bool;polling:bool;error:string>(source <- source,references=1)
         // Empty iterator carries T without constructing or finalizing a dummy T.

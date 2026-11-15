@@ -1,6 +1,7 @@
 options gen2
 module task_runtime public
 require ./task_scheduler.das public
+require daslib/typemacro_boost
 
 struct TaskRuntimeTag {_ce_marker:uint8}
 struct TaskTicketTag {_ce_marker:uint8}
@@ -9,6 +10,16 @@ def task_runtime(config:TaskSchedulerConfig) {
     return <- (kind=TaskRuntimeTag(),scheduler <- task_scheduler(type<CeUnit>,config))
 }
 def task_runtime() {return <- task_runtime(TaskSchedulerConfig())}
+// `TaskRuntime` names what task_runtime() returns.
+typedef TaskRuntime = typedecl(task_runtime())
+
+// `TaskTicket<T>` names what task_spawn(runtime, task) returns for a Task<T>.
+[template_tuple(T)]
+struct template TaskTicket {
+    tag : TaskTicketTag
+    id : TaskId
+    handle : tuple<tag:TaskSharedTag;owner:iterator<tuple<references:uint64;task:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:T>>;status:TaskStatus;value:T;error:string;polling:bool>>?>>
+}
 
 def private ce_task_erased(var handle:auto) {
     var events <- generator<tuple<tag:TaskEventTag;ready:bool;value:CeUnit>> capture(<-handle) {

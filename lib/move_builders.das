@@ -15,6 +15,13 @@ def move_ok(var value:auto(T)) : Result<T -const -&;string> {
     result as ok <- value
     return <- result
 }
+// The same for a Result that fails with E.
+def ce_move_ok(var value:auto(T); unused:type<auto(E)>) : Result<T -const -&;E -const -&> {
+    var vacant=default<T -const -&>
+    var result <- result::move_ok(vacant,type<E -const -&>)
+    result as ok <- value
+    return <- result
+}
 def move_error(message:string; unused:type<auto(T)>) : Result<T -const -&;string> {
     return <- variant type<Result<T -const -&;string>>(err=message)
 }

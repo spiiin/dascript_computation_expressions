@@ -9,7 +9,7 @@ require daslib/fio
 // Application-level services: owning handles live outside CE generators.
 var queue:TaskJobQueue
 var loading:TaskProgress<int>
-var decoded:typedecl(task_jobque_stream(task_job_queue(),type<int>,0,@@decode_chunks))
+var decoded:TaskJobStream<int;int>
 var input:TaskChannel<string>
 var network:TaskChannel<string>
 

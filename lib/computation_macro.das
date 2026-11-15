@@ -2238,10 +2238,13 @@ class ComputationMacro : AstCallMacro {
             ce_restamp_calls(body, expr.at)
             var element = clone_type(protocol.argTypes[1])
             var builder_type = clone_type(bt)
-            var run=ce_run_scope(name,qmacro(ce_sequence_run($i(name), source)),true,expr.at)
+            // A name of its own: the generator must not shadow, or be shadowed by,
+            // a variable of the function the computation is written in.
+            let stream = ce_unique_name("__ce_stream", expr.at)
+            var run=ce_run_scope(name,qmacro(ce_sequence_run($i(name), $i(stream))),true,expr.at)
             ce_scope_tail = nowhere
             var lowered = qmacro(invoke($($i(name) : $t(builder_type)) {
-                var source <- generator<$t(element)> {
+                var $i(stream) <- generator<$t(element)> {
                     $e(body)
                     return false
                 }

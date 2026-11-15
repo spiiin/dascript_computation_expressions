@@ -4,6 +4,7 @@
   "tests/test_direct_loops.das",
   "tests/test_result_error_type.das",
   "tests/test_task_type_names.das",
+  "tests/test_task_error_type.das",
   "tests/test_task_function.das",
   "tests/test_sequence_function.das",
   "tests/test_task_match.das",

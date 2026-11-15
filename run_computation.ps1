@@ -27,6 +27,8 @@ try {
     Check 'tests/test_task_channel_select.das' $true 'Task channel select checks OK'
     Check 'tests/test_task_scheduler_insight.das' $true 'Task scheduler insight checks OK'
     Check 'tests/test_task_type_names.das' $true 'Task type name checks OK'
+    Check 'tests/test_task_error_type.das' $true 'Task error type checks OK'
+    Check 'tests/test_task_error_mixed.das' $false 'this task fails with string, and the computation with LoadError'
     Check 'tests/test_task_function.das' $true 'Task function checks OK'
     Check 'tests/test_sequence_function.das' $true 'Sequence function checks OK'
     Check 'tests/test_sequence_function_untyped.das' $false 'needs the type of one element'

@@ -55,7 +55,7 @@ enum CeFunctionKind {
     Task                // the task's value: the function returns Task<T>
     TaskResult          // the successful value: Task<Result<T;string>>
     Sequence            // one element: iterator<T>
-    AsyncSequence       // one element; the stream's type has no name, it is inferred
+    AsyncSequence       // one element: AsyncSequence<T>
     Coroutine           // nothing: a coroutine produces no values
 }
 
@@ -120,9 +120,24 @@ def ce_function_computation(var func : FunctionPtr; annotation, builder : string
         for (name in owned) { taken |> push <| qmacro_expr() { var $i(name) <- $i(name) } }
     }
     for (statement in statements) { taken |> push <| statement }
+    // [task_result] def f() : Result<T;E> names the error type as well: the
+    // task is built by TaskResultBuilder(type<T>, type<E>).
+    var fallible : TypeDeclPtr
+    var failure : TypeDeclPtr
+    if (kind == CeFunctionKind.TaskResult && func.result.baseType == Type.typeMacro && length(func.result.typeMacroExpr) == 3
+            && func.result.typeMacroExpr[0] is ExprConstString
+            && (func.result.typeMacroExpr[0] as ExprConstString).value == "Result"
+            && func.result.typeMacroExpr[1] is ExprTypeDecl && func.result.typeMacroExpr[2] is ExprTypeDecl) {
+        fallible = clone_type((func.result.typeMacroExpr[1] as ExprTypeDecl).typeexpr)
+        failure = clone_type((func.result.typeMacroExpr[2] as ExprTypeDecl).typeexpr)
+    }
     var call = new ExprCallMacro(at=at, name:="computation", macro=find_call_macro(library, "computation"))
     if (kind == CeFunctionKind.Coroutine) {
         call.arguments |> push <| qmacro($c(builder)())
+    } elif (failure != null) {
+        var value = clone_type(fallible)
+        var fault = clone_type(failure)
+        call.arguments |> push <| qmacro($c(builder)(type<$t(value)>, type<$t(fault)>))
     } else {
         var value = clone_type(func.result)
         call.arguments |> push <| qmacro($c(builder)(type<$t(value)>))
@@ -155,18 +170,27 @@ def ce_function_computation(var func : FunctionPtr; annotation, builder : string
     // Generated nodes point at the function; the user's statements keep their lines.
     ce_restamp(lowered, at)
     func.body = lowered
+    if (kind == CeFunctionKind.AsyncSequence) {
+        var element = clone_type(func.result)
+        element.flags.removeConstant = true
+        element.flags.removeRef = true
+        func.result = ce_template_type("AsyncSequence", at, element)
+        return true
+    }
     if (!task) {
-        // A stream's type depends on what its builder does with the element,
+        // A sequence's type depends on what its builder does with the element,
         // and a coroutine's has no name: both are inferred from the body.
         func.result = new TypeDecl(baseType=Type.autoinfer, at=at)
         return true
     }
     // The builders store `T -const -&`. A generic's T can arrive as `string const`,
     // and the declared result must name the same tuple or AOT sees two C++ types.
-    var produced = clone_type(func.result)
+    var produced = clone_type(failure != null ? fallible : func.result)
     produced.flags.removeConstant = true
     produced.flags.removeRef = true
-    if (kind == CeFunctionKind.TaskResult) {
+    if (failure != null) {
+        produced = ce_template_type("Result", at, produced, failure)
+    } elif (kind == CeFunctionKind.TaskResult) {
         produced = ce_template_type("Result", at, produced, new TypeDecl(baseType=Type.tString, at=at))
     }
     func.result = ce_template_type("Task", at, produced)

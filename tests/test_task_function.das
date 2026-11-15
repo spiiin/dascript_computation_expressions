@@ -130,6 +130,13 @@ def counted(var count : int; step : int) : int {
     return count
 }
 
+// Nothing the macro generates may clash with a name the function uses.
+[task]
+def relay(source : int; stream : int) : int {
+    let waited = doubled(source + stream) |> bind
+    return waited
+}
+
 def finish(var task : Task<auto(T)>) {
     while (task_poll(task) == TaskStatus.Waiting) {}
     static_if (typeinfo can_copy(task.value)) {
@@ -207,5 +214,7 @@ def main() {
     var start = 4
     var inscope stepped <- counted(start, 3)
     verify(finish(stepped) == 10 && start == 4)
+    var inscope relayed <- relay(1, 2)
+    verify(finish(relayed) == 6)
     print("Task function checks OK\n")
 }

@@ -231,6 +231,62 @@ def ce_await_failure(builder:tuple<kind:TaskResultContext;element:auto(T)?>; eve
 def ce_sequence_run(builder:tuple<kind:TaskContext;element:auto(T)?>; var source:iterator<tuple<tag:TaskEventTag;ready:bool;value:T>>) {return <- task_create(source)}
 def ce_sequence_run(builder:tuple<kind:TaskResultContext;element:auto(T)?>; var source:iterator<tuple<tag:TaskEventTag;ready:bool;value:Result<T;string>>>) {return <- task_create(source)}
 
+// TaskResultBuilder(type<T>, type<E>): the same task with any copyable error
+// type, Task<Result<T;E>>. `return value` says nothing about the error type,
+// so the builder carries it. A bound task must fail with the same E.
+struct TaskResultErrorContext {_ce_marker:uint8}
+def TaskResultBuilder(unused:type<auto(T)>; failure:type<auto(E)>) {
+    static_assert(typeinfo can_copy(type<E -const -&>), "TaskResultBuilder(type<T>, type<E>): the error type must be copyable")
+    var marker:T -const -&?
+    var fault:E -const -&?
+    return (kind=TaskResultErrorContext(),element=marker,error=fault)
+}
+def ce_protocol(builder:tuple<kind:TaskResultErrorContext;element:auto(T)?;error:auto(E)?>) {
+    return ce_resumable_protocol(type<tuple<tag:TaskEventTag;ready:bool;value:Result<T;E>>>)
+}
+def ce_await_pending(builder:tuple<kind:TaskResultErrorContext;element:auto(T)?;error:auto(E)?>) {return task_pending(type<Result<T;E>>)}
+def ce_await_return(builder:tuple<kind:TaskResultErrorContext;element:auto(T)?;error:auto(E)?>; value:T) {return task_ready(result::ok(value,type<E>))}
+def ce_await_return_move(builder:tuple<kind:TaskResultErrorContext;element:auto(T)?;error:auto(E)?>; var value:T) {
+    var result <- ce_move_ok(value,type<E>)
+    return <- task_ready_move(result)
+}
+def ce_await_zero(builder:tuple<kind:TaskResultErrorContext;element:CeUnit?;error:auto(E)?>) {return task_ready(result::ok(CeUnit(),type<E>))}
+def ce_await_borrow_value(builder:tuple<kind:TaskResultErrorContext;element:auto;error:auto(E)?>; var event:tuple<tag:TaskEventTag;ready:bool;value:variant<err:auto(F);ok:auto(T)>>) : T& {
+    unsafe {return event.value as ok}
+}
+def ce_await_borrow_value(builder:tuple<kind:TaskResultErrorContext;element:auto;error:auto(E)?>; var event:tuple<tag:TaskEventTag;ready:bool;value:CeUnit>) : CeUnit& {return event.value}
+def ce_await_borrow_value(builder:tuple<kind:TaskResultErrorContext;element:auto;error:auto(E)?>; var event:tuple<tag:TaskEventTag;ready:bool;value:array<auto(T)>>) : array<T>& {unsafe {return event.value}}
+def ce_await_value(builder:tuple<kind:TaskResultErrorContext;element:auto(T)?;error:auto(E)?>; event:tuple<tag:TaskEventTag;ready:bool;value:variant<err:auto(F);ok:auto(U)>>) {
+    concept_assert(typeinfo can_copy(type<U>),"task: move-only bind needs 'var value & = source |> bind'")
+    return event.value as ok
+}
+// The bound task's error type is checked here, in the test every bind makes
+// first, so a task that fails with another type is reported once and by name.
+// An overload for the exact type next to a general one would be ambiguous.
+def ce_await_failed(builder:tuple<kind:TaskResultErrorContext;element:auto(T)?;error:auto(E)?>; event:tuple<tag:TaskEventTag;ready:bool;value:variant<err:auto(F);ok:auto(U)>>) : bool {
+    static_if (typeinfo stripped_typename(type<F>) != typeinfo stripped_typename(type<E>)) {
+        concept_assert(false, "computation: this task fails with {typeinfo stripped_typename(type<F>)}, and the computation with {typeinfo stripped_typename(type<E>)}; convert its error with task_map_error(task, @@convert)")
+        return false
+    } else {
+        return event.value is err
+    }
+}
+def ce_await_failure(builder:tuple<kind:TaskResultErrorContext;element:auto(T)?;error:auto(E)?>; event:tuple<tag:TaskEventTag;ready:bool;value:variant<err:auto(F);ok:auto(U)>>) {
+    static_if (typeinfo stripped_typename(type<F>) != typeinfo stripped_typename(type<E>)) {
+        return task_pending(type<Result<T;E>>)
+    } else {
+        var fault = event.value as err
+        var result <- result::move_err(fault,type<T>)
+        return <- task_ready_move(result)
+    }
+}
+def ce_await_value(builder:tuple<kind:TaskResultErrorContext;element:auto(T)?;error:auto(E)?>; event:tuple<tag:TaskEventTag;ready:bool;value:CeUnit>) {return CeUnit()}
+def ce_await_failed(builder:tuple<kind:TaskResultErrorContext;element:auto(T)?;error:auto(E)?>; event:tuple<tag:TaskEventTag;ready:bool;value:CeUnit>) {return false}
+def ce_await_failure(builder:tuple<kind:TaskResultErrorContext;element:auto(T)?;error:auto(E)?>; event:tuple<tag:TaskEventTag;ready:bool;value:CeUnit>) {return task_pending(type<Result<T;E>>)}
+def ce_await_failed(builder:tuple<kind:TaskResultErrorContext;element:auto(T)?;error:auto(E)?>; event:tuple<tag:TaskEventTag;ready:bool;value:array<auto>>) {return false}
+def ce_await_failure(builder:tuple<kind:TaskResultErrorContext;element:auto(T)?;error:auto(E)?>; event:tuple<tag:TaskEventTag;ready:bool;value:array<auto>>) {return <- task_pending(type<Result<T;E>>)}
+def ce_sequence_run(builder:tuple<kind:TaskResultErrorContext;element:auto(T)?;error:auto(E)?>; var source:iterator<tuple<tag:TaskEventTag;ready:bool;value:Result<T;E>>>) {return <- task_create(source)}
+
 def task_status(task:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(T)>>;status:TaskStatus;value:T;error:string;polling:bool>) {return task.status}
 def task_value(task:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(T)>>;status:TaskStatus;value:T;error:string;polling:bool>) : T {
     if(task.status!=TaskStatus.Succeeded) {panic("task_value: task has not succeeded")}
@@ -312,6 +368,10 @@ def ce_await_failed(builder:tuple<kind:TaskResultContext;element:auto(T)?>; even
 def ce_await_failure(builder:tuple<kind:TaskResultContext;element:auto(T)?>; event:tuple<tag:TaskEventTag;ready:bool;value:CeNotBindable>) { return task_pending(type<Result<T;string>>) }
 def ce_await_return(builder:tuple<kind:TaskContext;element:auto(T)?>; value:CeNotBindable) { return task_pending(type<T>) }
 def ce_await_return(builder:tuple<kind:TaskResultContext;element:auto(T)?>; value:CeNotBindable) { return task_pending(type<Result<T;string>>) }
+def ce_await_value(builder:tuple<kind:TaskResultErrorContext;element:auto(T)?;error:auto(E)?>; event:tuple<tag:TaskEventTag;ready:bool;value:CeNotBindable>) { return CeNotBindable() }
+def ce_await_failed(builder:tuple<kind:TaskResultErrorContext;element:auto(T)?;error:auto(E)?>; event:tuple<tag:TaskEventTag;ready:bool;value:CeNotBindable>) { return false }
+def ce_await_failure(builder:tuple<kind:TaskResultErrorContext;element:auto(T)?;error:auto(E)?>; event:tuple<tag:TaskEventTag;ready:bool;value:CeNotBindable>) { return task_pending(type<Result<T;E>>) }
+def ce_await_return(builder:tuple<kind:TaskResultErrorContext;element:auto(T)?;error:auto(E)?>; value:CeNotBindable) { return task_pending(type<Result<T;E>>) }
 
 // Move an awaited child into the parent; closing the parent cancels the child.
 def ce_await_source(builder:auto; var task:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(T)>>;status:TaskStatus;value:T;error:string;polling:bool>) : iterator<tuple<tag:TaskEventTag;ready:bool;value:T>> {
@@ -481,6 +541,12 @@ def task_scope(var task:auto(T); body:block<(var owned:T):void>) {
 }
 
 struct TaskSharedTag {_ce_marker:uint8}
+// `TaskShared<T>` names the handle that task_share returns for a Task<T>.
+[template_tuple(T)]
+struct template TaskShared {
+    tag : TaskSharedTag
+    owner : iterator<tuple<references:uint64;task:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:T>>;status:TaskStatus;value:T;error:string;polling:bool>>?>
+}
 
 def private ce_task_shared_lease(var state:auto(SharedState)?) {
     var owner <- generator<SharedState?> capture(copy(state)) {

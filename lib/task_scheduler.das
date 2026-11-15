@@ -4,6 +4,9 @@ require ./task_builder.das public
 require ./task_delay.das public
 require ./task_combinators.das public
 require daslib/rtti
+require daslib/ast_boost
+require daslib/templates_boost
+require daslib/typemacro_boost
 require strings
 
 // max_tick_usec: optional wall-clock budget per tick (0 = unlimited). At least one
@@ -95,6 +98,18 @@ def task_scheduler(unused:type<auto(T)>; config:TaskSchedulerConfig) {
     return <- task_scheduler_create(type<T>,config,owner)
 }
 def task_scheduler(unused:type<auto(T)>) {return <- task_scheduler(type<T>,TaskSchedulerConfig())}
+
+// `TaskScheduler<T>` names what task_scheduler(type<T>) returns. The records a
+// scheduler keeps are private, so the name is the constructor's own result
+// type rather than a layout written out twice. It declares a variable, a
+// field or a parameter; T cannot be deduced from an argument through it.
+[typemacro_function]
+def public TaskScheduler(macroArgument, passArgument : TypeDeclPtr; T : TypeDeclPtr) : TypeDeclPtr {
+    if (passArgument != null) { return null }
+    var named = new TypeDecl(baseType=Type.typeDecl, at=macroArgument.at)
+    named.typeMacroExpr |> push <| qmacro(task_scheduler(type<$t(T)>))
+    return named
+}
 
 def finalize(var scheduler:tuple<kind:TaskSchedulerTag;frames:array<auto(F)>>) {
     ce_sequence_finalize($ {

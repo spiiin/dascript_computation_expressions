@@ -42,6 +42,7 @@ task_result_when_all, task_race и [and_bind для Task](CE_SEMANTICS.md); см
 | CoroutineBuilder | Ленивый iterator<CoroutineFrame> |
 | TaskBuilder(type<T>) | Однократная задача с результатом T, запуск через task_poll |
 | TaskResultBuilder(type<T>) | Задача с Result<T>, Error пропускает продолжение |
+| TaskResultBuilder(type<T>, type<E>) | То же с собственным типом ошибки: Task<Result<T;E>> |
 | AsyncSequenceBuilder(type<T>) | Асинхронный stream; next возвращает Task<Option<T>> |
 
 ListBuilder()/SequenceBuilder() выбирают int. Обычные Value CE выполняются
@@ -162,10 +163,42 @@ def load_level(id : int) : Task<int> {
 | --- | --- | --- |
 | `[task]` | `TaskBuilder(type<T>)` | `Task<T>` |
 | `[task_result]` | `TaskResultBuilder(type<T>)` | `Task<Result<T;string>>` |
+| `[task_result]`, результат `Result<T;E>` | `TaskResultBuilder(type<T>, type<E>)` | `Task<Result<T;E>>` |
 
 Аннотации приходят вместе с `./lib/task_builder.das`. Тип результата объявляется
 явно; `void` и нативный `finally` не поддерживаются — для очистки есть
 `try_finally(body, cleanup)`.
+
+Тип ошибки задачи задаётся объявленным результатом `Result<T;E>`; E — любой
+копируемый тип, обычно enum или структура:
+
+```das
+enum LoadError { NotFound; Denied }
+
+[task_result]
+def load(id : int) : Result<string;LoadError> {
+    let record = lookup(id) |> bind        // Task<Result<Record;LoadError>>
+    return record.name
+}
+```
+
+Ошибка связанной задачи завершает и внешнюю, поэтому их типы ошибок должны
+совпадать. Молча ошибка не преобразуется: bind задачи с другим типом ошибки
+отклоняется при компиляции одним сообщением, в котором названы оба типа.
+`task_map_error(task, @@convert)` из `./lib/task_combinators.das` меняет тип
+ошибки задачи — так в такой функции связываются источники библиотеки, которые
+ошибаются строкой:
+
+```das
+def classify(message : string) : LoadError { ... }
+
+let page = task_map_error(fetch(url), @@classify) |> bind
+```
+
+Задачи без собственного результата (`Task<CeUnit>`, например `task_delay_ms`)
+связываются как обычно. `and_bind`, `deferred`, `task_result_when_all` (пара и
+массив) и `task_result_race` сохраняют тип ошибки своих задач; задачи одной
+группы должны ошибаться одним типом.
 
 Задача живёт дольше вызова функции, поэтому аргументы она забирает себе.
 Аргумент, объявленный `var`, перемещается в задачу и может быть некопируемым —
@@ -194,7 +227,7 @@ def drain(var tasks : array<Task<int>>; limit : int) : int {
 | Аннотация | Builder | `def f(...) : T` возвращает |
 | --- | --- | --- |
 | `[sequence]` | `SequenceBuilder(type<T>)` | `iterator<T>` |
-| `[async_sequence]` | `AsyncSequenceBuilder(type<T>)` | асинхронный поток элементов `T` |
+| `[async_sequence]` | `AsyncSequenceBuilder(type<T>)` | `AsyncSequence<T>` |
 | `[coroutine]` | `CoroutineBuilder()` | корутину; результат не объявляется |
 
 ```das
@@ -224,15 +257,28 @@ def evens(limit : int) : int {
 | `TaskProgress<T>` | `task_progress(type<T>)` |
 | `TaskEventSource<T>` | `task_event_source(type<T>)` |
 | `TaskJobQueue` | `task_job_queue()` |
+| `TaskJobStream<T;Input>` | `task_jobque_stream(queue, type<T>, input, @@work)`; Input — тип входа worker |
+| `AsyncSequence<T>` | `computation(AsyncSequenceBuilder(type<T>))`, функция `[async_sequence]` |
+| `TaskShared<T>` | `task_share(task)` |
+| `TaskScheduler<T>` | `task_scheduler(type<T>)` |
+| `TaskRuntime` | `task_runtime()` |
+| `TaskTicket<T>` | `task_spawn(runtime, task)` |
 
 ```das
 var inbox : TaskChannel<string>
 def total(var tasks : array<Task<int>>) : int { ... }
+
+struct Game {
+    runtime : TaskRuntime
+    jobs : TaskScheduler<int>
+}
+def first_reading(var readings : AsyncSequence<int>) : Task<Option<int>> { ... }
 ```
 
 Имя — тот же структурный тип, что и значение конструктора, поэтому старый код
-с `typedecl(...)` остаётся совместимым. У scheduler, runtime, потока jobque и
-AsyncSequence имён пока нет: там по-прежнему нужен `typedecl`.
+с `typedecl(...)` остаётся совместимым. `TaskScheduler<T>` и
+`TaskJobStream<T;Input>` объявляют переменную, поле или параметр с конкретными
+типами; вывести `auto(T)` из аргумента через них нельзя.
 
 ## Полный Task API
 

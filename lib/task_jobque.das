@@ -4,6 +4,9 @@ require ./task_builder.das public
 require daslib/jobque_boost public
 require daslib/rtti
 require daslib/fio
+require daslib/ast_boost
+require daslib/templates_boost
+require daslib/typemacro_boost
 
 struct TaskJobQueueTag {_ce_marker:uint8}
 // The handle that task_job_queue() returns, by name. The state layout is
@@ -331,6 +334,17 @@ def task_jobque_stream(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(S)?>>
         var op=new tuple<state:S?;lease:typedecl(lease);references:uint64;index:int;started:bool;stopped:bool;done:bool;failure:string;capacity:int;input:Input -const -&;work:typedecl(work) -const -&;witness:T -const -&>(state=state,lease <- lease,references=uint64(1),index=-1,capacity=capacity,input <- snapshot.value,work=work)
         return <- (tag=TaskJobStreamTag(),owner <- ce_jobque_stream_lease(op,true))
     }
+}
+// `TaskJobStream<T;Input>` names what task_jobque_stream(queue, type<T>, input,
+// @@work) returns: T is what the worker emits, Input what it is given. The
+// name is the constructor's own result type, as with TaskScheduler<T>.
+[typemacro_function]
+def public TaskJobStream(macroArgument, passArgument : TypeDeclPtr; T, Input : TypeDeclPtr) : TypeDeclPtr {
+    if (passArgument != null) { return null }
+    var named = new TypeDecl(baseType=Type.typeDecl, at=macroArgument.at)
+    named.typeMacroExpr |> push <| qmacro(task_jobque_stream(default<TaskJobQueue>, type<$t(T)>, default<$t(Input)>,
+        default<function<(input:$t(Input);sink:TaskJobSink):void>>))
+    return named
 }
 // Task<Result<Option<T>,string>>: the next value, none after the worker returned
 // (or after the stream was cancelled), err if the worker panicked.

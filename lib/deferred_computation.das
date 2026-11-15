@@ -31,6 +31,16 @@ def private ce_move_descriptor(t:TypeDeclPtr; moduleName,kind:string) : bool {
         && t.argTypes[1].baseType==Type.tPointer && ce_snapshot_safe(t.argTypes[1].firstType))
 }
 
+// TaskResultBuilder(type<T>, type<E>) carries two such markers.
+def private ce_task_error_descriptor(t:TypeDeclPtr) : bool {
+    if (t.baseType!=Type.tTuple || length(t.argTypes)!=3 || length(t.argNames)!=3) {return false}
+    let tag=t.argTypes[0]
+    return (t.argNames[0]=="kind" && t.argNames[1]=="element" && t.argNames[2]=="error"
+        && tag.baseType==Type.tStructure && tag.structType.name=="TaskResultErrorContext" && tag.structType._module.name=="task_builder"
+        && t.argTypes[1].baseType==Type.tPointer && ce_snapshot_safe(t.argTypes[1].firstType)
+        && t.argTypes[2].baseType==Type.tPointer && ce_snapshot_safe(t.argTypes[2].firstType))
+}
+
 [typeinfo_macro(name="ce_deferred_move_sequence_result")]
 class DeferredMoveSequenceResult : AstTypeInfoMacro {
     def override getAstChange(expr:ExprTypeInfo?; var errors:das_string) : ExpressionPtr {
@@ -99,7 +109,8 @@ class DeferredMacro : AstCallMacro {
         if (bt.isAutoOrAlias || et.isAutoOrAlias) { return null }
         let moveList=ce_move_descriptor(bt,"list_builder","MoveListContext")
         let moveSequence=ce_move_descriptor(bt,"sequence_builder","MoveSequenceContext")
-        let taskBuilder=ce_move_descriptor(bt,"task_builder","TaskContext") || ce_move_descriptor(bt,"task_builder","TaskResultContext")
+        let taskError=ce_task_error_descriptor(bt)
+        let taskBuilder=ce_move_descriptor(bt,"task_builder","TaskContext") || ce_move_descriptor(bt,"task_builder","TaskResultContext") || taskError
         let asyncSequence=ce_move_descriptor(bt,"async_sequence_builder","AsyncSequenceContext")
         if ((!ce_snapshot_safe(bt) && !moveList && !moveSequence && !taskBuilder && !asyncSequence) || !ce_snapshot_safe(et)) {
             macro_error(prog,expr.at,"deferred: builder and snapshot must own their data; pointers, blocks, lambdas, iterators and native handles are unsupported")
@@ -152,6 +163,12 @@ class DeferredMacro : AstCallMacro {
         if (moveList || moveSequence || taskBuilder || asyncSequence) {
             withBuilder=qmacro($($i(bsource):$t(builderInputType)) {
                 if ($i(bsource).element!=null) {panic("deferred: move-only builder type marker must be null")}
+                return <- $e(dataScope)
+            })
+        }
+        if (taskError) {
+            withBuilder=qmacro($($i(bsource):$t(builderInputType)) {
+                if ($i(bsource).element!=null || $i(bsource).error!=null) {panic("deferred: move-only builder type marker must be null")}
                 return <- $e(dataScope)
             })
         }
