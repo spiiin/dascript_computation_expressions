@@ -239,6 +239,8 @@ def ce_resumable_scope(node:ExpressionPtr; builder:string; var error:string&;
             }
             loop.at=stmt.at
             (loop as ExprFor).body.at=stmt.at
+            // qmacro stamped the awaited source with this file's position.
+            (loop as ExprFor).sources[0].at=call.arguments[0].at
             output |> push <| loop
             return qmacro_block() {$b(output);}
         }
@@ -256,9 +258,15 @@ def ce_resumable_scope(node:ExpressionPtr; builder:string; var error:string&;
                 for(entry in lowered.list) {output |> push <| clone_expression(entry)}
             } elif(ret.subexpr==null) {
                 output |> push <| qmacro_expr() {yield <- ce_await_return($i(builder),CeUnit())}
-            } elif(ret.returnFlags.moveSemantics) {
-                output |> push <| qmacro_expr() {yield <- ce_await_return_move($i(builder),$e(ret.subexpr))}
-            } else {output |> push <| qmacro_expr() {yield <- ce_await_return($i(builder),$e(ret.subexpr))}}
+            } else {
+                var returned=qmacro_expr() {yield <- ce_await_return($i(builder),$e(ret.subexpr))}
+                if(ret.returnFlags.moveSemantics) {
+                    returned=qmacro_expr() {yield <- ce_await_return_move($i(builder),$e(ret.subexpr))}
+                }
+                // qmacro stamped the returned value with this file's position.
+                ((returned as ExprYield).subexpr as ExprCall).arguments[1].at=ret.subexpr.at
+                output |> push <| returned
+            }
         } elif(ce_is_match_statement(stmt)) {
             let arms=ce_match_arms(stmt,error)
             if(!empty(error)) {return blk}

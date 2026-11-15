@@ -8,10 +8,11 @@ $cases=@(
     @{File='test_task_and_bind_unsupported.das';Message='and_bind is unsupported for builder';Marker='and_bind';ExactErrors=1},
     @{File='test_and_bind_mixed.das';Message='and_bind is unsupported for builder';Marker='and_bind';ExactErrors=1},
     @{File='test_move_copy.das';Message="value must be moved; use 'return <- value'";Marker='return items';ExactErrors=0},
-    # A source of the wrong type is reported at the bind, not inside the macro.
-    @{File='test_computation_mixed.das';Message='ce_unwrap';Marker='|> bind';ExactErrors=0},
-    @{File='test_writer_mixed.das';Message='ce_unwrap';Marker='|> bind';ExactErrors=0},
-    @{File='test_list_mixed.das';Message='ce_unwrap';Marker='|> bind';ExactErrors=0},
+    # A source of the wrong type is one error at the bind that names both types.
+    @{File='test_computation_mixed.das';Message='cannot bind a source of type variant<none;some:int>';Marker='|> bind';ExactErrors=1},
+    @{File='test_writer_mixed.das';Message='cannot bind a source of type variant<err:string;ok:int>';Marker='|> bind';ExactErrors=1},
+    @{File='test_list_mixed.das';Message='cannot bind a source of type variant<err:string;ok:int>';Marker='|> bind';ExactErrors=1},
+    @{File='test_task_wrong_source.das';Message='a task cannot bind a source of type variant<err:string;ok:int>';Marker='|> bind';ExactErrors=1},
     # A function that [task] cannot rewrite is reported once, at its annotation.
     @{File='test_task_function_untyped.das';Message='needs the type of the task value';Marker='[task]';ExactErrors=1},
     @{File='test_task_function_finally.das';Message='a task body has no native finally';Marker='[task_result]';ExactErrors=1}
