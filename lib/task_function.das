@@ -1,0 +1,102 @@
+options gen2
+module task_function public
+require ./computation_macro.das public
+require daslib/ast
+require daslib/ast_boost
+require daslib/templates_boost
+
+// Function-level sugar for the Task builders, after daslib's [async].
+//
+//     [task]
+//     def load_level(id : int) : int {
+//         let chunk = read_chunk(id) |> bind
+//         return chunk * 2
+//     }
+//
+// is the same function as
+//
+//     def load_level(id : int) : Task<int> {
+//         return <- computation(TaskBuilder(type<int>)) {
+//             let chunk = read_chunk(id) |> bind
+//             return chunk * 2
+//         }
+//     }
+//
+// The declared result is the value the task produces, not the task itself.
+// [task_result] uses TaskResultBuilder, so `: int` there declares a function
+// that returns Task<Result<int;string>>.
+//
+// The body is rewritten when the function is parsed, before any type is known.
+// The names Task, Result and the builders are therefore looked up later, in the
+// module that declares the function; task_builder.das brings them along.
+
+// `Name<first>` or `Name<first;second>`, as the parser builds it.
+def private ce_template_type(name : string; at : LineInfo; var first : TypeDeclPtr; var second : TypeDeclPtr = null) : TypeDeclPtr {
+    var result = new TypeDecl(baseType=Type.typeMacro, at=at)
+    result.typeMacroExpr |> push <| new ExprConstString(at=at, value:=name)
+    result.typeMacroExpr |> push <| new ExprTypeDecl(at=at, typeexpr=first)
+    if (second != null) {
+        result.typeMacroExpr |> push <| new ExprTypeDecl(at=at, typeexpr=second)
+    }
+    return result
+}
+
+def private ce_task_function(var func : FunctionPtr; annotation, builder : string; fallible : bool; var errors : das_string) : bool {
+    if (func.result == null || func.result.baseType == Type.autoinfer || func.result.baseType == Type.tVoid) {
+        errors := "[{annotation}] needs the type of the task value as the declared result: def {func.name}(...) : T"
+        return false
+    }
+    var body = func.body as ExprBlock
+    if (body == null) {
+        errors := "[{annotation}] needs a function with a body"
+        return false
+    }
+    if (!empty(body.finalList)) {
+        errors := "[{annotation}]: a task body has no native finally; use try_finally(body, cleanup)"
+        return false
+    }
+    var library = find_module(compiling_program(), "computation_macro")
+    if (library == null) {
+        errors := "[{annotation}]: module computation_macro is not loaded"
+        return false
+    }
+    let at = func.at
+    var statements : array<ExpressionPtr>
+    for (statement in body.list) {
+        statements |> push <| statement
+    }
+    var value = clone_type(func.result)
+    var call = new ExprCallMacro(at=at, name:="computation", macro=find_call_macro(library, "computation"))
+    call.arguments |> push <| qmacro($c(builder)(type<$t(value)>))
+    call.arguments |> push <| qmacro($ { $b(statements); })
+    var lowered = qmacro_block() {
+        return <- $e(call)
+    }
+    // Generated nodes point at the function; the user's statements keep their lines.
+    ce_restamp(lowered, at)
+    func.body = lowered
+    // The builders store `T -const -&`. A generic's T can arrive as `string const`,
+    // and the declared result must name the same tuple or AOT sees two C++ types.
+    var produced = clone_type(func.result)
+    produced.flags.removeConstant = true
+    produced.flags.removeRef = true
+    if (fallible) {
+        produced = ce_template_type("Result", at, produced, new TypeDecl(baseType=Type.tString, at=at))
+    }
+    func.result = ce_template_type("Task", at, produced)
+    return true
+}
+
+[function_macro(name="task")]
+class TaskFunctionMacro : AstFunctionAnnotation {
+    [unused_argument(group, args)] def override apply(var func : FunctionPtr; var group : ModuleGroup; var args : AnnotationArgumentList; var errors : das_string) : bool {
+        return ce_task_function(func, "task", "TaskBuilder", false, errors)
+    }
+}
+
+[function_macro(name="task_result")]
+class TaskResultFunctionMacro : AstFunctionAnnotation {
+    [unused_argument(group, args)] def override apply(var func : FunctionPtr; var group : ModuleGroup; var args : AnnotationArgumentList; var errors : das_string) : bool {
+        return ce_task_function(func, "task_result", "TaskResultBuilder", true, errors)
+    }
+}

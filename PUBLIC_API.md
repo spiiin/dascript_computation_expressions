@@ -134,6 +134,41 @@ task_delay_ms(duration_ms) возвращает Task<CeUnit>, ожидающую
 
 task_when_all(tasks) потребляет массив Task с одинаковым копируемым T и возвращает владеющую задачу коллекции. Bind: var results & = task_when_all(make_jobs()) |> bind. task_value возвращает clone массива; прямая регистрация — task_scheduler(type<array<T>>). Поддержаны token, timeout и task_scope. Подробности: [семантика builders](CE_SEMANTICS.md).
 
+## Функции-задачи: `[task]` и `[task_result]`
+
+Функцию, тело которой целиком — одна задача, можно объявить с аннотацией.
+Объявленный результат — тип значения задачи, а не сама задача:
+
+```das
+[task]
+def load_level(id : int) : int {
+    let chunk = read_chunk(id) |> bind
+    return chunk * 2
+}
+```
+
+Это та же функция, что и
+
+```das
+def load_level(id : int) : Task<int> {
+    return <- computation(TaskBuilder(type<int>)) {
+        let chunk = read_chunk(id) |> bind
+        return chunk * 2
+    }
+}
+```
+
+| Аннотация | Builder | `def f(...) : T` возвращает |
+| --- | --- | --- |
+| `[task]` | `TaskBuilder(type<T>)` | `Task<T>` |
+| `[task_result]` | `TaskResultBuilder(type<T>)` | `Task<Result<T;string>>` |
+
+Аннотации приходят вместе с `./lib/task_builder.das`. Тип результата объявляется
+явно; `void` и нативный `finally` не поддерживаются — для очистки есть
+`try_finally(body, cleanup)`. Аргументы тело задачи захватывает так же, как в
+явной записи: копируемые — копией, а аргумент некопируемого типа в теле
+использовать нельзя.
+
 ## Имена типов Task
 
 Задачи и их handles — именованные кортежи, и у основных есть имена, чтобы

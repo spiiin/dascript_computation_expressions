@@ -3,6 +3,7 @@
   "tests/test_direct_lowering.das",
   "tests/test_result_error_type.das",
   "tests/test_task_type_names.das",
+  "tests/test_task_function.das",
   "tests/test_move_ce.das",
   "tests/test_async_sequence_and_bind.das",
   "tests/test_async_sequence_zip.das",

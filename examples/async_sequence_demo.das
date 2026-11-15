@@ -17,18 +17,17 @@ def readings() {
         },$ {closed++})
     }
 }
-def consume() {
-    return <- computation(TaskBuilder(type<int>)) {
-        var stream & = readings() |> use_resource
-        var sum=0
-        while(true) {
-            let item=async_sequence_next(stream) |> bind
-            if(item is none) {break}
-            print("Reading: {item as some}\n")
-            sum+=item as some
-        }
-        return sum
+[task]
+def consume() : int {
+    var stream & = readings() |> use_resource
+    var sum=0
+    while(true) {
+        let item=async_sequence_next(stream) |> bind
+        if(item is none) {break}
+        print("Reading: {item as some}\n")
+        sum+=item as some
     }
+    return sum
 }
 [export]
 def main() {

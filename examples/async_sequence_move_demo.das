@@ -13,18 +13,17 @@ def batches() {
         }
     }
 }
-def sum_batches() {
-    return <- computation(TaskBuilder(type<int>)) {
-        var stream & = batches() |> use_resource
-        var sum=0
-        while(true) {
-            var item & = async_sequence_next(stream) |> bind
-            if(item is none) {break}
-            // Borrow the payload while this bind owns its next-Task.
-            for(value in item as some) {sum+=value}
-        }
-        return sum
+[task]
+def sum_batches() : int {
+    var stream & = batches() |> use_resource
+    var sum=0
+    while(true) {
+        var item & = async_sequence_next(stream) |> bind
+        if(item is none) {break}
+        // Borrow the payload while this bind owns its next-Task.
+        for(value in item as some) {sum+=value}
     }
+    return sum
 }
 [export]
 def main() {

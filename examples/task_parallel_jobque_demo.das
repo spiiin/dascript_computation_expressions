@@ -9,11 +9,10 @@ var queue:TaskJobQueue
 
 // Runs in a cloned jobque context; input and output cross through SDK channels.
 def decode_asset(asset:int) {var checksum=0;for(i in range(asset*1000)) {checksum+=i%17};return checksum}
-def load(asset:int) {
-    return <- computation(TaskResultBuilder(type<int>)) {
-        let checksum=task_jobque(queue,asset,@@decode_asset) |> bind
-        return checksum
-    }
+[task_result]
+def load(asset:int) : int {
+    let checksum=task_jobque(queue,asset,@@decode_asset) |> bind
+    return checksum
 }
 [export]
 def main() {

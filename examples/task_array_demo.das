@@ -6,13 +6,12 @@ var completion=""
 struct AssetData {items:array<int>}
 def acquire() {var data:AssetData;data.items <- [1,2,3];return <- data}
 def ce_dispose(var data:AssetData) {released++;delete data}
-def load_asset(id,delay:int) {
-    return <- computation(TaskBuilder(type<int>)) {
-        var data & = acquire() |> use_resource
-        task_delay_ms(delay) |> bind
-        completion+="{id}"
-        return id*10+length(data.items)
-    }
+[task]
+def load_asset(id,delay:int) : int {
+    var data & = acquire() |> use_resource
+    task_delay_ms(delay) |> bind
+    completion+="{id}"
+    return id*10+length(data.items)
 }
 def asset_jobs() {
     var tasks:array<Task<int>>

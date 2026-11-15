@@ -5,11 +5,10 @@ require daslib/async_boost
 
 [async]
 def standard_name() : string {await_next_frame();yield "Alice"}
-def load_player() {
-    return <- computation(TaskBuilder(type<string>)) {
-        let data=task_when_all(task_from_async(standard_name()),task_after_polls(2,85)) |> bind
-        return "{data.first}: health={data.second}"
-    }
+[task]
+def load_player() : string {
+    let data=task_when_all(task_from_async(standard_name()),task_after_polls(2,85)) |> bind
+    return "{data.first}: health={data.second}"
 }
 [export]
 def main() {

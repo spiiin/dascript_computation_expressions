@@ -65,21 +65,19 @@ def private on_key(key,action:int) {
         if(!empty(codepoints)) {codepoints |> erase(length(codepoints)-1);rebuild_text()}
     }
 }
-def private read_input() {
-    return <- computation(TaskResultBuilder(type<string>)) {
-        let value=task_wait_event(events) |> bind
-        continued++
-        return value
-    }
+[task_result]
+def private read_input() : string {
+    let value=task_wait_event(events) |> bind
+    continued++
+    return value
 }
-def private heartbeat() {
-    return <- computation(TaskResultBuilder(type<string>)) {
-        while(true) {
-            task_delay_ms(heartbeat_ms) |> bind
-            ticks++
-        }
-        return "background finished"
+[task_result]
+def private heartbeat() : string {
+    while(true) {
+        task_delay_ms(heartbeat_ms) |> bind
+        ticks++
     }
+    return "background finished"
 }
 def private start_reader() {
     delete token

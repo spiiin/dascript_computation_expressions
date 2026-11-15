@@ -10,11 +10,10 @@ def on_confirm_clicked() {task_event_emit(actions,"confirm")}
 // A business choice completes normally; closing the UI cancels its Task below.
 def on_cancel_clicked() {task_event_emit(actions,"cancel")}
 
-def confirmation_dialog() {
-    return <- computation(TaskResultBuilder(type<string>)) {
-        let action=task_wait_event(actions) |> bind
-        return action=="confirm" ? "Purchase confirmed" : "Purchase declined"
-    }
+[task_result]
+def confirmation_dialog() : string {
+    let action=task_wait_event(actions) |> bind
+    return action=="confirm" ? "Purchase confirmed" : "Purchase declined"
 }
 [export]
 def main() {

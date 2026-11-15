@@ -6,12 +6,11 @@ require daslib/async_boost
 // An external async operation can be awaited without knowing about the scheduler.
 [async]
 def load_level() : int {await_next_frame();yield 12}
-def prepare_player() {
-    return <- computation(TaskBuilder(type<int>)) {
-        let level=task_from_async(load_level()) |> bind
-        let bonus=task_after_polls(1,3) |> bind
-        return level+bonus
-    }
+[task]
+def prepare_player() : int {
+    let level=task_from_async(load_level()) |> bind
+    let bonus=task_after_polls(1,3) |> bind
+    return level+bonus
 }
 [export]
 def main() {

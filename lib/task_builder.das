@@ -5,6 +5,7 @@ require ./sequence_runtime.das public
 require ./resumable_lowering.das public
 require ./cancellation_token.das public
 require ./move_builders.das public
+require ./task_function.das public
 require daslib/rtti
 require daslib/templates
 require daslib/templates_boost
