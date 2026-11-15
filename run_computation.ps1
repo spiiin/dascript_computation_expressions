@@ -285,6 +285,7 @@ try {
         Check 'tests/test_computation_loop_mixed.das' $false 'variant<none;some:int>'
         Check 'tests/test_direct_lowering.das' $true 'direct lowering checks OK'
         Check 'tests/test_direct_loops.das' $true 'direct loop checks OK'
+        Check 'tests/test_bind_chain_length.das' $true 'bind chain length checks OK'
         Check 'tests/test_result_error_type.das' $true 'result error type checks OK'
         Check 'tests/test_result_error_mixed.das' $false 'LoadError'
         Check 'tests/test_computation_effects.das' $true 'state/writer checks OK'

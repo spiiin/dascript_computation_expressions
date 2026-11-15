@@ -541,6 +541,12 @@ def private ce_stage_bind(var expr : ExprCallMacro?; var error : string&) : Expr
         mapper = ce_bind_mapper(builder, argument, source, mapped)
     }
     var ordinary = ce_bind_continuation(builder, argument, source, rest, owned, borrow_bind)
+    // The probe is the call the continuation's argument is declared with, and
+    // it is typed already: the argument gets that type now instead of a pass
+    // later. A borrowing bind is probed with ce_unwrap_borrow, which a fused
+    // mapper does not use.
+    ce_stage_retype_argument(ordinary, unwrapped._type)
+    if (mapper != null && !(borrow_bind && !owned)) { ce_stage_retype_argument(mapper, unwrapped._type) }
     return ce_bind_emit(builder, source, mapper, ordinary, ce_stage_flag(expr, 4), owned || borrow_bind, ce_stage_at(expr))
 }
 // Bind of an and_bind group. The grouped hooks are optional. A fused
