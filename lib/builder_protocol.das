@@ -71,6 +71,19 @@ def ce_owned_source_rethrow(var source : auto) {
     delete source
     panic(message)
 }
+// Run a continuation over an owned temporary source and release the source
+// before a native exception leaves. The continuation arrives as an argument,
+// so generated code names it once instead of once for its type and once to run.
+def ce_owned_apply_move(var source : auto; next : auto) {
+    var inscope result : typedecl(invoke(next, source))
+    try { result <- invoke(next, source) } recover { ce_owned_source_rethrow(source) }
+    return <- result
+}
+def ce_owned_apply_copy(var source : auto; next : auto) {
+    var result : typedecl(invoke(next, source))
+    try { result = invoke(next, source) } recover { ce_owned_source_rethrow(source) }
+    return result
+}
 
 
 

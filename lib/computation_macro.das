@@ -60,7 +60,7 @@ def ce_normalize_source(builder:string; source:ExpressionPtr) : ExpressionPtr {
 }
 def ce_return_from_source(builder:string; source:ExpressionPtr; collect:bool; owned:bool=false) : ExpressionPtr {
     let normalized=ce_normalize_source(builder,source)
-    let name=make_unique_private_name("__ce_return_source",source.at)
+    let name=ce_unique_name("__ce_return_source",source.at)
     var next=qmacro($($i(name):typedecl($e(normalized))) {
         return ce_return_from($i(builder),$i(name))
     })
@@ -146,9 +146,9 @@ def ce_resumable_merge_source(node:ExpressionPtr; builder:string; var error:stri
     let left=ce_resumable_merge_source(call.arguments[0],builder,error)
     let right=ce_resumable_merge_source(call.arguments[1],builder,error)
     if(!empty(error)) {return null}
-    let ln=make_unique_private_name("__await_left",node.at)
-    let rn=make_unique_private_name("__await_right",node.at)
-    let result=make_unique_private_name("__await_product",node.at)
+    let ln=ce_unique_name("__await_left",node.at)
+    let rn=ce_unique_name("__await_right",node.at)
+    let result=ce_unique_name("__await_product",node.at)
     let failure=result+"_error"
     let failed=result+"_failed"
     let location="{node.at.fileInfo.name}:{int(node.at.line)}:{int(node.at.column)}"
@@ -183,38 +183,622 @@ def ce_resumable_merge_source(node:ExpressionPtr; builder:string; var error:stri
     }))
 }
 
+// ---- Deferred stages ---------------------------------------------------------
+// A stage is this same call macro under another name. It waits until its probe
+// arguments are typed and then emits exactly one variant, so a continuation is
+// never cloned into alternatives that a static_if would discard afterwards.
+// Arguments: operation name, probe slot count, probe slots (inferred in place),
+// then payload (not inferred until the stage has emitted it).
+// A probe takes two slots. A source normalized by ce_normalize_source is split
+// into the raw expression and its ce_source hook call: both are plain calls,
+// typed in the pass that first sees them, so resolving the hook costs no pass.
+def private ce_stage_push_probe(var slots : array<ExpressionPtr>; probe : ExpressionPtr) {
+    if (probe is ExprTypeInfo) {
+        let info = probe as ExprTypeInfo
+        if (info.trait == "ce_resolved_source" && info.subexpr != null && info.subexpr is ExprCall) {
+            slots |> push <| clone_expression((info.subexpr as ExprCall).arguments[1])
+            slots |> push <| clone_expression(info.subexpr)
+            return
+        }
+    }
+    slots |> push <| clone_expression(probe)
+    slots |> push <| new ExprConstBool(at=probe.at, value=false)
+}
+
+def ce_stage(op : string; at : LineInfo; probes : array<ExpressionPtr>; payload : array<ExpressionPtr>) : ExpressionPtr {
+    // Other call macros lower sources too, so the node is built from the
+    // registered macro instead of a clone of whatever is being visited.
+    var stage = new ExprCallMacro(at=at, name:="__ce_stage",
+        macro=find_call_macro(find_module(compiling_program(), "computation_macro"), "computation"))
+    var slots : array<ExpressionPtr>
+    for (probe in probes) { ce_stage_push_probe(slots, probe) }
+    stage.arguments |> push <| new ExprConstString(at=at, value:=op)
+    stage.arguments |> push <| new ExprConstInt(at=at, value=length(slots))
+    for (slot in slots) { stage.arguments |> push <| slot }
+    for (item in payload) { stage.arguments |> push <| clone_expression(item) }
+    return stage
+}
+
+// qmacro restamps the node it substitutes with the template position; the
+// arguments below it keep the position of the statement being lowered.
+def private ce_stage_at(expr : ExprCallMacro?) : LineInfo {
+    return expr.arguments[0].at
+}
+def private ce_stage_probe_slots(expr : ExprCallMacro?) : int {
+    return (expr.arguments[1] as ExprConstInt).value
+}
+def private ce_stage_payload(var expr : ExprCallMacro?; index : int) : ExpressionPtr {
+    return expr.arguments[2 + ce_stage_probe_slots(expr) + index]
+}
+def private ce_stage_flag(var expr : ExprCallMacro?; index : int) : bool {
+    return (ce_stage_payload(expr, index) as ExprConstBool).value
+}
+def private ce_stage_text(var expr : ExprCallMacro?; index : int) : string {
+    return string((ce_stage_payload(expr, index) as ExprConstString).value)
+}
+def private ce_stage_ready(expr : ExprCallMacro?) : bool {
+    // An unsupported and_bind group is reported at once: its hook probes
+    // cannot be typed, because there is no merged value to unwrap.
+    if ((expr.arguments[0] as ExprConstString).value == "bind2") {
+        let merged = expr.arguments[2]
+        if (merged._type != null && ce_is_protocol(merged._type, "CeMergeSourcesFallback")) { return true }
+        // Not having a Zero is an answer too; the hook probe that needs it never types.
+        if (merged._type != null && !merged._type.isAutoOrAlias
+                && ce_stage_unresolved_call(expr.arguments[8])) { return true }
+    }
+    for (index in range(ce_stage_probe_slots(expr))) {
+        let probe = expr.arguments[2 + index]
+        if (probe is ExprConstBool) { continue }
+        if (probe._type == null || probe._type.isAutoOrAlias) { return false }
+    }
+    return true
+}
+// The inferred probe is returned as is; the emitted code holds a clone of it.
+def private ce_stage_probe(var expr : ExprCallMacro?; index : int; var error : string&) : ExpressionPtr {
+    var raw = expr.arguments[2 + index * 2]
+    var hook = expr.arguments[2 + index * 2 + 1]
+    if (hook is ExprConstBool) { return raw }
+    if (hook._type.baseType == Type.tVoid) {
+        error = "computation: ce_source must return a source, not void"
+        return null
+    }
+    return ce_is_protocol(hook._type, "CeSourceFallback") ? raw : hook
+}
+// Same rule as typeinfo ce_source_is_borrowed, applied to an inferred probe.
+def private ce_stage_borrowed(source : ExpressionPtr) : bool {
+    return source._type.flags.ref || (source is ExprVar)
+}
+// What `name : typedecl(source)` resolves to, without keeping the source
+// expression inside the type: a clone of it there doubles every nested scope.
+def private ce_stage_retype_argument(var next : ExpressionPtr; source : TypeDeclPtr) {
+    var argument = ((next as ExprMakeBlock)._block as ExprBlock).arguments[0]
+    let declared = argument._type
+    if (declared.baseType != Type.typeDecl) { return }
+    var resolved = clone_type(source)
+    resolved.flags.ref = declared.flags.ref && !declared.flags.removeRef
+    resolved.flags.constant = (resolved.flags.constant || declared.flags.constant) && !declared.flags.removeConstant
+    resolved.flags.temporary = (resolved.flags.temporary || declared.flags.temporary) && !declared.flags.removeTemporary
+    argument._type = resolved
+}
+
 // Run a continuation while keeping an owned temporary alive. Borrowed arrays
 // remain borrowed; factories and intermediate products are released on panic too.
-def ce_source_apply(source, next : ExpressionPtr; collect : bool; move_result:bool=true) : ExpressionPtr {
+// `retype` is false when the continuation's argument is not typedecl(source).
+def ce_source_apply(source, next : ExpressionPtr; collect : bool; move_result:bool=true; retype:bool=true) : ExpressionPtr {
     if (!collect) { return qmacro(invoke($e(next), $e(source))) }
-    let ownedName = make_unique_private_name("__ce_owned_source", source.at)
-    let resultName = ownedName + "_result"
-    if (!move_result) {
+    var probes : array<ExpressionPtr>
+    probes |> push <| clone_expression(source)
+    var payload : array<ExpressionPtr>
+    payload |> push <| clone_expression(next)
+    payload |> push <| new ExprConstBool(at=source.at, value=move_result)
+    payload |> push <| new ExprConstBool(at=source.at, value=retype)
+    return ce_stage("apply", source.at, probes, payload)
+}
+// Copyable and borrowed sources go straight to the continuation; an owned
+// temporary is scoped here and released if the continuation throws.
+def private ce_stage_apply_emit(source, next : ExpressionPtr; move_result : bool; at : LineInfo) : ExpressionPtr {
+    if (source._type.canCopy || ce_stage_borrowed(source)) {
+        return qmacro(invoke($e(next), $e(source)))
+    }
+    let ownedName = ce_unique_name("__ce_owned_source", at)
+    if (move_result) {
         return qmacro(invoke($ {
-            static_if ((typeinfo can_copy($e(source))) || (typeinfo ce_source_is_borrowed($e(source)))) {
-                return invoke($e(next), $e(source))
-            } else {
-                var inscope $i(ownedName) <- $e(source)
-                var $i(resultName) : typedecl(invoke($e(next), $i(ownedName)))
-                try { $i(resultName) = invoke($e(next), $i(ownedName)) } recover { ce_owned_source_rethrow($i(ownedName)) }
-                return $i(resultName)
-            }
+            var inscope $i(ownedName) <- $e(source)
+            return <- ce_owned_apply_move($i(ownedName), $e(next))
         }))
     }
     return qmacro(invoke($ {
-        static_if ((typeinfo can_copy($e(source))) || (typeinfo ce_source_is_borrowed($e(source)))) {
-            return <- invoke($e(next), $e(source))
-        } else {
-            var inscope $i(ownedName) <- $e(source)
-            var inscope $i(resultName) : typedecl(invoke($e(next), $i(ownedName)))
-            try { $i(resultName) <- invoke($e(next), $i(ownedName)) } recover { ce_owned_source_rethrow($i(ownedName)) }
-            return <- $i(resultName)
-        }
+        var inscope $i(ownedName) <- $e(source)
+        return ce_owned_apply_copy($i(ownedName), $e(next))
     }))
 }
+def private ce_stage_apply(var expr : ExprCallMacro?; var error : string&) : ExpressionPtr {
+    let source = ce_stage_probe(expr, 0, error)
+    if (source == null) { return null }
+    var next = clone_expression(ce_stage_payload(expr, 0))
+    if (ce_stage_flag(expr, 2)) { ce_stage_retype_argument(next, source._type) }
+    return ce_stage_apply_emit(source, next, ce_stage_flag(expr, 1), ce_stage_at(expr))
+}
+def private ce_stage_statements(blk : ExpressionPtr) : array<ExpressionPtr> {
+    var list : array<ExpressionPtr>
+    for (entry in ((blk as ExprMakeBlock)._block as ExprBlock).list) { list |> push <| clone_expression(entry) }
+    return <- list
+}
+// Payload of a bind: 0 rest of the scope, 1 the fused `bind; return` body or
+// false, 2 argument name, 3 builder name, 4 collect, 5 owned, 6 borrowing bind.
+def private ce_bind_continuation(builder, argument : string; source : ExpressionPtr;
+                                 var rest : array<ExpressionPtr>; owned, borrow_bind : bool) : ExpressionPtr {
+    if (borrow_bind && !owned) {
+        return qmacro($(var $i(argument):typedecl(ce_unwrap_borrow($i(builder),$e(source)))&) {$b(rest);})
+    }
+    if (owned || borrow_bind) {
+        return qmacro($(var $i(argument):typedecl(ce_unwrap($i(builder),$e(source)))&) {$b(rest);})
+    }
+    return qmacro($($i(argument) : typedecl(ce_unwrap($i(builder), $e(source)))) { $b(rest); })
+}
+def private ce_bind_mapper(builder, argument : string; source : ExpressionPtr; var mapped : array<ExpressionPtr>) : ExpressionPtr {
+    return qmacro($($i(argument) : typedecl(ce_unwrap($i(builder), $e(source)))) { $b(mapped); })
+}
+// Bind an inferred source to its continuation. Every use of the source is a
+// clone of the probe, so the bound variable is typed in the following pass.
+def private ce_bind_emit(builder : string; source, mapper, ordinary : ExpressionPtr;
+                         collect_mode, mutable_bind : bool; at : LineInfo) : ExpressionPtr {
+    let sourceName = ce_unique_name("__ce_group_source", at)
+    var application = ce_bind_application(builder, qmacro($i(sourceName)), mapper, ordinary, mapper != null, collect_mode)
+    var next : ExpressionPtr
+    if (collect_mode) {
+        next = qmacro($($i(sourceName):typedecl($e(source))) { return <- $e(application) })
+    } else {
+        next = qmacro($($i(sourceName):typedecl($e(source))) { return $e(application) })
+    }
+    if (mutable_bind) {((next as ExprMakeBlock)._block as ExprBlock).arguments[0]._type.flags.constant=false}
+    ce_stage_retype_argument(next, source._type)
+    return ce_stage_apply_emit(source, next, collect_mode, at)
+}
+def private ce_stage_bind(var expr : ExprCallMacro?; var error : string&) : ExpressionPtr {
+    let source = ce_stage_probe(expr, 0, error)
+    if (source == null) { return null }
+    var rest <- ce_stage_statements(ce_stage_payload(expr, 0))
+    let argument = ce_stage_text(expr, 2)
+    let builder = ce_stage_text(expr, 3)
+    let owned = ce_stage_flag(expr, 5)
+    let borrow_bind = ce_stage_flag(expr, 6)
+    var mapper : ExpressionPtr
+    if (!(ce_stage_payload(expr, 1) is ExprConstBool)) {
+        var mapped <- ce_stage_statements(ce_stage_payload(expr, 1))
+        mapper = ce_bind_mapper(builder, argument, source, mapped)
+    }
+    var ordinary = ce_bind_continuation(builder, argument, source, rest, owned, borrow_bind)
+    return ce_bind_emit(builder, source, mapper, ordinary, ce_stage_flag(expr, 4), owned || borrow_bind, ce_stage_at(expr))
+}
+// Bind of an and_bind group. The grouped hooks are optional. A fused
+// `bind; return` is small, so its hooks are probed with the real blocks. A
+// longer continuation is probed with one that only produces Zero, and the real
+// one is emitted once. Probes: 0 the merged pair, 1 ce_bind2, 2 ce_bind2_return
+// (fused only), 3 ce_zero (unfused only: a builder may have no Zero).
+def private ce_bind2_stage(builder, leftName, rightName : string; pieces : array<ExpressionPtr>; at : LineInfo) : ExpressionPtr {
+    let argument = string((pieces[2] as ExprConstString).value)
+    let collect_mode = (pieces[4] as ExprConstBool).value
+    let owned = (pieces[5] as ExprConstBool).value
+    let borrow_bind = (pieces[6] as ExprConstBool).value
+    let merged = qmacro(ce_merge_sources($i(builder), $i(leftName), $i(rightName)))
+    var payload : array<ExpressionPtr>
+    for (piece in pieces) { payload |> push <| clone_expression(piece) }
+    payload |> push <| new ExprConstString(at=at, value:=leftName)
+    payload |> push <| new ExprConstString(at=at, value:=rightName)
+    var probes : array<ExpressionPtr>
+    probes |> push <| clone_expression(merged)
+    if (pieces[1] is ExprConstBool) {
+        var zero : array<ExpressionPtr>
+        if (collect_mode) { zero |> push <| qmacro_expr() { return <- ce_zero($i(builder)) } }
+        else { zero |> push <| qmacro_expr() { return ce_zero($i(builder)) } }
+        let trivial = ce_bind_continuation(builder, argument, merged, zero, owned, borrow_bind)
+        probes |> push <| qmacro(ce_bind2($i(builder), $i(leftName), $i(rightName), $e(trivial)))
+        probes |> push <| new ExprConstBool(at=at, value=false)
+        probes |> push <| qmacro(ce_zero($i(builder)))
+        return ce_stage("bind2", at, probes, payload)
+    }
+    var rest <- ce_stage_statements(pieces[0])
+    let ordinary = ce_bind_continuation(builder, argument, merged, rest, owned, borrow_bind)
+    probes |> push <| qmacro(ce_bind2($i(builder), $i(leftName), $i(rightName), $e(ordinary)))
+    var mapped <- ce_stage_statements(pieces[1])
+    let mapper = ce_bind_mapper(builder, argument, merged, mapped)
+    probes |> push <| qmacro(ce_bind2_return($i(builder), $i(leftName), $i(rightName), $e(mapper)))
+    probes |> push <| new ExprConstBool(at=at, value=false)
+    return ce_stage("bind2", at, probes, payload)
+}
+def private ce_bind2_unsupported(var expr : ExprCallMacro?; merged : ExpressionPtr) : string {
+    let builderType = (merged as ExprCall).arguments[0]._type
+    return "computation: and_bind is unsupported for builder {describe(builderType)} and these sources at {ce_stage_at(expr).fileInfo.name}:{int(ce_stage_at(expr).line)}:{int(ce_stage_at(expr).column)}; define ce_merge_sources(builder, left, right) or use sequential bind"
+}
+// An unsupported group reports one error, at the and_bind itself, and then binds
+// the left source alone: the rest of the scope stays typed, so the report is
+// not followed by errors about everything that depended on the pair.
+def private ce_bind2_invalid(var expr : ExprCallMacro?; merged : ExpressionPtr) : ExpressionPtr {
+    let at = ce_stage_at(expr)
+    let message = ce_bind2_unsupported(expr, merged)
+    let left = (merged as ExprCall).arguments[1]
+    let argument = ce_stage_text(expr, 2)
+    let builder = ce_stage_text(expr, 3)
+    let collect_mode = ce_stage_flag(expr, 4)
+    let owned = ce_stage_flag(expr, 5)
+    let borrow_bind = ce_stage_flag(expr, 6)
+    var mapper : ExpressionPtr
+    if (!(ce_stage_payload(expr, 1) is ExprConstBool)) {
+        var mapped <- ce_stage_statements(ce_stage_payload(expr, 1))
+        mapper = ce_bind_mapper(builder, argument, left, mapped)
+    }
+    var rest <- ce_stage_statements(ce_stage_payload(expr, 0))
+    var ordinary = ce_bind_continuation(builder, argument, left, rest, owned, borrow_bind)
+    let bound = ce_bind_emit(builder, left, mapper, ordinary, collect_mode, owned || borrow_bind, at)
+    var invalid : ExpressionPtr
+    if (collect_mode) {
+        invalid = qmacro(invoke($ { static_assert(false, $v(message)); return <- $e(bound) }))
+    } else {
+        invalid = qmacro(invoke($ { static_assert(false, $v(message)); return $e(bound) }))
+    }
+    // qmacro stamped both with the template position; the error belongs to the user.
+    invalid.at = at
+    (((invalid as ExprInvoke).arguments[0] as ExprMakeBlock)._block as ExprBlock).list[0].at = at
+    return invalid
+}
+// A call whose arguments are typed either resolves in the pass that sees it
+// or never does: an unresolved one has no function.
+def private ce_stage_unresolved_call(probe : ExpressionPtr) : bool {
+    if (!(probe is ExprCall) || (probe as ExprCall).func != null) { return false }
+    for (argument in (probe as ExprCall).arguments) {
+        if (argument._type == null || argument._type.isAutoOrAlias) { return false }
+    }
+    return true
+}
+def private ce_stage_bind2(var expr : ExprCallMacro?; var error : string&) : ExpressionPtr {
+    let merged = ce_stage_probe(expr, 0, error)
+    if (ce_is_protocol(merged._type, "CeMergeSourcesFallback")) { return ce_bind2_invalid(expr, merged) }
+    let argument = ce_stage_text(expr, 2)
+    let builder = ce_stage_text(expr, 3)
+    let owned = ce_stage_flag(expr, 5)
+    let borrow_bind = ce_stage_flag(expr, 6)
+    let leftName = ce_stage_text(expr, 7)
+    let rightName = ce_stage_text(expr, 8)
+    var mapper : ExpressionPtr
+    if (!(ce_stage_payload(expr, 1) is ExprConstBool)) {
+        var mapped <- ce_stage_statements(ce_stage_payload(expr, 1))
+        mapper = ce_bind_mapper(builder, argument, merged, mapped)
+        if (!ce_is_protocol(ce_stage_probe(expr, 2, error)._type, "CeBindReturnFallback")) {
+            return qmacro(ce_bind2_return($i(builder), $i(leftName), $i(rightName), $e(mapper)))
+        }
+    }
+    var rest <- ce_stage_statements(ce_stage_payload(expr, 0))
+    var ordinary = ce_bind_continuation(builder, argument, merged, rest, owned, borrow_bind)
+    let collect_mode = ce_stage_flag(expr, 4)
+    if (ce_stage_unresolved_call(ce_stage_probe(expr, 3, error))) {
+        // A builder without Zero: the hook is probed with the continuation itself.
+        let fallback = ce_bind_emit(builder, merged, null, ordinary, collect_mode, owned || borrow_bind, ce_stage_at(expr))
+        if (collect_mode) {
+            return qmacro(invoke($ {
+                static_if (typeinfo ce_has_bind_return(ce_bind2($i(builder), $i(leftName), $i(rightName), $e(ordinary)))) {
+                    return <- ce_bind2($i(builder), $i(leftName), $i(rightName), $e(ordinary))
+                } else { return <- $e(fallback) }
+            }))
+        }
+        return qmacro(invoke($ {
+            static_if (typeinfo ce_has_bind_return(ce_bind2($i(builder), $i(leftName), $i(rightName), $e(ordinary)))) {
+                return ce_bind2($i(builder), $i(leftName), $i(rightName), $e(ordinary))
+            } else { return $e(fallback) }
+        }))
+    }
+    if (!ce_is_protocol(ce_stage_probe(expr, 1, error)._type, "CeBindReturnFallback")) {
+        return qmacro(ce_bind2($i(builder), $i(leftName), $i(rightName), $e(ordinary)))
+    }
+    // No grouped hook: merge the sources and bind the pair.
+    return ce_bind_emit(builder, merged, mapper, ordinary, collect_mode, owned || borrow_bind, ce_stage_at(expr))
+}
+// ---- Loops -------------------------------------------------------------------
+// A loop is lowered once its sources and the builder's optional hook are typed.
+// The hook is probed with a body that only produces Zero: it has the type of a
+// real iteration, so the lowered body is emitted once, into the chosen variant.
+def private ce_loop_zero_body(builder : string; collect_mode : bool) : ExpressionPtr {
+    if (collect_mode) { return qmacro_block() { return <- ce_zero($i(builder)) } }
+    return qmacro_block() { return ce_zero($i(builder)) }
+}
+def private ce_loop_callback(builder : string; source : ExpressionPtr; item : string; body : ExpressionPtr;
+                             mutable_source, collect_mode : bool) : ExpressionPtr {
+    if (mutable_source) {
+        if (collect_mode) {
+            return qmacro($(var $i(item):typedecl(ce_for_element($e(source)))&) {
+                return <- ce_delay($i(builder), $ { $e(body); })
+            })
+        }
+        return qmacro($(var $i(item):typedecl(ce_for_element($e(source)))&) {
+            return ce_delay($i(builder), $ { $e(body); })
+        })
+    }
+    if (collect_mode) {
+        return qmacro($($i(item):typedecl(ce_for_element($e(source)))) {
+            return <- ce_delay($i(builder), $ { $e(body); })
+        })
+    }
+    return qmacro($($i(item):typedecl(ce_for_element($e(source)))) {
+        return ce_delay($i(builder), $ { $e(body); })
+    })
+}
+def private ce_loop_iteration(builder : string; body : ExpressionPtr; collect_mode : bool) : ExpressionPtr {
+    if (collect_mode) { return qmacro($ { return <- ce_delay($i(builder), $ { $e(body); }) }) }
+    return qmacro($ { return ce_delay($i(builder), $ { $e(body); }) })
+}
+def private ce_loop_hook(probe : ExpressionPtr; var error : string&) : bool {
+    if (probe._type.baseType == Type.tVoid) {
+        error = "computation: loop hook must return a builder outcome"
+        return false
+    }
+    return !ce_is_protocol(probe._type, "CeLoopFallback")
+}
+// One iteration of the hook-free loop. `breaking` leaves a zip traversal so its
+// cursors are closed; a native while returns the accumulated failure directly.
+def private ce_loop_step(builder, step, accumulated : string; body : ExpressionPtr;
+                         collect_mode, owned, breaking : bool) : ExpressionPtr {
+    if (owned) {
+        if (breaking) {
+            return qmacro_block() {
+                var inscope $i(step) <- ce_delay($i(builder), $ {$e(body);})
+                ce_collect_append($i(builder),$i(accumulated),$i(step))
+                if (ce_loop_failed($i(builder),$i(accumulated))) {break}
+            }
+        }
+        return qmacro_block() {
+            var inscope $i(step) <- ce_delay($i(builder), $ {$e(body);})
+            ce_collect_append($i(builder),$i(accumulated),$i(step))
+            if (ce_loop_failed($i(builder),$i(accumulated))) {return <- $i(accumulated)}
+        }
+    }
+    if (collect_mode) {
+        return qmacro_block() {
+            var inscope $i(step) <- ce_delay($i(builder), $ { $e(body); })
+            ce_collect_append($i(builder), $i(accumulated), $i(step))
+        }
+    }
+    if (breaking) {
+        return qmacro_block() {
+            let $i(step)=ce_delay($i(builder), $ {$e(body);})
+            $i(accumulated)=ce_loop_append($i(builder),$i(accumulated),$i(step))
+            if (ce_loop_failed($i(builder),$i(accumulated))) {break}
+        }
+    }
+    return qmacro_block() {
+        let $i(step) = ce_delay($i(builder), $ { $e(body); })
+        $i(accumulated) = ce_loop_append($i(builder), $i(accumulated), $i(step))
+        if (ce_loop_failed($i(builder), $i(accumulated))) { return $i(accumulated) }
+    }
+}
+def private ce_loop_fallback(builder, accumulated : string; loop : ExpressionPtr; collect_mode : bool) : ExpressionPtr {
+    if (collect_mode) {
+        return qmacro(ce_delay($i(builder), $ {
+            var inscope $i(accumulated) <- ce_zero($i(builder))
+            try { $e(loop); } recover {
+                ce_collect_rethrow($i(builder), $i(accumulated))
+            }
+            return <- $i(accumulated)
+        }))
+    }
+    return qmacro(ce_delay($i(builder), $ {
+        var $i(accumulated) = ce_zero($i(builder))
+        $e(loop)
+        return $i(accumulated)
+    }))
+}
+// Evaluate sources left-to-right in nested scopes. Borrowed sources keep their
+// references; temporary collections stay alive until all zip iterators close.
+def private ce_loop_source_scopes(sources : array<ExpressionPtr>; body : ExpressionPtr;
+                                  names : array<string>; at : LineInfo) : ExpressionPtr {
+    var result = clone_expression(body)
+    let count = length(sources)
+    for (offset in range(count)) {
+        let index = count - 1 - offset
+        var next : ExpressionPtr
+        if (sources[index]._type.isConst) {
+            next = qmacro($($i(names[index]):typedecl($e(sources[index]))) { return $e(result) })
+        } else {
+            next = qmacro($(var $i(names[index]):typedecl($e(sources[index]))) { return $e(result) })
+        }
+        ce_stage_retype_argument(next, sources[index]._type)
+        result = ce_stage_apply_emit(sources[index], next, false, at)
+    }
+    return result
+}
+def private ce_loop_for_fallback(original : ExprFor?; sources : array<ExpressionPtr>; body : ExpressionPtr;
+                                 builder : string; collect_mode, owned : bool; at : LineInfo) : ExpressionPtr {
+    let step = ce_unique_name("__ce_iteration", at)
+    let accumulated = ce_unique_name("__ce_accumulated", at)
+    var names : array<string>
+    for (index in range(length(sources))) {
+        names |> push(ce_unique_name("__ce_fallback_source_{index}", at))
+    }
+    var consume = ce_loop_step(builder, step, accumulated, body, collect_mode, owned, true)
+    var loop = ce_zip_traversal(original, names, null, "", consume)
+    loop = ce_loop_source_scopes(sources, loop, names, at)
+    return ce_loop_fallback(builder, accumulated, loop, collect_mode)
+}
+def ce_loop_stage(stmt, body : ExpressionPtr; builder : string; collect_mode, owned : bool) : ExpressionPtr {
+    var skeleton = clone_expression(stmt)
+    if (skeleton is ExprFor) { (skeleton as ExprFor).body = qmacro_block() {} }
+    else { (skeleton as ExprWhile).body = qmacro_block() {} }
+    var payload : array<ExpressionPtr>
+    payload |> push <| qmacro($ { $e(skeleton); })
+    payload |> push <| qmacro($ { $e(body); })
+    payload |> push <| new ExprConstString(at=stmt.at, value:=builder)
+    payload |> push <| new ExprConstBool(at=stmt.at, value=collect_mode)
+    payload |> push <| new ExprConstBool(at=stmt.at, value=owned)
+    var probes : array<ExpressionPtr>
+    if (stmt is ExprWhile) {
+        let iteration = ce_loop_iteration(builder, ce_loop_zero_body(builder, collect_mode), collect_mode)
+        probes |> push <| qmacro(ce_while($i(builder), $ { return true }, $e(iteration)))
+        return ce_stage("while", stmt.at, probes, payload)
+    }
+    let original = stmt as ExprFor
+    let arity = length(original.sources)
+    for (source in original.sources) { probes |> push <| clone_expression(source) }
+    if (arity > 1) {
+        let visitor = ce_unique_name("__ce_zip_probe", stmt.at)
+        probes |> push <| qmacro(ce_for_zip($i(builder), $v(arity),
+            $($i(visitor):block<(body:block<():typedecl(ce_zero($i(builder)))>):bool>) { return; }))
+    }
+    return ce_stage("for", stmt.at, probes, payload)
+}
+def private ce_stage_statement(var expr : ExprCallMacro?; index : int) : ExpressionPtr {
+    return clone_expression(((ce_stage_payload(expr, index) as ExprMakeBlock)._block as ExprBlock).list[0])
+}
+def private ce_stage_while(var expr : ExprCallMacro?; var error : string&) : ExpressionPtr {
+    let hook = ce_loop_hook(ce_stage_probe(expr, 0, error), error)
+    if (!empty(error)) { return null }
+    var skeleton = ce_stage_statement(expr, 0)
+    var body = ce_stage_statement(expr, 1)
+    let builder = ce_stage_text(expr, 2)
+    let collect_mode = ce_stage_flag(expr, 3)
+    if (hook) {
+        let iteration = ce_loop_iteration(builder, body, collect_mode)
+        return qmacro(ce_while($i(builder), $ { return $e((skeleton as ExprWhile).cond) }, $e(iteration)))
+    }
+    let step = ce_unique_name("__ce_iteration", ce_stage_at(expr))
+    let accumulated = ce_unique_name("__ce_accumulated", ce_stage_at(expr))
+    (skeleton as ExprWhile).body = ce_loop_step(builder, step, accumulated, body, collect_mode, ce_stage_flag(expr, 4), false)
+    return ce_loop_fallback(builder, accumulated, skeleton, collect_mode)
+}
+def private ce_stage_for(var expr : ExprCallMacro?; var error : string&) : ExpressionPtr {
+    var skeleton = ce_stage_statement(expr, 0)
+    var original = skeleton as ExprFor
+    let arity = length(original.sources)
+    var sources : array<ExpressionPtr>
+    for (index in range(arity)) {
+        var source = ce_stage_probe(expr, index, error)
+        if (source == null) { return null }
+        sources |> push <| source
+    }
+    let builder = ce_stage_text(expr, 2)
+    let collect_mode = ce_stage_flag(expr, 3)
+    if (arity == 1) {
+        // The hook is probed with the callback shape this source selects, so a
+        // second stage follows; it carries the same payload.
+        let t = sources[0]._type
+        let mutable_source = (((t.isGoodArrayType || t.baseType==Type.tFixedArray) && !t.isConst)
+            || (t.baseType==Type.tIterator && t.firstType.flags.ref && !t.firstType.flags.constant))
+        let callback = ce_loop_callback(builder, sources[0], string(original.iterators[0]),
+            ce_loop_zero_body(builder, collect_mode), mutable_source, collect_mode)
+        var probes : array<ExpressionPtr>
+        probes |> push <| clone_expression(sources[0])
+        probes |> push <| qmacro(ce_for($i(builder), $e(sources[0]), $e(callback)))
+        var payload : array<ExpressionPtr>
+        for (index in range(5)) { payload |> push <| clone_expression(ce_stage_payload(expr, index)) }
+        payload |> push <| new ExprConstBool(at=ce_stage_at(expr), value=mutable_source)
+        return ce_stage("for1", ce_stage_at(expr), probes, payload)
+    }
+    let hook = ce_loop_hook(ce_stage_probe(expr, arity, error), error)
+    if (!empty(error)) { return null }
+    var body = ce_stage_statement(expr, 1)
+    if (!hook) {
+        return ce_loop_for_fallback(original, sources, body, builder, collect_mode, ce_stage_flag(expr, 4), ce_stage_at(expr))
+    }
+    // Preserve native zip ordering with explicitly owned cursors so
+    // producer and consumer panics cannot strand hidden iterators.
+    let visitor = ce_unique_name("__ce_zip_visit", ce_stage_at(expr))
+    var sourceNames : array<string>
+    for (index in range(arity)) {
+        sourceNames |> push(ce_unique_name("__ce_zip_source_{index}", ce_stage_at(expr)))
+    }
+    var traversal = ce_zip_traversal(original, sourceNames, ce_loop_iteration(builder, body, collect_mode), visitor, null)
+    traversal = ce_loop_source_scopes(sources, traversal, sourceNames, ce_stage_at(expr))
+    var driver = qmacro($($i(visitor):block<(body:block<():typedecl(ce_zero($i(builder)))>):bool>) {
+        $e(traversal)
+    })
+    return qmacro(ce_for_zip($i(builder), $v(arity), $e(driver)))
+}
+def private ce_stage_for1(var expr : ExprCallMacro?; var error : string&) : ExpressionPtr {
+    var source = ce_stage_probe(expr, 0, error)
+    let hook = ce_loop_hook(ce_stage_probe(expr, 1, error), error)
+    if (!empty(error)) { return null }
+    var skeleton = ce_stage_statement(expr, 0)
+    var original = skeleton as ExprFor
+    var body = ce_stage_statement(expr, 1)
+    let builder = ce_stage_text(expr, 2)
+    let collect_mode = ce_stage_flag(expr, 3)
+    if (!hook) {
+        var sources : array<ExpressionPtr>
+        sources |> push <| source
+        return ce_loop_for_fallback(original, sources, body, builder, collect_mode, ce_stage_flag(expr, 4), ce_stage_at(expr))
+    }
+    let mutable_source = ce_stage_flag(expr, 5)
+    var callback = ce_loop_callback(builder, source, string(original.iterators[0]), body, mutable_source, collect_mode)
+    // Iterators are consumed by the hook; ordinary source temporaries
+    // are scoped here, while source variables stay borrowed.
+    if (source._type.isGoodIteratorType) {
+        return qmacro(ce_for($i(builder), $e(source), $e(callback)))
+    }
+    let sourceName = ce_unique_name("__ce_for_source", ce_stage_at(expr))
+    var apply : ExpressionPtr
+    if (mutable_source) {
+        if (collect_mode) {
+            apply = qmacro($(var $i(sourceName):typedecl($e(source))) {
+                return <- ce_for($i(builder),$i(sourceName),$e(callback))
+            })
+        } else {
+            apply = qmacro($(var $i(sourceName):typedecl($e(source))) {
+                return ce_for($i(builder),$i(sourceName),$e(callback))
+            })
+        }
+    } elif (collect_mode) {
+        apply = qmacro($($i(sourceName):typedecl($e(source))) {
+            return <- ce_for($i(builder),$i(sourceName),$e(callback))
+        })
+    } else {
+        apply = qmacro($($i(sourceName):typedecl($e(source))) {
+            return ce_for($i(builder),$i(sourceName),$e(callback))
+        })
+    }
+    ce_stage_retype_argument(apply, source._type)
+    return ce_stage_apply_emit(source, apply, collect_mode, ce_stage_at(expr))
+}
+def private ce_stage_visit(var expr : ExprCallMacro?; var error : string&) : ExpressionPtr {
+    let op = string((expr.arguments[0] as ExprConstString).value)
+    if (op == "apply") { return ce_stage_apply(expr, error) }
+    if (op == "bind") { return ce_stage_bind(expr, error) }
+    if (op == "bind2") { return ce_stage_bind2(expr, error) }
+    if (op == "apply2") { return ce_stage_apply2(expr, error) }
+    if (op == "while") { return ce_stage_while(expr, error) }
+    if (op == "for") { return ce_stage_for(expr, error) }
+    if (op == "for1") { return ce_stage_for1(expr, error) }
+    error = "computation: unknown lowering stage '{op}'"
+    return null
+}
 
+def private ce_is_group(node : ExpressionPtr) : bool {
+    return node is ExprCall && (node as ExprCall).name == "and_bind"
+}
+// The two sources of a group, left first; each is scoped like a single source.
+def private ce_stage_apply2(var expr : ExprCallMacro?; var error : string&) : ExpressionPtr {
+    let left = ce_stage_probe(expr, 0, error)
+    if (left == null) { return null }
+    let right = ce_stage_probe(expr, 1, error)
+    if (right == null) { return null }
+    let mergeBody = ce_stage_payload(expr, 0)
+    let leftName = ce_stage_text(expr, 1)
+    let rightName = ce_stage_text(expr, 2)
+    let collect = ce_stage_flag(expr, 3)
+    let owned = ce_stage_flag(expr, 4)
+    let at = ce_stage_at(expr)
+    var rightNext = qmacro($($i(rightName):typedecl($e(right))) { return $e(mergeBody) })
+    if (collect) { rightNext = qmacro($($i(rightName):typedecl($e(right))) { return <- $e(mergeBody) }) }
+    if (owned) {((rightNext as ExprMakeBlock)._block as ExprBlock).arguments[0]._type.flags.constant=false}
+    ce_stage_retype_argument(rightNext, right._type)
+    let rightBody = ce_stage_apply_emit(right, rightNext, collect, at)
+    var leftNext = qmacro($($i(leftName):typedecl($e(left))) { return $e(rightBody) })
+    if (collect) { leftNext = qmacro($($i(leftName):typedecl($e(left))) { return <- $e(rightBody) }) }
+    if (owned) {((leftNext as ExprMakeBlock)._block as ExprBlock).arguments[0]._type.flags.constant=false}
+    ce_stage_retype_argument(leftNext, left._type)
+    return ce_stage_apply_emit(left, leftNext, collect, at)
+}
+// Evaluate a group left to right, each source once. `pieces` is the payload of
+// the bind that consumes the outermost group; inner groups only merge.
 def ce_merge_apply(node : ExpressionPtr; builder : string; next : ExpressionPtr;
-                   collect : bool; var error : string&; mapper : ExpressionPtr = null; ordinary : ExpressionPtr = null; owned:bool=false) : ExpressionPtr {
+                   collect : bool; var error : string&; pieces : array<ExpressionPtr>; owned:bool=false) : ExpressionPtr {
     if (node is ExprCall && (node as ExprCall).name == "and_bind") {
         let call = node as ExprCall
         if (length(call.arguments)!=2) {
@@ -224,27 +808,41 @@ def ce_merge_apply(node : ExpressionPtr; builder : string; next : ExpressionPtr;
         var leftType = ce_merge_source(call.arguments[0], builder, error)
         var rightType = ce_merge_source(call.arguments[1], builder, error)
         if (!empty(error)) { return null }
-        let leftName = make_unique_private_name("__ce_merge_left", node.at)
-        let rightName = make_unique_private_name("__ce_merge_right", node.at)
-        let location="{node.at.fileInfo.name}:{int(node.at.line)}:{int(node.at.column)}"
-        ce_merge_locations |> insert(location,new ExprConstBool(at=node.at,value=true))
-        var merged = qmacro(typeinfo ce_checked_merge(ce_merge_origin(ce_merge_sources($i(builder), $i(leftName), $i(rightName)), $i(builder), $v(location))))
-        merged.at = node.at
-        var mergeBody = ce_source_apply(merged, next, true, collect)
-        if (ordinary != null) {
-            mergeBody = ce_bind2_continuation(builder, qmacro($i(leftName)), qmacro($i(rightName)), ordinary, mergeBody, collect)
+        let leftName = ce_unique_name("__ce_merge_left", node.at)
+        let rightName = ce_unique_name("__ce_merge_right", node.at)
+        var mergeBody : ExpressionPtr
+        if (empty(pieces)) {
+            let location="{node.at.fileInfo.name}:{int(node.at.line)}:{int(node.at.column)}"
+            ce_merge_locations |> insert(location,new ExprConstBool(at=node.at,value=true))
+            var merged = qmacro(typeinfo ce_checked_merge(ce_merge_origin(ce_merge_sources($i(builder), $i(leftName), $i(rightName)), $i(builder), $v(location))))
+            merged.at = node.at
+            // `next` is typed from the group expression, not from this named merge.
+            mergeBody = ce_source_apply(merged, next, true, collect, false)
+        } else {
+            mergeBody = ce_bind2_stage(builder, leftName, rightName, pieces, node.at)
         }
-        if (mapper != null) {
-            mergeBody = ce_bind2_application(builder, qmacro($i(leftName)), qmacro($i(rightName)), mapper, mergeBody, collect)
+        if (!ce_is_group(call.arguments[0]) && !ce_is_group(call.arguments[1])) {
+            // Neither source depends on the other's name, so one stage types both.
+            var probes : array<ExpressionPtr>
+            probes |> push <| leftType
+            probes |> push <| rightType
+            var payload : array<ExpressionPtr>
+            payload |> push <| mergeBody
+            payload |> push <| new ExprConstString(at=node.at, value:=leftName)
+            payload |> push <| new ExprConstString(at=node.at, value:=rightName)
+            payload |> push <| new ExprConstBool(at=node.at, value=collect)
+            payload |> push <| new ExprConstBool(at=node.at, value=owned)
+            return ce_stage("apply2", node.at, probes, payload)
         }
+        var inner : array<ExpressionPtr>
         var rightNext = qmacro($($i(rightName):typedecl($e(rightType))) { return $e(mergeBody) })
         if (collect) { rightNext = qmacro($($i(rightName):typedecl($e(rightType))) { return <- $e(mergeBody) }) }
         if (owned) {((rightNext as ExprMakeBlock)._block as ExprBlock).arguments[0]._type.flags.constant=false}
-        var rightBody = ce_merge_apply(call.arguments[1], builder, rightNext, collect, error, null, null, owned)
+        var rightBody = ce_merge_apply(call.arguments[1], builder, rightNext, collect, error, inner, owned)
         var leftNext = qmacro($($i(leftName):typedecl($e(leftType))) { return $e(rightBody) })
         if (collect) { leftNext = qmacro($($i(leftName):typedecl($e(leftType))) { return <- $e(rightBody) }) }
         if (owned) {((leftNext as ExprMakeBlock)._block as ExprBlock).arguments[0]._type.flags.constant=false}
-        return ce_merge_apply(call.arguments[0], builder, leftNext, collect, error, null, null, owned)
+        return ce_merge_apply(call.arguments[0], builder, leftNext, collect, error, inner, owned)
     }
     return ce_source_apply(ce_normalize_source(builder,node), next, true, collect)
 }
@@ -280,133 +878,6 @@ def ce_bind_application(builder:string; source, mapper, ordinary:ExpressionPtr; 
     }))
 }
 
-def ce_bind2_application(builder:string; left, right, mapper, fallback:ExpressionPtr; collect:bool) : ExpressionPtr {
-    if (collect) {
-        return qmacro(invoke($ {
-            static_if (typeinfo ce_has_bind_return(ce_bind2_return($i(builder), $e(left), $e(right), $e(mapper)))) {
-                return <- ce_bind2_return($i(builder), $e(left), $e(right), $e(mapper))
-            } else { return <- $e(fallback) }
-        }))
-    }
-    return qmacro(invoke($ {
-        static_if (typeinfo ce_has_bind_return(ce_bind2_return($i(builder), $e(left), $e(right), $e(mapper)))) {
-            return ce_bind2_return($i(builder), $e(left), $e(right), $e(mapper))
-        } else { return $e(fallback) }
-    }))
-}
-
-def ce_bind2_continuation(builder:string; left, right, mapper, fallback:ExpressionPtr; collect:bool) : ExpressionPtr {
-    if (collect) {
-        return qmacro(invoke($ {
-            static_if (typeinfo ce_has_bind_return(ce_bind2($i(builder), $e(left), $e(right), $e(mapper)))) {
-                return <- ce_bind2($i(builder), $e(left), $e(right), $e(mapper))
-            } else { return <- $e(fallback) }
-        }))
-    }
-    return qmacro(invoke($ {
-        static_if (typeinfo ce_has_bind_return(ce_bind2($i(builder), $e(left), $e(right), $e(mapper)))) {
-            return ce_bind2($i(builder), $e(left), $e(right), $e(mapper))
-        } else { return $e(fallback) }
-    }))
-}
-
-// Optional loop methods are selected without evaluating source/condition/body.
-[typeinfo_macro(name="ce_has_loop")]
-class CeHasLoop : AstTypeInfoMacro {
-    def override getAstChange(expr:ExprTypeInfo?; var errors:das_string) : ExpressionPtr {
-        if (expr.subexpr==null || expr.subexpr._type==null) { errors := "computation: loop result type must be inferred"; return null }
-        let t=expr.subexpr._type
-        if (t.baseType==Type.tVoid) { errors := "computation: loop hook must return a builder outcome"; return null }
-        return <- new ExprConstBool(at=expr.at,value=!ce_is_protocol(t,"CeLoopFallback"))
-    }
-}
-
-[typeinfo_macro(name="ce_for_ref_iterator")]
-class CeForRefIterator : AstTypeInfoMacro {
-    def override getAstChange(expr:ExprTypeInfo?; var errors:das_string) : ExpressionPtr {
-        if (expr.subexpr==null || expr.subexpr._type==null) { errors := "computation: for source type must be inferred"; return null }
-        let t=expr.subexpr._type
-        let mutableRef=t.baseType==Type.tIterator && t.firstType.flags.ref && !t.firstType.flags.constant
-        return <- new ExprConstBool(at=expr.at,value=mutableRef)
-    }
-}
-
-def ce_loop_dispatch(custom, fallback:ExpressionPtr; collect:bool) : ExpressionPtr {
-    if (collect) {
-        return qmacro(invoke($ {
-            static_if (typeinfo ce_has_loop($e(custom))) { return <- $e(custom) }
-            else { return <- $e(fallback) }
-        }))
-    }
-    return qmacro(invoke($ {
-        static_if (typeinfo ce_has_loop($e(custom))) { return $e(custom) }
-        else { return $e(fallback) }
-    }))
-}
-
-def ce_for_application(builder:string; source, callback, fallback:ExpressionPtr;
-                        collect_mode, mutable_source:bool; at:LineInfo) : ExpressionPtr {
-    var custom=qmacro(ce_for($i(builder),$e(source),$e(callback)))
-    let sourceName=make_unique_private_name("__ce_for_source",at)
-    var apply=qmacro($(var $i(sourceName):typedecl($e(source))) {
-        return ce_for($i(builder),$i(sourceName),$e(callback))
-    })
-    if (collect_mode) {
-        apply=qmacro($(var $i(sourceName):typedecl($e(source))) {
-            return <- ce_for($i(builder),$i(sourceName),$e(callback))
-        })
-    }
-    if (!mutable_source) {
-        if (collect_mode) {
-            apply=qmacro($($i(sourceName):typedecl($e(source))) { return <- ce_for($i(builder),$i(sourceName),$e(callback)) })
-        } else {
-            apply=qmacro($($i(sourceName):typedecl($e(source))) { return ce_for($i(builder),$i(sourceName),$e(callback)) })
-        }
-    }
-    var owned=ce_source_apply(source,apply,true,collect_mode)
-    // Iterators are consumed by the hook; ordinary source temporaries
-    // are scoped here, while source variables stay borrowed.
-    var execution=qmacro(invoke($ {
-        static_if (typeinfo is_iterator($e(source))) { return $e(custom) }
-        else { return $e(owned) }
-    }))
-    if (collect_mode) {
-        execution=qmacro(invoke($ {
-            static_if (typeinfo is_iterator($e(source))) { return <- $e(custom) }
-            else { return <- $e(owned) }
-        }))
-    }
-    // Probe the raw call: fallback markers must not own/evaluate sources.
-    if (collect_mode) {
-        return qmacro(invoke($ {
-            static_if (typeinfo ce_has_loop($e(custom))) { return <- $e(execution) }
-            else { return <- $e(fallback) }
-        }))
-    } else {
-        return qmacro(invoke($ {
-            static_if (typeinfo ce_has_loop($e(custom))) { return $e(execution) }
-            else { return $e(fallback) }
-        }))
-    }
-}
-
-// Evaluate sources left-to-right in nested scopes. Borrowed sources keep their
-// references; temporary collections stay alive until all zip iterators close.
-def ce_zip_source_scopes(original:ExprFor?; body:ExpressionPtr; names:array<string>; index:int) : ExpressionPtr {
-    if (index==length(original.sources)) { return clone_expression(body) }
-    let source=original.sources[index]
-    let name=names[index]
-    var rest=ce_zip_source_scopes(original,body,names,index+1)
-    var mutableNext=qmacro($(var $i(name):typedecl($e(source))) { return $e(rest) })
-    var constantNext=qmacro($($i(name):typedecl($e(source))) { return $e(rest) })
-    var mutableCall=ce_source_apply(source,mutableNext,true,false)
-    var constantCall=ce_source_apply(source,constantNext,true,false)
-    return qmacro(invoke($ {
-        static_if (typeinfo is_const($e(source))) { return $e(constantCall) }
-        else { return $e(mutableCall) }
-    }))
-}
-
 [typeinfo_macro(name="ce_zip_value")]
 class CeZipValue : AstTypeInfoMacro {
     def override getAstChange(expr:ExprTypeInfo?; var errors:das_string) : ExpressionPtr {
@@ -432,12 +903,12 @@ def ce_zip_traversal(original:ExprFor?; names:array<string>; iteration:Expressio
     var advance:array<ExpressionPtr>
     var aliases:array<ExpressionPtr>
     var cleanup:array<ExpressionPtr>
-    let first=make_unique_private_name("__ce_zip_first",original.at)
-    let more=make_unique_private_name("__ce_zip_more",original.at)
-    let message=make_unique_private_name("__ce_zip_error",original.at)
+    let first=ce_unique_name("__ce_zip_first",original.at)
+    let more=ce_unique_name("__ce_zip_more",original.at)
+    let message=ce_unique_name("__ce_zip_error",original.at)
     for (index in range(length(names))) {
         let source=names[index]
-        let cursor=make_unique_private_name("__ce_zip_cursor_{index}",original.at)
+        let cursor=ce_unique_name("__ce_zip_cursor_{index}",original.at)
         let item=string(original.iterators[index])
         declarations |> push <| qmacro_expr() {var $i(cursor):typedecl(ce_zip_cursor($i(source)))}
         initialize |> push <| qmacro_expr() {$i(cursor) <- ce_zip_cursor($i(source))}
@@ -567,8 +1038,8 @@ def ce_collect_emit_scope(blk:ExprBlock?; start:int; builder,sink:string; owned:
     var binding:ExpressionPtr
     if(stmt is ExprLet) {binding=clone_expression((stmt as ExprLet).variables[0].init)} else {binding=clone_expression(stmt)}
     let source=ce_normalize_source(builder,(binding as ExprCall).arguments[0])
-    let argument=make_unique_private_name("__ce_sink_item",stmt.at)
-    let sourceName=make_unique_private_name("__ce_sink_source",stmt.at)
+    let argument=ce_unique_name("__ce_sink_item",stmt.at)
+    let sourceName=ce_unique_name("__ce_sink_source",stmt.at)
     let borrow=stmt is ExprLet && (stmt as ExprLet).variables[0]._type.flags.ref && !(stmt as ExprLet).variables[0]._type.flags.constant
     var rest=(ce_collect_emit_scope(blk,start+1,builder,sink,owned) as ExprBlock)
     if(stmt is ExprLet) {
@@ -614,7 +1085,7 @@ def ce_lower(blk : ExprBlock?; start : int; builder : string; collect_mode : boo
              var error : string&; owned:bool=false) : array<ExpressionPtr> {
     var output <- ce_lower_impl(blk, start, builder, collect_mode, error, owned)
     if(collect_mode && empty(error) && ce_can_collect_fuse(blk,start,owned)) {
-        let sink=make_unique_private_name("__ce_sink",blk.at)
+        let sink=ce_unique_name("__ce_sink",blk.at)
         let emitted=ce_collect_emit_scope(blk,start,builder,sink,owned)
         let fused=qmacro(ce_collect_into($i(builder),$(var $i(sink):typedecl(ce_zero($i(builder)))) {$e(emitted);}))
         let fallback=qmacro(invoke($ {$b(output);}))
@@ -655,7 +1126,7 @@ def ce_lower_impl(blk : ExprBlock?; start : int; builder : string; collect_mode 
                 value = ce_return_from_source(builder,call.arguments[0],true,owned)
             }
             var rest <- ce_lower(blk, index+1, builder, collect_mode, error, owned)
-            let first=make_unique_private_name("__ce_yield_result",stmt.at)
+            let first=ce_unique_name("__ce_yield_result",stmt.at)
             var append=qmacro($(var $i(first):typedecl($e(value))) {
                 return <- ce_combine($i(builder),$i(first),$ { $b(rest); })
             })
@@ -724,19 +1195,12 @@ def ce_lower_impl(blk : ExprBlock?; start : int; builder : string; collect_mode 
             if (!empty(error)) { return <- output }
             var source = ce_merge_source(call.arguments[0], builder, error)
             if (!empty(error)) { return <- output }
-            let argument = make_unique_private_name("__ce_value", stmt.at)
+            let argument = ce_unique_name("__ce_value", stmt.at)
             if (stmt is ExprLet) {
                 var declaration = clone_expression(stmt)
                 (declaration as ExprLet).variables[0].init = qmacro($i(argument))
                 if (mutable_bind) {(declaration as ExprLet).variables[0].init.genFlags.alwaysSafe=true}
                 rest |> emplace(declaration, 0)
-            }
-            var ordinary = qmacro($($i(argument) : typedecl(ce_unwrap($i(builder), $e(source)))) { $b(rest); })
-            if (mutable_bind) {
-                ordinary=qmacro($(var $i(argument):typedecl(ce_unwrap($i(builder),$e(source)))&) {$b(rest);})
-            }
-            if (borrow_bind && !owned) {
-                ordinary=qmacro($(var $i(argument):typedecl(ce_unwrap_borrow($i(builder),$e(source)))&) {$b(rest);})
             }
             // Only adjacent bind + final ordinary return. Preserve the original
             // declaration (including its annotation) inside the mapping block.
@@ -747,34 +1211,37 @@ def ce_lower_impl(blk : ExprBlock?; start : int; builder : string; collect_mode 
                     fused = !(ret.subexpr is ExprCall && (ret.subexpr as ExprCall).name == "return_from")
                 }
             }
+            // The source is lowered once its type is known: the rest of the scope
+            // travels as payload and is emitted exactly once.
+            var payload : array<ExpressionPtr>
+            payload |> push <| qmacro($ { $b(rest); })
             if (fused) {
-                rest |> clear()
+                var mapped : array<ExpressionPtr>
                 if (stmt is ExprLet) {
                     var declaration = clone_expression(stmt)
                     (declaration as ExprLet).variables[0].init = qmacro($i(argument))
-                    rest |> push <| declaration
+                    mapped |> push <| declaration
                 }
-                rest |> push <| clone_expression(blk.list[index+1])
+                mapped |> push <| clone_expression(blk.list[index+1])
+                payload |> push <| qmacro($ { $b(mapped); })
+            } else {
+                payload |> push <| new ExprConstBool(at=stmt.at, value=false)
             }
-            var continuation = qmacro($($i(argument) : typedecl(ce_unwrap($i(builder), $e(source)))) { $b(rest); })
-            var application = ce_bind_application(builder, source, continuation, ordinary, fused, collect_mode)
-            {
-                let sourceName = make_unique_private_name("__ce_group_source", stmt.at)
-                application = ce_bind_application(builder, qmacro($i(sourceName)), continuation, ordinary, fused, collect_mode)
-                var next = qmacro($($i(sourceName):typedecl($e(source))) {
-                    return $e(application)
-                })
-                if (collect_mode) {
-                    next = qmacro($($i(sourceName):typedecl($e(source))) {
-                        return <- $e(application)
-                    })
-                }
-                if (mutable_bind) {((next as ExprMakeBlock)._block as ExprBlock).arguments[0]._type.flags.constant=false}
-                var mapper : ExpressionPtr
-                if (fused) { mapper = continuation }
-                var grouped = ce_merge_apply(call.arguments[0], builder, next, collect_mode, error, mapper, ordinary, mutable_bind)
-                output |> push <| qmacro_expr() { return $e(grouped) }
+            payload |> push <| new ExprConstString(at=stmt.at, value:=argument)
+            payload |> push <| new ExprConstString(at=stmt.at, value:=builder)
+            payload |> push <| new ExprConstBool(at=stmt.at, value=collect_mode)
+            payload |> push <| new ExprConstBool(at=stmt.at, value=owned)
+            payload |> push <| new ExprConstBool(at=stmt.at, value=borrow_bind)
+            var staged : ExpressionPtr
+            if (call.arguments[0] is ExprCall && (call.arguments[0] as ExprCall).name == "and_bind") {
+                staged = ce_merge_apply(call.arguments[0], builder, null, collect_mode, error, payload, mutable_bind)
+                if (!empty(error)) { return <- output }
+            } else {
+                var probes : array<ExpressionPtr>
+                probes |> push <| source
+                staged = ce_stage("bind", stmt.at, probes, payload)
             }
+            output |> push <| qmacro_expr() { return $e(staged) }
             return <- output
         }
         // A scoped resource is acquired only when this declaration is reached.
@@ -792,7 +1259,7 @@ def ce_lower_impl(blk : ExprBlock?; start : int; builder : string; collect_mode 
             }
             var rest <- ce_lower(blk, index+1, builder, collect_mode, error, owned)
             if (!empty(error)) { return <- output }
-            let argument = make_unique_private_name("__ce_resource", stmt.at)
+            let argument = ce_unique_name("__ce_resource", stmt.at)
             var declaration = clone_expression(stmt)
             (declaration as ExprLet).variables[0].init = qmacro($i(argument))
             if (moveResource) {(declaration as ExprLet).variables[0].init.genFlags.alwaysSafe=true}
@@ -848,133 +1315,9 @@ def ce_lower_impl(blk : ExprBlock?; start : int; builder : string; collect_mode 
             (branch as ExprIfThenElse).if_false = ce_scope(original.if_false, builder, collect_mode, error, owned)
             computation = qmacro(ce_delay($i(builder), $ { $e(branch); }))
         } elif (stmt is ExprFor || stmt is ExprWhile) {
-            var loop = clone_expression(stmt)
             let original_body = stmt is ExprFor ? (stmt as ExprFor).body : (stmt as ExprWhile).body
             var body = ce_scope(original_body, builder, collect_mode, error, owned)
-            let step = make_unique_private_name("__ce_iteration", stmt.at)
-            let accumulated = make_unique_private_name("__ce_accumulated", stmt.at)
-            var checked_body = qmacro_block() {
-                let $i(step) = ce_delay($i(builder), $ { $e(body); })
-                $i(accumulated) = ce_loop_append($i(builder), $i(accumulated), $i(step))
-                if (ce_loop_failed($i(builder), $i(accumulated))) { return $i(accumulated) }
-            }
-            if (collect_mode) {
-                checked_body = qmacro_block() {
-                    var inscope $i(step) <- ce_delay($i(builder), $ { $e(body); })
-                    ce_collect_append($i(builder), $i(accumulated), $i(step))
-                }
-            }
-            if (owned) {
-                checked_body=qmacro_block() {
-                    var inscope $i(step) <- ce_delay($i(builder), $ {$e(body);})
-                    ce_collect_append($i(builder),$i(accumulated),$i(step))
-                    if (ce_loop_failed($i(builder),$i(accumulated))) {return <- $i(accumulated)}
-                }
-            }
-            if (loop is ExprFor) { (loop as ExprFor).body = checked_body }
-            else { (loop as ExprWhile).body = checked_body }
-            if (stmt is ExprFor) {
-                let original=stmt as ExprFor
-                var names:array<string>
-                for (fallbackIndex in range(length(original.sources))) {
-                    names |> push(make_unique_private_name("__ce_fallback_source_{fallbackIndex}",stmt.at))
-                }
-                var consume=qmacro_block() {
-                    let $i(step)=ce_delay($i(builder), $ {$e(body);})
-                    $i(accumulated)=ce_loop_append($i(builder),$i(accumulated),$i(step))
-                    if (ce_loop_failed($i(builder),$i(accumulated))) {break}
-                }
-                if (collect_mode) {consume=clone_expression(checked_body)}
-                if (owned) {
-                    consume=qmacro_block() {
-                        var inscope $i(step) <- ce_delay($i(builder), $ {$e(body);})
-                        ce_collect_append($i(builder),$i(accumulated),$i(step))
-                        if (ce_loop_failed($i(builder),$i(accumulated))) {break}
-                    }
-                }
-                loop=ce_zip_traversal(original,names,null,"",consume)
-                loop=ce_zip_source_scopes(original,loop,names,0)
-            }
-            computation = qmacro(ce_delay($i(builder), $ {
-                var $i(accumulated) = ce_zero($i(builder))
-                $e(loop)
-                return $i(accumulated)
-            }))
-            if (collect_mode) {
-                computation = qmacro(ce_delay($i(builder), $ {
-                    var inscope $i(accumulated) <- ce_zero($i(builder))
-                    try { $e(loop); } recover {
-                        ce_collect_rethrow($i(builder), $i(accumulated))
-                    }
-                    return <- $i(accumulated)
-                }))
-            }
-            if (stmt is ExprWhile) {
-                let condition=(stmt as ExprWhile).cond
-                var custom=qmacro(ce_while($i(builder), $ { return $e(condition) },
-                    $ { return ce_delay($i(builder), $ { $e(body); }) }))
-                if (collect_mode) {
-                    custom=qmacro(ce_while($i(builder), $ { return $e(condition) },
-                        $ { return <- ce_delay($i(builder), $ { $e(body); }) }))
-                }
-                computation=ce_loop_dispatch(custom,computation,collect_mode)
-            } else {
-                let original=stmt as ExprFor
-                if (length(original.sources)>1) {
-                    // Preserve native zip ordering with explicitly owned cursors so
-                    // producer and consumer panics cannot strand hidden iterators.
-                    let visitor=make_unique_private_name("__ce_zip_visit",stmt.at)
-                    var iteration=qmacro($ { return ce_delay($i(builder), $ { $e(body); }) })
-                    if (collect_mode) {
-                        iteration=qmacro($ { return <- ce_delay($i(builder), $ { $e(body); }) })
-                    }
-                    let arity=length(original.sources)
-                    var sourceNames:array<string>
-                    for (sourceIndex in range(arity)) {
-                        let sourceName=make_unique_private_name("__ce_zip_source_{sourceIndex}",stmt.at)
-                        sourceNames |> push(sourceName)
-                    }
-                    var traversal=ce_zip_traversal(original,sourceNames,iteration,visitor,null)
-                    traversal=ce_zip_source_scopes(original,traversal,sourceNames,0)
-                    var driver=qmacro($($i(visitor):block<(body:block<():typedecl(ce_zero($i(builder)))>):bool>) {
-                        $e(traversal)
-                    })
-                    var custom=qmacro(ce_for_zip($i(builder),$v(arity),$e(driver)))
-                    computation=ce_loop_dispatch(custom,computation,collect_mode)
-                } elif (length(original.sources)==1 && length(original.iterators)==1) {
-                    let source=original.sources[0]
-                    let item=string(original.iterators[0])
-                    var callback=qmacro($($i(item):typedecl(ce_for_element($e(source)))) {
-                        return ce_delay($i(builder), $ { $e(body); })
-                    })
-                    var mutableCallback=qmacro($(var $i(item):typedecl(ce_for_element($e(source)))&) {
-                        return ce_delay($i(builder), $ { $e(body); })
-                    })
-                    if (collect_mode) {
-                        callback=qmacro($($i(item):typedecl(ce_for_element($e(source)))) {
-                            return <- ce_delay($i(builder), $ { $e(body); })
-                        })
-                        mutableCallback=qmacro($(var $i(item):typedecl(ce_for_element($e(source)))&) {
-                            return <- ce_delay($i(builder), $ { $e(body); })
-                        })
-                    }
-                    var mutableCall=ce_for_application(builder,source,mutableCallback,computation,collect_mode,true,stmt.at)
-                    var ordinaryCall=ce_for_application(builder,source,callback,computation,collect_mode,false,stmt.at)
-                    if (collect_mode) {
-                        computation=qmacro(invoke($ {
-                            static_if ((((typeinfo is_array($e(source))) || (typeinfo is_dim($e(source)))) && !(typeinfo is_const($e(source)))) || (typeinfo ce_for_ref_iterator($e(source)))) {
-                                return <- $e(mutableCall)
-                            } else { return <- $e(ordinaryCall) }
-                        }))
-                    } else {
-                        computation=qmacro(invoke($ {
-                            static_if ((((typeinfo is_array($e(source))) || (typeinfo is_dim($e(source)))) && !(typeinfo is_const($e(source)))) || (typeinfo ce_for_ref_iterator($e(source)))) {
-                                return $e(mutableCall)
-                            } else { return $e(ordinaryCall) }
-                        }))
-                    }
-                }
-            }
+            computation = ce_loop_stage(stmt, body, builder, collect_mode, owned)
         } elif (stmt is ExprBlock) {
             var scope = ce_scope(stmt, builder, collect_mode, error, owned)
             computation = qmacro(ce_delay($i(builder), $ { $e(scope); }))
@@ -987,7 +1330,7 @@ def ce_lower_impl(blk : ExprBlock?; start : int; builder : string; collect_mode 
                 var rest <- ce_lower(blk, index+1, builder, collect_mode, error, owned)
                 var combined=qmacro(ce_combine($i(builder), $e(computation), $ { $b(rest); }))
                 if (collect_mode) {
-                    let first=make_unique_private_name("__ce_scope_result",stmt.at)
+                    let first=ce_unique_name("__ce_scope_result",stmt.at)
                     var append=qmacro($(var $i(first):typedecl($e(computation))) {
                         return <- ce_combine($i(builder),$i(first),$ { $b(rest); })
                     })
@@ -1022,7 +1365,7 @@ class CeHasRun : AstTypeInfoMacro {
 }
 
 def ce_run_scope(builder:string; outcome:ExpressionPtr; owned:bool; at:LineInfo) : ExpressionPtr {
-    let input=make_unique_private_name("__ce_run_outcome",at)
+    let input=ce_unique_name("__ce_run_outcome",at)
     var supported=qmacro(typeinfo ce_has_run(ce_run($i(builder),$i(input))))
     supported.at=at
     var finish=qmacro_block() {
@@ -1033,7 +1376,7 @@ def ce_run_scope(builder:string; outcome:ExpressionPtr; owned:bool; at:LineInfo)
         } else { return $i(input) }
     }
     if (owned) {
-        let result=make_unique_private_name("__ce_run_result",at)
+        let result=ce_unique_name("__ce_run_result",at)
         return qmacro_block() {
             var inscope $i(input) <- $e(outcome)
             static_if ($e(supported)) {
@@ -1056,10 +1399,21 @@ def ce_run_scope(builder:string; outcome:ExpressionPtr; owned:bool; at:LineInfo)
 class ComputationMacro : AstCallMacro {
     serial : int = 0
     def override canVisitArgument(expr : ExprCallMacro?; index : int) : bool {
+        if (expr.name=="__ce_stage") { return index < 2 + (expr.arguments[1] as ExprConstInt).value }
         return index == 0 || (index == 1 && expr.name=="__ce_lower_protocol")
     }
     def override canFoldReturnResult(expr : ExprCallMacro?) : bool { return false }
     def override visit(prog : ProgramPtr; mod : Module?; var expr : ExprCallMacro?) : ExpressionPtr {
+        if (expr.name=="__ce_stage") {
+            if (!ce_stage_ready(expr)) { return null }
+            var stage_error : string
+            var staged = ce_stage_visit(expr, stage_error)
+            if (!empty(stage_error)) {
+                macro_error(prog, expr.arguments[0].at, stage_error)
+                return null
+            }
+            return staged
+        }
         if (length(expr.arguments)==2 && expr.name=="computation" && expr.arguments[1] is ExprMakeBlock) {
             // A saved local may still be auto on the first inference pass.
             // Do not freeze default<auto> into the protocol probe.
@@ -1088,7 +1442,7 @@ class ComputationMacro : AstCallMacro {
         }
         if (expr.arguments[0]._type == null) { return null }
         serial++
-        let name = make_unique_private_name("__ce_builder_{serial}", expr.at)
+        let name = ce_unique_name("__ce_builder_{serial}", expr.at)
         let protocol = expr.arguments[1]._type
         if (protocol == null) { return null }
         let bt = expr.arguments[0]._type
@@ -1149,7 +1503,7 @@ class ComputationMacro : AstCallMacro {
             return null
         }
         var builder_type = clone_type(expr.arguments[0]._type)
-        let input = make_unique_private_name("__ce_input_{serial}", expr.at)
+        let input = ce_unique_name("__ce_input_{serial}", expr.at)
         var run=ce_run_scope(name,qmacro(ce_delay($i(name), $ { $b(body); })),collect_mode,expr.at)
         var scope = qmacro($($i(input) : $t(builder_type)) {
             var $i(name) = $i(input)
@@ -1261,9 +1615,9 @@ def ce_sequence_scope(node : ExpressionPtr; start : int; element : TypeDeclPtr; 
                     error = "sequence: shared locals require copyable values, without explicit reference, inscope, move or clone"
                     return blk
                 }
-                let cell = make_unique_private_name("__seq_cell_{variable.name}", stmt.at)
+                let cell = ce_unique_name("__seq_cell_{variable.name}", stmt.at)
                 let original_name = "{variable.name}"
-                let initial_name = make_unique_private_name("__seq_initial_{variable.name}", stmt.at)
+                let initial_name = ce_unique_name("__seq_initial_{variable.name}", stmt.at)
                 var declaration = clone_expression(stmt)
                 (declaration as ExprLet).variables[0].name := initial_name
                 var initialization = qmacro(invoke($ {
@@ -1298,14 +1652,14 @@ def ce_sequence_scope(node : ExpressionPtr; start : int; element : TypeDeclPtr; 
                     return blk
                 }
                 let identity = "{(stmt as ExprLet).variables[0].name}"
-                let owned = make_unique_private_name("__seq_owned_{identity}", stmt.at)
+                let owned = ce_unique_name("__seq_owned_{identity}", stmt.at)
                 let variable=(stmt as ExprLet).variables[0]
                 if (variable.flags.init_via_move || variable.flags.init_via_clone || variable.flags.inScope) {
                     error="use_resource: borrow ownership with 'var resource & = source |> use_resource'"
                     return blk
                 }
                 if (variable._type.flags.ref) {
-                    let cell=make_unique_private_name("__seq_resource_cell_{identity}",stmt.at)
+                    let cell=ce_unique_name("__seq_resource_cell_{identity}",stmt.at)
                     var raw_tail=qmacro_block() {} as ExprBlock
                     for(i in range(index+1,length(blk.list))) {raw_tail.list |> push <| clone_expression(blk.list[i])}
                     let replaced=ce_sequence_replace_local(raw_tail,identity,cell)
@@ -1362,9 +1716,9 @@ def ce_sequence_scope(node : ExpressionPtr; start : int; element : TypeDeclPtr; 
                 handler_body.list |> push <| generated
                 handler.mmFlags.isLambda = true
                 handler_body.blockFlags.isLambdaBlock = true
-                let item = make_unique_private_name("__seq_recovered", stmt.at)
-                let input = make_unique_private_name("__seq_try_source", stmt.at)
-                let recovery = make_unique_private_name("__seq_try_handler", stmt.at)
+                let item = ce_unique_name("__seq_recovered", stmt.at)
+                let input = ce_unique_name("__seq_try_source", stmt.at)
+                let recovery = ce_unique_name("__seq_try_handler", stmt.at)
                 var source = qmacro(invoke($ {
                     var $i(input) <- generator<$t(element)> { $e(body); return false }
                     var $i(recovery) <- $e(handler)
@@ -1385,7 +1739,7 @@ def ce_sequence_scope(node : ExpressionPtr; start : int; element : TypeDeclPtr; 
                     error = "sequence: expected expression |> bind"
                     return blk
                 }
-                let name = make_unique_private_name("__seq_item", stmt.at)
+                let name = ce_unique_name("__seq_item", stmt.at)
                 var declarations : array<ExpressionPtr>
                 if (stmt is ExprLet) {
                     var decl = clone_expression(stmt)
@@ -1417,7 +1771,7 @@ def ce_sequence_scope(node : ExpressionPtr; start : int; element : TypeDeclPtr; 
                 error = "sequence: expected expression |> yield_from"
                 return blk
             }
-            let name = make_unique_private_name("__seq_yield", stmt.at)
+            let name = ce_unique_name("__seq_yield", stmt.at)
             let normalized=ce_normalize_source(builder,call.arguments[0])
             var loop = qmacro_expr() {
                 for ($i(name) in $e(normalized)) {
@@ -1460,9 +1814,9 @@ def ce_sequence_scope(node : ExpressionPtr; start : int; element : TypeDeclPtr; 
 // Body and finalizer are owned by one scope iterator; its child is closed first.
 def ce_sequence_guard(body : ExpressionPtr; var setup : array<ExpressionPtr>;
                       cleanup : ExpressionPtr; element : TypeDeclPtr; at : LineInfo; identity : string) : ExpressionPtr {
-    let item = make_unique_private_name("__seq_scoped_{identity}", at)
-    let child = make_unique_private_name("__seq_child_{identity}", at)
-    let finish = make_unique_private_name("__seq_finish_{identity}", at)
+    let item = ce_unique_name("__seq_scoped_{identity}", at)
+    let child = ce_unique_name("__seq_child_{identity}", at)
+    let finish = ce_unique_name("__seq_finish_{identity}", at)
     var cleanup_lambda = clone_expression(cleanup) as ExprMakeBlock
     cleanup_lambda.mmFlags.isLambda = true
     (cleanup_lambda._block as ExprBlock).blockFlags.isLambdaBlock = true
