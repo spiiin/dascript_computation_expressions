@@ -2325,6 +2325,16 @@ def ce_sequence_scope(node : ExpressionPtr; start : int; element : TypeDeclPtr; 
             loop.at = stmt.at
             (loop as ExprFor).body.at = stmt.at
             output |> push <| ce_sequence_protect_loop(loop)
+        } elif (ce_is_match_statement(stmt)) {
+            var matched=clone_expression(stmt)
+            let arms=ce_match_arms(matched,error)
+            if(!empty(error)) {return blk}
+            for(arm in (arms as ExprBlock).list) {
+                var branch=arm as ExprIfThenElse
+                branch.if_true=ce_sequence_scope(branch.if_true,0,element,share,error,builder)
+                if(!empty(error)) {return blk}
+            }
+            output |> push <| matched
         } elif (stmt is ExprIfThenElse) {
             var branch = clone_expression(stmt) as ExprIfThenElse
             branch.if_true = ce_sequence_scope(branch.if_true, 0, element, share, error, builder)
@@ -2421,6 +2431,11 @@ class SequenceLocalReferences : AstVisitor {
         for (arg in blk.arguments) { if (arg.name==original) {hidden=true} }
     }
     def override visitExprBlock(var blk : ExprBlock?) : ExpressionPtr { self.restore(); return blk }
+    def override preVisitExprIfThenElse(expr:ExprIfThenElse?) {
+        self.save()
+        if(ce_match_binds(expr.cond,original)) {hidden=true}
+    }
+    def override visitExprIfThenElse(var expr:ExprIfThenElse?) : ExpressionPtr {self.restore();return expr}
     def override visitExprLetVariable(expr : ExprLet?; var arg : VariablePtr; lastArg : bool) : VariablePtr {
         if (arg.name==original) {hidden=true}
         return arg

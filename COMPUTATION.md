@@ -181,6 +181,43 @@ let description = computation(OptionBuilder()) {
 неявный успешный Unit, поэтому вернуть `int` только из одной такой ветки
 нельзя: это несовместимые типы.
 
+### `match` внутри Task и Sequence
+
+В `TaskBuilder`, `TaskResultBuilder` и `SequenceBuilder` ветки обычного
+`daslib/match` поддерживают CE-операции. Например, после ожидания выполнение
+продолжается внутри выбранной ветки, затем переходит к общему хвосту:
+
+```das
+require ./lib/computation.das
+require ./lib/task_builder.das
+require daslib/match
+
+[task]
+def after_vote(action : int) : int {
+    var reward = 0
+    match (action) {
+        if (1 || 2) {
+            let amount = task_after_polls(1, 4) |> bind
+            reward += amount
+        }
+        if (_) { reward = 1 }
+    }
+    return reward
+}
+```
+
+Поддержаны вложенные `match`, паттерны `$v(name)` и guards; связанные имена
+могут затенять внешние CE-переменные. При возобновлении выбранной ветки её
+паттерн и guard не проверяются повторно. `return` завершает Task, а
+`break`/`continue` из ветки относятся к окружающему CE-циклу. Ресурсы ветки
+освобождаются перед общим хвостом, а также при отмене и ошибке.
+
+Макрос CE обрабатывает тела веток, оставляя выбор паттерна стандартному
+`daslib/match`. Нужен самостоятельный statement `match(subject) { ... }`
+(также допустим `match::match`). Поддержка не распространяется на RHS-выражения
+`let x = match(...)`, `static_match`, `multi_match` или eager builders.
+Регрессия: [test_task_match.das](tests/test_task_match.das).
+
 ## Zero, Combine, Delay
 
 - `CeUnit` — пустая структура для результата без полезного значения.

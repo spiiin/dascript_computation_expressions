@@ -28,6 +28,7 @@ try {
     Check 'tests/test_task_scheduler_insight.das' $true 'Task scheduler insight checks OK'
     Check 'tests/test_task_type_names.das' $true 'Task type name checks OK'
     Check 'tests/test_task_function.das' $true 'Task function checks OK'
+    Check 'tests/test_task_match.das' $true 'CE match OK'
     Check 'tests/test_task_function_untyped.das' $false 'needs the type of the task value'
     Check 'tests/test_task_function_finally.das' $false 'a task body has no native finally'
     Check 'tests/test_task_jobque_stream.das' $true 'Task jobque stream checks OK'
