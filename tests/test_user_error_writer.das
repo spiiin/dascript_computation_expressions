@@ -1,5 +1,4 @@
 options gen2
-expect 30231
 expect 30341:2
 expect 30838
 // diagnostic: can't locate variable 'missing_writer'
@@ -17,5 +16,4 @@ def main() {
         let b = writer_value(a + 1, "two;") |> bind
         return a + b + missing_writer
     }
-    print("{result}\n")
 }

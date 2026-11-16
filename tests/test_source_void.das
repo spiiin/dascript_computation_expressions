@@ -1,7 +1,6 @@
 options gen2
 expect 30107
 expect 30165:3
-expect 30231
 expect 30316
 expect 30341
 expect 30820:2
@@ -11,4 +10,4 @@ require ../packages/computation/computation.das
 struct BadSource {}
 def ce_source(builder:ResultBuilder; source:BadSource) {}
 [export]
-def main() {let value=computation(ResultBuilder()) {let n=BadSource() |> bind;return n};print("{value}")}
+def main() {let value=computation(ResultBuilder()) {let n=BadSource() |> bind;return n} }

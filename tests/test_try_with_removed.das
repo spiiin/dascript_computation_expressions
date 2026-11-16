@@ -1,5 +1,4 @@
 options gen2
-expect 30231
 expect 50503
 // diagnostic: try_with is not supported: a panic is fatal
 require ../packages/computation/computation.das
@@ -15,5 +14,4 @@ def main() {
             return 2
         })
     }
-    print("{result}\n")
 }

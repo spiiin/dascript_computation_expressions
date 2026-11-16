@@ -1,5 +1,4 @@
 options gen2
-expect 30231
 expect 30316
 expect 30341
 expect 30820
@@ -23,5 +22,4 @@ def main() {
         let b = half(a) |> bind
         return a + b + missing_direct
     }
-    print("{result}\n")
 }

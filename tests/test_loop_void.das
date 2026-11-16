@@ -1,5 +1,4 @@
 options gen2
-expect 30231
 expect 30341
 expect 50503
 // diagnostic: loop hook must return a builder outcome
@@ -9,4 +8,4 @@ def ce_protocol(builder:InvalidLoop) {return CeValueProtocol()}
 def ce_zero(builder:InvalidLoop) {return 0}
 def ce_while(builder:InvalidLoop; condition:block<():bool>; body:block<():int>) {}
 [export]
-def main() {let value=computation(InvalidLoop()) {while(false) {}}; print("{value}")}
+def main() {let value=computation(InvalidLoop()) {while(false) {}} }

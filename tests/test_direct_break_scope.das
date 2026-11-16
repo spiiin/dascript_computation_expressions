@@ -1,5 +1,4 @@
 options gen2
-expect 30231
 expect 50503
 // diagnostic: break and continue need a loop around them
 require ../packages/computation/computation.das
@@ -13,5 +12,4 @@ def main() {
         }, $ {
         })
     }
-    print("{result}\n")
 }
