@@ -1249,7 +1249,7 @@ def ce_collect_emit_scope(blk:ExprBlock?; start:int; builder,sink:string; owned:
 // a handler would be released, so there is no handler.
 let CE_TRY_WITH_REMOVED = "computation: try_with is not supported: a panic is fatal and is never caught; report a failure as a value, e.g. a Result"
 def private ce_lower_try_finally(call : ExprCall?; builder : string; collect_mode, owned, direct : bool; var error : string&;
-                                 escape : string = "") : ExpressionPtr {
+                                 escape : string = ""; target : string = "") : ExpressionPtr {
     if (length(call.arguments) != 2 || !(call.arguments[0] is ExprMakeBlock)
             || !(call.arguments[1] is ExprMakeBlock)) {
         error = "computation: try_finally expects two blocks (body, cleanup)"
@@ -1261,7 +1261,7 @@ def private ce_lower_try_finally(call : ExprCall?; builder : string; collect_mod
         error = "computation: try_finally blocks must have no arguments"
         return null
     }
-    var protected_body = ce_scope(source, builder, collect_mode, error, owned, direct, escape)
+    var protected_body = ce_scope(source, builder, collect_mode, error, owned, direct, escape, target)
     return qmacro(ce_try_finally($i(builder), $ { $e(protected_body); }, $e(call.arguments[1])))
 }
 def private ce_validate_use_resource(stmt : ExpressionPtr; call : ExprCall?; var error : string&) : bool {
@@ -1466,6 +1466,7 @@ struct private CeDirectState {
     witness : bool      // a failure is converted to the result type
     loops : bool        // a loop may park the result and leave
     escapes : bool      // a scope nested in a loop body may break or continue the loop
+    target : string     // the scope whose result a `return` here is; empty when it is this scope
 }
 // try_with, try_finally and the scope after use_resource are blocks handed to
 // the builder, so a break or continue inside them cannot reach the loop around
@@ -1493,6 +1494,47 @@ def private ce_direct_leave(var value : ExpressionPtr; witness : string; looped 
         $i(ce_direct_outcome(witness)) <- $e(value)
         $i(ce_direct_left(witness)) = true
         break
+    }
+}
+// try_finally and the scope after use_resource are blocks handed to the
+// builder: a `return` in one ends that block, not the computation. When more
+// code follows the block, its `return value` is the computation's result all
+// the same: the value is parked in the slot of the scope the block is nested
+// in (`target`), and the block ends with Unit, so cleanup runs and the resource
+// is released on the way out. Every scope between the two ends the same way.
+def private ce_direct_hand_over(var value : ExpressionPtr; builder, target : string; looped : bool) : ExpressionPtr {
+    if (looped) {
+        return qmacro_block() {
+            $i(ce_direct_outcome(target)) <- $e(value)
+            $i(ce_direct_left(target)) = true
+            break
+        }
+    }
+    return qmacro_block() {
+        $i(ce_direct_outcome(target)) <- $e(value)
+        $i(ce_direct_left(target)) = true
+        return ce_zero($i(builder))
+    }
+}
+// After a step or a loop of a scope that hands its result over: keep leaving.
+def private ce_direct_handed(builder, target : string; looped : bool) : ExpressionPtr {
+    if (looped) { return qmacro_expr() { if ($i(ce_direct_left(target))) { break } } }
+    return qmacro_expr() { if ($i(ce_direct_left(target))) { return ce_zero($i(builder)) } }
+}
+// Where a block nested at a statement of this scope sends its `return`. A
+// block in tail position is the scope's own result and needs no slot.
+def private ce_direct_target(witness : string; tail : bool; var state : CeDirectState&) : string {
+    if (!empty(state.target)) { return state.target }
+    if (tail) { return "" }
+    state.loops = true
+    return witness
+}
+// After the step of a nested block that may have handed a result over.
+def private ce_direct_received(builder, witness : string; looped : bool; var output : array<ExpressionPtr>; state : CeDirectState) {
+    if (!empty(state.target)) {
+        output |> push <| ce_direct_handed(builder, state.target, looped)
+    } else {
+        output |> push <| ce_direct_resume(witness, looped)
     }
 }
 // After a loop: keep leaving if its body parked the result.
@@ -1556,11 +1598,14 @@ def private ce_direct_statement(blk : ExprBlock?; index : int; builder, witness,
             var raw : string
             let forwarded = ce_direct_evaluate(call.arguments[0], builder, stmt.at, false, output, raw, error)
             if (!empty(error)) { return true }
-            returned = ce_direct_leave(qmacro(ce_return_from($i(builder), $i(forwarded))), witness, looped)
+            var value = qmacro(ce_return_from($i(builder), $i(forwarded)))
+            returned = (empty(state.target) ? ce_direct_leave(value, witness, looped)
+                : ce_direct_hand_over(value, builder, state.target, looped))
         } else {
             var value = qmacro(ce_return($i(builder), $e(ret.subexpr)))
             (value as ExprCall).arguments[1].at = ret.subexpr.at
-            returned = ce_direct_leave(value, witness, looped)
+            returned = (empty(state.target) ? ce_direct_leave(value, witness, looped)
+                : ce_direct_hand_over(value, builder, state.target, looped))
         }
         returned.at = stmt.at
         output |> push <| returned
@@ -1611,7 +1656,7 @@ def private ce_direct_statement(blk : ExprBlock?; index : int; builder, witness,
         // The rest of this scope is the resource's continuation, so nothing
         // is left to lower here. In a branch that is not the block's tail the
         // continuation is a step, and control goes on after the branch.
-        var rest <- ce_lower(blk, index+1, builder, false, error, false, true, nested)
+        var rest <- ce_lower(blk, index+1, builder, false, error, false, true, nested, ce_direct_target(witness, tail, state))
         if (!empty(error)) { return true }
         let scoped = ce_lower_use_resource(stmt, call, rest, builder)
         if (tail) {
@@ -1620,6 +1665,7 @@ def private ce_direct_statement(blk : ExprBlock?; index : int; builder, witness,
             let step = ce_unique_name("__ce_step", stmt.at)
             output |> push <| qmacro_expr() { let $i(step) = $e(scoped) }
             output |> push <| ce_direct_check(builder, step, witness, true, looped)
+            ce_direct_received(builder, witness, looped, output, state)
             ce_direct_escaped(builder, witness, inherited, looped, output, state)
             state.witness = true
         }
@@ -1653,6 +1699,7 @@ def private ce_direct_statement(blk : ExprBlock?; index : int; builder, witness,
             output |> push <| ce_loop_stage(stmt, body, builder, false, false, true)
         }
         output |> push <| ce_direct_resume(witness, looped)
+        if (!empty(state.target)) { output |> push <| ce_direct_handed(builder, state.target, looped) }
         state.loops = true
         return false
     }
@@ -1660,7 +1707,8 @@ def private ce_direct_statement(blk : ExprBlock?; index : int; builder, witness,
     if (stmt is ExprCall && (stmt as ExprCall).name == "try_with") {
         error = CE_TRY_WITH_REMOVED
     } elif (stmt is ExprCall && (stmt as ExprCall).name == "try_finally") {
-        computation = ce_lower_try_finally(stmt as ExprCall, builder, false, false, true, error, nested)
+        computation = ce_lower_try_finally(stmt as ExprCall, builder, false, false, true, error, nested,
+            ce_direct_target(witness, tail && last, state))
     }
     if (!empty(error)) { return true }
     if (computation != null) {
@@ -1671,6 +1719,7 @@ def private ce_direct_statement(blk : ExprBlock?; index : int; builder, witness,
         let step = ce_unique_name("__ce_step", stmt.at)
         output |> push <| qmacro_expr() { let $i(step) = $e(computation) }
         output |> push <| ce_direct_check(builder, step, witness, true, looped)
+        ce_direct_received(builder, witness, looped, output, state)
         ce_direct_escaped(builder, witness, inherited, looped, output, state)
         state.witness = true
         return false
@@ -1710,9 +1759,10 @@ def private ce_direct_inline(node : ExpressionPtr; builder, witness, inherited :
     return qmacro_block() { $b(body); }
 }
 def private ce_direct_scope(blk : ExprBlock?; start : int; builder : string; var error : string&;
-                            inherited : string = "") : array<ExpressionPtr> {
+                            inherited : string = ""; target : string = "") : array<ExpressionPtr> {
     let witness = ce_unique_name("__ce_result", blk.at)
     var state : CeDirectState
+    state.target = target
     var output <- ce_direct_lower(blk, start, builder, witness, inherited, true, true, false, state, error)
     if (state.escapes && empty(error)) {
         var escape = qmacro_expr() { var $i(ce_direct_escape(witness)) = 0 }
@@ -1732,6 +1782,10 @@ def private ce_direct_scope(blk : ExprBlock?; start : int; builder : string; var
         var declared = qmacro_expr() {
             var $i(witness) : typedecl(invoke($ { $b(replica); }))?
         }
+        // A scope that hands its result over ends with Unit whatever it returns.
+        if (!empty(target)) {
+            declared = qmacro_expr() { var $i(witness) : typedecl(ce_zero($i(builder)))? }
+        }
         ce_restamp(declared, ce_scope_end(blk.at), true)
         output |> emplace(declared, 0)
     }
@@ -1741,7 +1795,7 @@ def private ce_direct_scope(blk : ExprBlock?; start : int; builder : string; var
 // Lower every CE scope independently. Empty scopes end in Zero; only Bind and
 // Combine decide whether to enter their continuation. For fallback owns its cursors.
 def ce_scope(node : ExpressionPtr; builder : string; collect_mode : bool; var error : string&; owned:bool=false; direct:bool=false;
-             escape:string="") : ExpressionPtr {
+             escape:string=""; target:string="") : ExpressionPtr {
     var source = (qmacro_block() {}) as ExprBlock
     if (node != null) {
         if (node is ExprBlock) {
@@ -1753,13 +1807,13 @@ def ce_scope(node : ExpressionPtr; builder : string; collect_mode : bool; var er
     if (!empty(source.finalList)) {
         error = "computation: use try_finally(body, cleanup) instead of a native finally on a CE scope"
     }
-    var body <- ce_lower(source, 0, builder, collect_mode, error, owned, direct, escape)
+    var body <- ce_lower(source, 0, builder, collect_mode, error, owned, direct, escape, target)
     return qmacro_block() { $b(body); }
 }
 
 def ce_lower(blk : ExprBlock?; start : int; builder : string; collect_mode : bool;
-             var error : string&; owned:bool=false; direct:bool=false; escape:string="") : array<ExpressionPtr> {
-    if (direct) { return <- ce_direct_scope(blk, start, builder, error, escape) }
+             var error : string&; owned:bool=false; direct:bool=false; escape:string=""; target:string="") : array<ExpressionPtr> {
+    if (direct) { return <- ce_direct_scope(blk, start, builder, error, escape, target) }
     var output <- ce_lower_impl(blk, start, builder, collect_mode, error, owned)
     if(collect_mode && empty(error) && ce_can_collect_fuse(blk,start,owned)) {
         let sink=ce_unique_name("__ce_sink",blk.at)
@@ -2419,7 +2473,18 @@ def ce_sequence_scope(node : ExpressionPtr; start : int; element : TypeDeclPtr; 
                 (loop as ExprFor).body = rest
                 loop.at = stmt.at
                 (loop as ExprFor).body.at = stmt.at
-                output |> push <| ce_sequence_protect_loop(loop)
+                // A bind walks its source. One that cannot be walked is reported
+                // here, once; the loop over it would fail three times over.
+                var walked = ce_sequence_protect_loop(loop)
+                var guarded = qmacro_expr() {
+                    static_if (typeinfo is_iterable($e(normalized))) {
+                        $e(walked)
+                    } else {
+                        static_assert(false, "computation: a sequence cannot bind a source of type {typeinfo stripped_typename($e(normalized))}: bind takes each element of what a for loop can walk")
+                    }
+                }
+                ce_restamp(guarded, stmt.at)
+                output |> push <| guarded
                 return qmacro_block() { $b(output); }
             }
         }
