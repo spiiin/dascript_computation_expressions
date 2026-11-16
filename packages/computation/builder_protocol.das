@@ -28,6 +28,16 @@ def ce_await_zero(builder:auto) => CeResumableNoZero()
 struct CeResumableForFallback {_ce_marker:uint8}
 def ce_await_for_source(builder:auto; source:auto; control:auto) => CeResumableForFallback()
 def ce_await_for_merge(builder:auto; left,right:auto) => CeResumableForFallback()
+// A sequence builder that awaits its sources may walk an awaited source itself:
+// ce_await_input(builder, source) then replaces the walk over
+// ce_await_source(builder, source). A builder without the hook keeps that walk.
+struct CeAwaitInputFallback {_ce_marker:uint8}
+def ce_await_input(builder:auto; source:auto) => CeAwaitInputFallback()
+// What a deferred run must own in a result that wraps its payload, as a Task
+// wraps its value: ce_deferred_payload(result) has the payload's type. It is
+// only typed, never called. Without the hook the result itself is checked.
+struct CeDeferredPayloadFallback {_ce_marker:uint8}
+def ce_deferred_payload(result:auto) => CeDeferredPayloadFallback()
 def ce_await_for_incompatible(builder:auto) {
     concept_assert(false,"async For: all sources must support ce_await_for_merge; cannot mix AsyncSequence and native sources")
 }

@@ -71,6 +71,17 @@ def ce_await_failed(builder:tuple<kind:AsyncSequenceContext;element:auto>; event
 def ce_await_failure(builder:tuple<kind:AsyncSequenceContext;element:auto(TT)?>; event:auto) =>
     <- ce_await_pending(builder)
 
+// A deferred stream's producer keeps the frame across all its next-Tasks: its
+// finalizers run before cleanup, even if the primary lease closes while a
+// next is pending.
+def ce_deferred_keep(var stream:tuple<tag:AsyncSequenceTag;owner:iterator<auto(StateT)?>;element:auto>; var cleanup:lambda<():void>) {
+    var state:StateT?
+    if(!next(stream.owner,state)) {panic("deferred: AsyncSequence owner is closed")}
+    unsafe {state.source <- ce_deferred_wrap_sequence(state.source,cleanup)}
+}
+// What a deferred run must own in a stream: its elements.
+def ce_deferred_payload(stream:tuple<tag:AsyncSequenceTag;owner:iterator<auto(StateT)?>;element:iterator<auto(TT)>>) : TT -const -&? => null
+
 // One iterator owns both the Task and its event slot. The yielded reference
 // stays valid across the entire continuation, including subsequent suspension.
 def ce_await_input(builder:tuple<kind:AsyncSequenceContext;element:auto>;

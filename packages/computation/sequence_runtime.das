@@ -145,3 +145,7 @@ def sequence_next_move(var source:iterator<auto(TT)>; var value:TT -&) : bool {
     }
     return true
 }
+
+// Releases a local that a resumable computation kept across its suspensions.
+// The lowering of such a local calls it when the local's scope ends.
+def ce_task_local_delete(var value:auto) {static_if(typeinfo can_delete(value)) {delete value}}

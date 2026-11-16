@@ -5,6 +5,7 @@ require ../computation/sequence_runtime.das public
 require ../computation/resumable_lowering.das public
 require ./cancellation_token.das public
 require ../computation/move_builders.das public
+require ../computation/deferred_runtime.das public
 require ./task_function.das public
 require daslib/rtti
 require daslib/templates
@@ -41,7 +42,14 @@ struct template Task {
 }
 struct TaskContext {_ce_marker:uint8}
 struct TaskResultContext {_ce_marker:uint8}
-def ce_task_local_delete(var value:auto) {static_if(typeinfo can_delete(value)) {delete value}}
+// A deferred task runs on a frame of its own. The task's source keeps the
+// frame until the task is done.
+def ce_deferred_keep(var task:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(TT)>>;status:TaskStatus;value:TT;error:string;polling:bool>;
+                     var cleanup:lambda<():void>) {
+    task.source <- ce_deferred_wrap_sequence(task.source,cleanup)
+}
+// What a deferred run must own in a task: its value.
+def ce_deferred_payload(task:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(TT)>>;status:TaskStatus;value:TT;error:string;polling:bool>) : TT -const -&? => null
 
 // Control is handle by nested await/resource generators, scoped to one loop.
 struct CeTaskLoopControl {signal:int}

@@ -2284,31 +2284,47 @@ class CeSequenceSource : AstTypeInfoMacro {
             return null
         }
         let source=expr.subexpr
-        // Fuse protected await adaptation after source normalization/inference.
         if(source is ExprCall && length((source as ExprCall).arguments)==2) {
             let call=source as ExprCall
             var origin=call.func
             while(origin!=null && origin.fromGeneric!=null) {origin=origin.fromGeneric}
-            let descriptor=call.arguments[0]._type
-            if(origin!=null && origin.name=="ce_await_source" && origin._module.name=="task_builder"
-                && descriptor!=null && descriptor.baseType==Type.tTuple && !empty(descriptor.argTypes)
-                && descriptor.argTypes[0].baseType==Type.tStructure
-                && descriptor.argTypes[0].structType.name=="AsyncSequenceContext"
-                && descriptor.argTypes[0].structType._module.name=="async_sequence_builder") {
-                return qmacro(ce_await_input($e(call.arguments[0]),$e(call.arguments[1])))
+            // An awaited source: the builder's ce_await_input hook may walk it.
+            // The hook is typed first, and this macro is asked again about it.
+            if(origin!=null && origin.name=="ce_await_source") {
+                return qmacro(typeinfo ce_sequence_source(ce_await_input($e(call.arguments[0]),$e(call.arguments[1]))))
+            }
+            if(origin!=null && origin.name=="ce_await_input") {
+                if(!ce_is_protocol(source._type,"CeAwaitInputFallback")) {return clone_expression(source)}
+                // No hook: walk what ce_await_source gives, as any other source.
+                return qmacro(typeinfo ce_sequence_walk(ce_await_source($e(call.arguments[0]),$e(call.arguments[1]))))
             }
         }
-        if (source._type.baseType==Type.tIterator) {
-            return qmacro(invoke($ {
-                static_if (typeinfo is_ref_value(type<$t(source._type.firstType)>)) {
-                    return <- ce_sequence_input($e(source))
-                } static_elif (typeinfo can_copy(type<$t(source._type.firstType)>)) {
-                    return <- ce_sequence_input($e(source))
-                } else {return <- ce_sequence_own_elements($e(source))}
-            }))
-        }
-        return clone_expression(source)
+        return ce_sequence_walked(source)
     }
+}
+// The walk itself, without the question about the await hook.
+[typeinfo_macro(name="ce_sequence_walk")]
+class CeSequenceWalk : AstTypeInfoMacro {
+    def override getAstChange(expr:ExprTypeInfo?; var errors:das_string) : ExpressionPtr {
+        if (expr.subexpr==null || expr.subexpr._type==null) {
+            errors := "sequence: source type must be inferred"
+            return null
+        }
+        return ce_sequence_walked(expr.subexpr)
+    }
+}
+// Protect only iterator sources; native array/range ownership stays in the generator.
+def private ce_sequence_walked(source:ExpressionPtr) : ExpressionPtr {
+    if (source._type.baseType==Type.tIterator) {
+        return qmacro(invoke($ {
+            static_if (typeinfo is_ref_value(type<$t(source._type.firstType)>)) {
+                return <- ce_sequence_input($e(source))
+            } static_elif (typeinfo can_copy(type<$t(source._type.firstType)>)) {
+                return <- ce_sequence_input($e(source))
+            } else {return <- ce_sequence_own_elements($e(source))}
+        }))
+    }
+    return clone_expression(source)
 }
 def ce_sequence_protect_loop(loop:ExpressionPtr) : ExpressionPtr {
     var result=clone_expression(loop) as ExprFor

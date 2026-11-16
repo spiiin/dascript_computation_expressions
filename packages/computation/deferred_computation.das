@@ -20,24 +20,25 @@ def private ce_snapshot_safe(t:TypeDeclPtr) : bool {
     return true
 }
 
-// Only built-in null phantom descriptors are allowed to contain a pointer.
+// A builder may be a phantom descriptor: a marker structure named `kind`, then
+// null pointers that only carry types, as in (kind=MoveListContext(), element=null).
+// Such a descriptor owns nothing, so its pointers are allowed in a snapshot.
 // Snapshot data and payload fields continue to use the ordinary recursive check.
+def private ce_phantom_descriptor(t:TypeDeclPtr) : bool {
+    if (t.baseType!=Type.tTuple || length(t.argTypes)<2 || length(t.argNames)!=length(t.argTypes) || t.argNames[0]!="kind") {return false}
+    let tag=t.argTypes[0]
+    if (tag.baseType!=Type.tStructure || length(tag.structType.fields)!=1 || tag.structType.fields[0].name!="_ce_marker") {return false}
+    for (index in range(1,length(t.argTypes))) {
+        if (t.argTypes[index].baseType!=Type.tPointer || !ce_snapshot_safe(t.argTypes[index].firstType)) {return false}
+    }
+    return true
+}
 def private ce_move_descriptor(t:TypeDeclPtr; moduleName,kind:string) : bool {
     if (t.baseType!=Type.tTuple || length(t.argTypes)!=2 || length(t.argNames)!=2) {return false}
     let tag=t.argTypes[0]
     return (t.argNames[0]=="kind" && t.argNames[1]=="element"
         && tag.baseType==Type.tStructure && tag.structType.name==kind && tag.structType._module.name==moduleName
         && t.argTypes[1].baseType==Type.tPointer && ce_snapshot_safe(t.argTypes[1].firstType))
-}
-
-// TaskResultBuilder(type<T>, type<E>) carries two such markers.
-def private ce_task_error_descriptor(t:TypeDeclPtr) : bool {
-    if (t.baseType!=Type.tTuple || length(t.argTypes)!=3 || length(t.argNames)!=3) {return false}
-    let tag=t.argTypes[0]
-    return (t.argNames[0]=="kind" && t.argNames[1]=="element" && t.argNames[2]=="error"
-        && tag.baseType==Type.tStructure && tag.structType.name=="TaskResultErrorContext" && tag.structType._module.name=="task_builder"
-        && t.argTypes[1].baseType==Type.tPointer && ce_snapshot_safe(t.argTypes[1].firstType)
-        && t.argTypes[2].baseType==Type.tPointer && ce_snapshot_safe(t.argTypes[2].firstType))
 }
 
 [typeinfo_macro(name="ce_deferred_move_sequence_result")]
@@ -57,17 +58,21 @@ class DeferredMoveSequenceResult : AstTypeInfoMacro {
 class DeferredResult : AstTypeInfoMacro {
     def override getAstChange(expr:ExprTypeInfo?; var errors:das_string) : ExpressionPtr {
         if (expr.subexpr==null || expr.subexpr._type==null || expr.subexpr._type.isAutoOrAlias) { return null }
-        let result=expr.subexpr._type
-        if(result.baseType==Type.tTuple && length(result.argTypes)==6 && result.argTypes[0].baseType==Type.tStructure
-            && result.argTypes[0].structType.name=="TaskTag" && result.argTypes[0].structType._module.name=="task_builder") {
-            if(!ce_snapshot_safe(result.argTypes[3])) {errors:="deferred: Task result must own its payload";return null}
-        } elif(result.baseType==Type.tTuple && length(result.argTypes)==3 && result.argTypes[0].baseType==Type.tStructure
-            && result.argTypes[0].structType.name=="AsyncSequenceTag" && result.argTypes[0].structType._module.name=="async_sequence_builder") {
-            let token=result.argTypes[2]
-            if(token.baseType!=Type.tIterator || token.firstType.flags.ref || !ce_snapshot_safe(token.firstType)) {
-                errors:="deferred: AsyncSequence elements must own their data";return null
+        // The expression is ce_deferred_payload(result). A result that wraps
+        // its payload answers with a null pointer to the payload's type; any
+        // other result is checked as it is.
+        let hooked=expr.subexpr is ExprCall && length((expr.subexpr as ExprCall).arguments)==1
+        if (hooked && !ce_is_protocol(expr.subexpr._type,"CeDeferredPayloadFallback")) {
+            let payload=expr.subexpr._type
+            if (payload.baseType!=Type.tPointer || payload.firstType==null || !ce_snapshot_safe(payload.firstType)) {
+                errors:="deferred: a result must own its payload; references, pointers and iterators cannot escape a run snapshot"
+                return null
             }
-        } elif (result.baseType==Type.tIterator && !result.flags.ref) {
+            return <- new ExprConstBool(at=expr.at,value=true)
+        }
+        let result=hooked ? (expr.subexpr as ExprCall).arguments[0]._type : expr.subexpr._type
+        if (result==null || result.isAutoOrAlias) { return null }
+        if (result.baseType==Type.tIterator && !result.flags.ref) {
             if (result.firstType.flags.ref || !ce_snapshot_safe(result.firstType)) {
                 errors := "deferred: iterator elements must own their data; references, pointers and nested iterators cannot escape a run snapshot"
                 return null
@@ -107,10 +112,11 @@ class DeferredMacro : AstCallMacro {
         if (bt.isAutoOrAlias || et.isAutoOrAlias) { return null }
         let moveList=ce_move_descriptor(bt,"list_builder","MoveListContext")
         let moveSequence=ce_move_descriptor(bt,"sequence_builder","MoveSequenceContext")
-        let taskError=ce_task_error_descriptor(bt)
-        let taskBuilder=ce_move_descriptor(bt,"task_builder","TaskContext") || ce_move_descriptor(bt,"task_builder","TaskResultContext") || taskError
-        let asyncSequence=ce_move_descriptor(bt,"async_sequence_builder","AsyncSequenceContext")
-        if ((!ce_snapshot_safe(bt) && !moveList && !moveSequence && !taskBuilder && !asyncSequence) || !ce_snapshot_safe(et)) {
+        // Any other phantom descriptor builds a result that is moved, never
+        // copied: a task, an asynchronous sequence, a builder of one's own.
+        let phantom=ce_phantom_descriptor(bt)
+        let moved=phantom && !moveList && !moveSequence
+        if ((!ce_snapshot_safe(bt) && !phantom) || !ce_snapshot_safe(et)) {
             macro_error(prog,expr.at,"deferred: builder and snapshot must own their data; pointers, blocks, lambdas, iterators and native handles are unsupported")
             return null
         }
@@ -126,7 +132,7 @@ class DeferredMacro : AstCallMacro {
         inner.arguments |> push <| qmacro($i(frame).builder)
         inner.arguments |> push <| raw
         var callback=qmacro(@@($i(frame):tuple<marker:int;builder:$t(builderType);value:$t(et)>?) {
-            static_assert(typeinfo ce_deferred_result($e(inner)))
+            static_assert(typeinfo ce_deferred_result(ce_deferred_payload($e(inner))))
             static_if (typeinfo can_copy($e(inner))) { return $e(inner) }
             else { return <- $e(inner) }
         })
@@ -137,11 +143,11 @@ class DeferredMacro : AstCallMacro {
                 return <- $e(inner)
             })
         }
-        if(taskBuilder || asyncSequence) {
+        if(moved) {
             let result=ce_unique_name("__deferred_task",expr.at)
             callback=qmacro(@@($i(frame):tuple<marker:int;builder:$t(builderType);value:$t(et)>?) {
                 var $i(result) <- $e(inner)
-                static_assert(typeinfo ce_deferred_result($i(result)))
+                static_assert(typeinfo ce_deferred_result(ce_deferred_payload($i(result))))
                 return <- $i(result)
             })
         }
@@ -151,22 +157,20 @@ class DeferredMacro : AstCallMacro {
         if (moveList || moveSequence) {
             make=qmacro($($i(esource):$t(et)) { return <- ce_deferred_create($i(bsource),$i(esource),$e(callback),CeDeferredTypeBuilder()) })
         }
-        if(taskBuilder) {make=qmacro($($i(esource):$t(et)) {return <- ce_deferred_create($i(bsource),$i(esource),$e(callback),CeDeferredTaskBuilder())})}
-        if(asyncSequence) {make=qmacro($($i(esource):$t(et)) {return <- ce_deferred_create($i(bsource),$i(esource),$e(callback),CeDeferredAsyncSequenceBuilder())})}
+        if(moved) {make=qmacro($($i(esource):$t(et)) {return <- ce_deferred_create($i(bsource),$i(esource),$e(callback),CeDeferredMovedBuilder())})}
         var dataScope=ce_source_apply(data,make,true)
         // Borrow saved const builders while copying them into the owned frame.
         var builderInputType=clone_type(builderType)
         builderInputType.flags.constant=true
         var withBuilder=qmacro($($i(bsource):$t(builderInputType)) { return <- $e(dataScope) })
-        if (moveList || moveSequence || taskBuilder || asyncSequence) {
+        if (phantom) {
+            // Every pointer of a phantom descriptor only carries a type.
+            var marked=qmacro($i(bsource).$f(string(bt.argNames[1]))!=null)
+            for (index in range(2,length(bt.argNames))) {
+                marked=qmacro($e(marked) || $i(bsource).$f(string(bt.argNames[index]))!=null)
+            }
             withBuilder=qmacro($($i(bsource):$t(builderInputType)) {
-                if ($i(bsource).element!=null) {panic("deferred: move-only builder type marker must be null")}
-                return <- $e(dataScope)
-            })
-        }
-        if (taskError) {
-            withBuilder=qmacro($($i(bsource):$t(builderInputType)) {
-                if ($i(bsource).element!=null || $i(bsource).error!=null) {panic("deferred: move-only builder type marker must be null")}
+                if ($e(marked)) {panic("deferred: move-only builder type marker must be null")}
                 return <- $e(dataScope)
             })
         }

@@ -5,31 +5,31 @@ require ./sequence_runtime.das public
 struct DeferredComputation {_ce_marker:uint8}
 struct CeDeferredValueBuilder {_ce_marker:uint8}
 struct CeDeferredTypeBuilder {_ce_marker:uint8}
-struct CeDeferredTaskBuilder {_ce_marker:uint8}
-struct CeDeferredAsyncSequenceBuilder {_ce_marker:uint8}
+struct CeDeferredMovedBuilder {_ce_marker:uint8}
 def private ce_deferred_copy_builder(var target:auto; source:auto; policy:CeDeferredValueBuilder) {target := source}
 // The macro checks that this built-in phantom descriptor contains only null.
 def private ce_deferred_copy_builder(var target:auto; source:auto; policy:CeDeferredTypeBuilder) {target.element = null}
-def private ce_deferred_copy_builder(var target:auto; source:auto; policy:CeDeferredTaskBuilder) {target.element = null}
-def private ce_deferred_copy_builder(var target:auto; source:auto; policy:CeDeferredAsyncSequenceBuilder) {target.element = null}
+// Any other phantom descriptor: its pointers are null, as a fresh target's are.
+def private ce_deferred_copy_builder(var target:auto; source:auto; policy:CeDeferredMovedBuilder) {}
 
 def private ce_deferred_finish(var result:auto;var frame:auto?;policy:auto) {
     unsafe {delete frame}
     return <- result
 }
-def private ce_deferred_finish(var result:auto;var frame:auto?;policy:CeDeferredTaskBuilder) {
+// A moved result may go on running after this call returns, as a task does.
+// ce_deferred_keep(result, cleanup) is its hook: it makes the result the owner
+// of `cleanup`, which deletes the frame, and runs it when the result is done.
+def private ce_deferred_finish(var result:auto;var frame:auto?;policy:CeDeferredMovedBuilder) {
     var cleanup <- @ capture(move(frame)) {unsafe {delete frame}}
-    result.source <- ce_deferred_wrap_sequence(result.source,cleanup)
+    // `_::` looks the hook up where the computation is written: the module of
+    // the result is visible there, and is not from here.
+    _::ce_deferred_keep(result,cleanup)
     return <- result
 }
-def private ce_deferred_finish(var result:tuple<tag:auto;owner:iterator<auto(StateT)?>;element:auto>;var frame:auto?;policy:CeDeferredAsyncSequenceBuilder) {
-    var cleanup <- @ capture(move(frame)) {unsafe {delete frame}}
-    // The producer owns the frame across all next-Tasks; its finalizers run
-    // before cleanup, even if the primary lease closes while next is pending.
-    var state:StateT?
-    if(!next(result.owner,state)) {panic("deferred: AsyncSequence owner is closed")}
-    unsafe {state.source <- ce_deferred_wrap_sequence(state.source,cleanup)}
-    return <- result
+// Without the hook the result is complete, and the frame goes at once.
+def ce_deferred_keep(var result:auto; var cleanup:lambda<():void>) {
+    invoke(cleanup)
+    unsafe {delete cleanup}
 }
 
 
@@ -102,7 +102,8 @@ def ce_deferred_reference_scope(var source:iterator<auto(TT)&>; var cleanup:lamb
     } finally {ce_sequence_finalize($ {ce_deferred_reference_close(state)})}
 }
 
-def private ce_deferred_wrap_sequence(var source:iterator<auto(TT)>; var cleanup:lambda<():void>) {
+// A source that owns `cleanup`: it runs once the source is closed or exhausted.
+def ce_deferred_wrap_sequence(var source:iterator<auto(TT)>; var cleanup:lambda<():void>) {
     static_if (typeinfo is_ref_value(type<TT>)) {
         return <- ce_deferred_reference_scope(source,cleanup)
     } else {
