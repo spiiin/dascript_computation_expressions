@@ -7,6 +7,10 @@ require daslib/ast
 require daslib/ast_boost
 require daslib/templates_boost
 
+//! Deferred runs: ``deferred(builder, data) $(snapshot) { ... }`` saves a computation without running it,
+//! and ``run_deferred(task)`` runs it, any number of times, each run on its own copy of the builder and
+//! the data. Require it in addition to ``computation`` to create a computation in one place and run it later.
+
 // Snapshots must not retain borrowed pointers or escaping executable captures.
 def private ce_snapshot_safe(t:TypeDeclPtr) : bool {
     if (t==null || t.baseType==Type.tPointer || t.baseType==Type.tBlock || t.baseType==Type.tLambda
@@ -85,6 +89,12 @@ class DeferredResult : AstTypeInfoMacro {
     }
 }
 
+//! ``deferred(builder, data) $(snapshot) { ... }`` and ``deferred(builder) { ... }`` save a computation
+//! instead of running it. ``builder`` and ``data`` are evaluated once and cloned into the saved value; the
+//! block is the body of ``computation(builder)`` and reads its copy of the data through the untyped
+//! argument ``snapshot``. The result is move-only: hold it with ``var inscope`` and run it with
+//! ``run_deferred``. The builder and the data must own what they hold: pointers, blocks, lambdas, iterators
+//! and native handles in them are compile errors, and so is a result that is a reference or a pointer.
 [call_macro(name="deferred")]
 class DeferredMacro : AstCallMacro {
     def override canVisitArgument(expr:ExprCallMacro?; index:int) : bool =>

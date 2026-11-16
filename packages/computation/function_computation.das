@@ -6,13 +6,15 @@ require daslib/ast_boost
 require daslib/templates_boost
 require math
 
-// What the function annotations share: [sequence] and [coroutine] here, and
-// [task], [task_result] and [async_sequence] in the task package. Each turns
-//
-//     [sequence]
-//     def evens(limit : int) : int { ... }
-//
-// into the function that returns `computation(SequenceBuilder(type<int>)) { ... }`.
+//! Macro internals: what the function annotations share, ``[sequence]`` and ``[coroutine]`` in this package
+//! and ``[task]``, ``[task_result]`` and ``[async_sequence]`` in the task package. Each turns::
+//!
+//!     [sequence]
+//!     def evens(limit : int) : int { ... }
+//!
+//! into the function that returns ``computation(SequenceBuilder(type<int>)) { ... }``.
+//! Require it only to write such an annotation for another builder; the annotations themselves come
+//! with the modules of their builders.
 //
 // The body is rewritten when the function is parsed, before any type is known.
 // The names of the result type and of the builder are therefore looked up

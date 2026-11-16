@@ -5,10 +5,19 @@ require daslib/templates
 require daslib/templates_boost
 require daslib/typemacro_boost
 
+//! Bounded FIFO channels between tasks. ``task_channel(type<T>, capacity)`` returns a
+//! ``TaskChannel<T>``; ``task_channel_send`` and ``task_channel_receive`` return tasks to bind, so a
+//! full or an empty channel suspends the task instead of blocking, and ``task_channel_select``
+//! receives from the first of several channels. Require it to pass a stream of values from one task
+//! to another.
+
+//! Marker field that makes a tuple a ``TaskChannel<T>``; it carries no data.
 struct TaskChannelTag {_ce_marker:uint8}
-// `TaskChannel<T>` names the handle that task_channel(type<T>, capacity)
-// returns. The state layout is repeated in task_channel; its declared result
-// type keeps the two in step.
+//! The handle that ``task_channel(type<T>, capacity)`` returns: a counted reference to one bounded
+//! queue. The handle from ``task_channel`` is the owner, and deleting it closes the channel. A handle
+//! from ``task_channel_clone`` or ``:=`` keeps the queue alive and closes nothing when it is deleted.
+// The state layout is repeated in task_channel; its declared result type
+// keeps the two in step.
 [template_tuple(TT)]
 struct template TaskChannel {
     tag : TaskChannelTag
@@ -32,6 +41,8 @@ def private ce_channel_state(channel:tuple<tag:TaskChannelTag;owner:iterator<aut
         return state
     }
 }
+//! Creates a channel that holds up to ``capacity`` values of ``T`` and returns its owner handle.
+//! Deleting that handle closes the channel. Panics unless ``capacity`` is positive.
 def task_channel(unused:type<auto(TT)>;capacity:int) : TaskChannel<TT -const -&> {
     static_assert(typeinfo ce_resumable_payload(default<TT -const -&>))
     if(capacity<=0) {panic("task channel: capacity must be positive")}
@@ -40,6 +51,8 @@ def task_channel(unused:type<auto(TT)>;capacity:int) : TaskChannel<TT -const -&>
         return <- (tag=TaskChannelTag(),owner <- ce_channel_lease(state,true))
     }
 }
+//! Returns another handle to the same channel; deleting it does not close the channel. Panics on a
+//! handle that was moved from or deleted, as every operation on a channel does.
 def task_channel_clone(channel:tuple<tag:TaskChannelTag;owner:iterator<auto(SS)?>>) {
     var state=ce_channel_state(channel)
     unsafe {
@@ -48,15 +61,23 @@ def task_channel_clone(channel:tuple<tag:TaskChannelTag;owner:iterator<auto(SS)?
         return <- (tag=TaskChannelTag(),owner <- ce_channel_lease(state))
     }
 }
+//! Closes the channel: sends fail from now on, and receivers still get the values that are queued
+//! and then ``none``.
 def task_channel_close(channel:tuple<tag:TaskChannelTag;owner:iterator<auto(SS)?>>) {
     var state=ce_channel_state(channel);state.closed=true
 }
+//! Closes the channel with an error and drops the queued values: pending and later sends and
+//! receives complete with ``err(message)``. An empty ``message`` becomes ``"channel failed"``.
+//! Does nothing to a channel that is already closed.
 def task_channel_fail(channel:tuple<tag:TaskChannelTag;owner:iterator<auto(SS)?>>;message:string) {
     var state=ce_channel_state(channel);unsafe {
         if(!state.closed) {state.closed=true;state.error=empty(message) ? "channel failed" : message;delete state.queue}
     }
 }
+//! Returns the number of values queued in the channel.
 def task_channel_count(channel:tuple<tag:TaskChannelTag;owner:iterator<auto(SS)?>>) {var state=ce_channel_state(channel);unsafe {return length(state.queue)}}
+//! Returns how many send and receive tasks are waiting on the channel. A task counts from its first
+//! poll until it completes or is released.
 def task_channel_waiters(channel:tuple<tag:TaskChannelTag;owner:iterator<auto(SS)?>>) {var state=ce_channel_state(channel);unsafe {return length(state.senders)+length(state.readers)}}
 def ce_dispose(var channel:tuple<tag:TaskChannelTag;owner:iterator<auto?>>) {sequence_close(channel.owner)}
 
@@ -67,12 +88,16 @@ def private ce_channel_register(var state:auto(SS)?;sender:bool) : uint64 {unsaf
     if(sender) {state.senders |> push(state.serial)} else {state.readers |> push(state.serial)}
     return state.serial
 }}
+//! Queues ``value`` without waiting. Returns true and takes the value if the channel is open, has
+//! room and no sender is waiting; otherwise returns false and leaves the value with the caller.
 def task_channel_try_send_move(channel:tuple<tag:TaskChannelTag;owner:iterator<auto(SS)?>>;var value:auto) : bool {
     var state=ce_channel_state(channel);unsafe {
         if(state.closed || !empty(state.senders) || length(state.queue)>=state.capacity) {return false}
         state.queue |> emplace(value);return true
     }
 }
+//! The same as ``task_channel_try_send_move`` with a copy of ``value``. A value that cannot be
+//! copied is a compile error.
 def task_channel_try_send(channel:tuple<tag:TaskChannelTag;owner:iterator<auto(SS)?>>;value:auto(TT)) {
     concept_assert(typeinfo can_copy(type<TT>),"task channel: use task_channel_send_move for an owning payload")
     static_if(typeinfo is_string(type<TT>)) {var item=string(value);return task_channel_try_send_move(channel,item)}
@@ -93,6 +118,10 @@ def private ce_channel_finish(var op:auto(OO)?;sender:bool) {unsafe {
     if(sender) {ce_channel_remove(op.state.senders,op.id)} else {ce_channel_remove(op.state.readers,op.id)}
     op.state=null;delete op.lease;delete op
 }}
+//! Returns a ``Task<Result<CeUnit;string>>`` that queues ``value``, which is moved into the task.
+//! The task waits while the channel is full; senders are served in the order of their first poll.
+//! It completes with ``err`` when the channel is closed or has failed. A task that is released before
+//! it sent the value deletes the value.
 def task_channel_send_move(channel:tuple<tag:TaskChannelTag;owner:iterator<auto(SS)?>>;var value:auto(TT)) {
     var lease <- task_channel_clone(channel);var state=ce_channel_state(channel)
     unsafe {
@@ -100,6 +129,8 @@ def task_channel_send_move(channel:tuple<tag:TaskChannelTag;owner:iterator<auto(
         return <- task_from_poll(@(){return ce_channel_send_poll(op)},@(){ce_channel_finish(op,true)})
     }
 }
+//! The same as ``task_channel_send_move`` with a copy of ``value``. A value that cannot be copied
+//! is a compile error.
 def task_channel_send(channel:tuple<tag:TaskChannelTag;owner:iterator<auto(SS)?>>;value:auto(TT)) {
     concept_assert(typeinfo can_copy(type<TT>),"task channel: use task_channel_send_move for an owning payload")
     static_if(typeinfo is_string(type<TT>)) {var item=string(value);return <- task_channel_send_move(channel,item)}
@@ -120,6 +151,9 @@ def private ce_channel_receive_poll(var op:auto(OO)?) {unsafe {
     }
     return <- task_pending(type<Result<Option<Item>;string>>)
 }}
+//! Returns a ``Task<Result<Option<T>;string>>`` for the next value. It completes with ``some(value)``,
+//! moved out of the queue, with ``none`` once the channel is closed and empty, and with ``err`` when
+//! the channel has failed. Receivers are served in the order of their first poll.
 def task_channel_receive(channel:tuple<tag:TaskChannelTag;owner:iterator<auto(SS)?>>) {
     var lease <- task_channel_clone(channel);var state=ce_channel_state(channel)
     unsafe {
@@ -128,6 +162,8 @@ def task_channel_receive(channel:tuple<tag:TaskChannelTag;owner:iterator<auto(SS
     }
 }
 
+//! Makes ``target := source`` refer to the channel of ``source``; the handle that ``target`` held
+//! is released.
 def clone(var target:tuple<tag:TaskChannelTag;owner:iterator<auto(SS)?>>;source:tuple<tag:TaskChannelTag;owner:iterator<SS?>>) {
     var next <- task_channel_clone(source);delete target;target <- next
 }
@@ -193,6 +229,11 @@ def private ce_channel_select_op(var leases:array<auto(LL)>) {
         return <- task_from_poll(@(){return <- ce_channel_select_poll(op)},@(){ce_channel_select_finish(op)})
     }
 }
+//! Returns a task that receives from whichever of two or three channels has a value first: a
+//! ``Task<Result<tuple<index:int;value:Option<T>>;string>>``. ``index`` is the argument position of
+//! the channel; the lowest one wins when several are ready, and the others lose nothing. ``value`` is
+//! ``none`` when that channel is closed and drained, so the caller can stop listening to it. A failed
+//! channel gives ``err``. Every channel carries the same ``T``.
 def task_channel_select(a:tuple<tag:TaskChannelTag;owner:iterator<auto(SS)?>>;b:tuple<tag:TaskChannelTag;owner:iterator<SS?>>) {
     var leases:array<typedecl(task_channel_clone(a))>
     leases |> emplace(task_channel_clone(a))

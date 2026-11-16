@@ -3,7 +3,17 @@ module task_combinators public
 require ./task_builder.das public
 require daslib/rtti
 
+//! Combinators that wait for several tasks at once: ``task_when_all`` and ``task_result_when_all``
+//! complete when every task has, ``task_race`` and ``task_result_race`` when the first one has, and
+//! ``task_map_error`` changes the error type of a task. They take ownership of their tasks and poll
+//! them cooperatively inside the parent's poll. The module also makes
+//! ``left |> and_bind(right) |> bind`` await two tasks together.
+
+//! Selects the plain behaviour of the pair combinator: ``task_when_all`` waits for both values,
+//! whatever they hold.
 struct TaskAllPolicy {_ce_marker:uint8}
+//! Selects the ``Result`` behaviour of the pair combinator: ``task_result_when_all`` stops at the
+//! first ``err``.
 struct TaskResultAllPolicy {_ce_marker:uint8}
 struct TaskArrayTag {_ce_marker:uint8}
 struct TaskArrayEventTag {_ce_marker:uint8}
@@ -32,6 +42,10 @@ def private task_array_store(var target:auto(TargetT)&; var child:auto) {
     else {target <- child.value}
 }
 
+//! Moves an array of tasks into one ``Task<array<T>>`` whose value keeps the order of the tasks.
+//! Each poll of the parent polls every unfinished child once, in order. A child that fails fails the
+//! parent with its error, and a cancelled child cancels it. When the parent ends, the children that
+//! are still running are cancelled and all of them are released. Panics if a child is being polled.
 def task_when_all(var children:array<auto(CC)>) {
     typedef ArrayValue=typedecl(children[0].value) -const -&
     static_assert(typeinfo ce_resumable_payload(default<ArrayValue>))
@@ -146,13 +160,20 @@ def private task_pair(var left:auto(LL); var right:auto(RR); policy:auto(PP)) {
     return <- task_create(events)
 }
 
-// At most one poll per active child per parent poll, in left-to-right order.
+//! Waits for two tasks of any types and returns a ``Task<tuple<first:A;second:B>>``. Each poll of
+//! the parent polls each unfinished child at most once, left to right. A ``Task`` argument is moved
+//! in; a ``TaskShared`` handle is cloned and stays with the caller. Failure, cancellation and release
+//! of the children are as in the array form. Panics when the same owner is passed twice.
 def task_when_all(var left:auto(LL); var right:auto(RR)) {
     task_check_distinct(left,right)
     var inscope first <- ce_task_source(left)
     var inscope second <- ce_task_source(right)
     return <- task_pair(first,second,TaskAllPolicy())
 }
+//! ``task_when_all`` for two tasks that produce a ``Result``: returns a
+//! ``Task<Result<tuple<first:A;second:B>;E>>``. The first child to finish with ``err`` completes the
+//! parent with that error, and the other child is cancelled. A ``Task<CeUnit>`` child counts as ``ok``.
+//! Both tasks must fail with the same type; ``task_map_error`` converts one that does not.
 def task_result_when_all(var left:auto(LL); var right:auto(RR)) {
     task_check_distinct(left,right)
     var inscope first <- ce_task_source(left)
@@ -183,6 +204,9 @@ def private ce_task_result_source(var source:tuple<tag:TaskTag;source:iterator<t
     return <- task_create(events)
 }
 
+//! The array form: moves an array of tasks, or of ``TaskShared`` handles, into a
+//! ``Task<Result<array<T>;E>>``. Its value is ``ok`` with the values in the order of the tasks, or the
+//! first ``err`` that a child finishes with. Panics if a child is being polled.
 def task_result_when_all(var children:array<auto(CC)>) {
     for(i in range(length(children))) {if(ce_task_is_polling(children[i])) {panic("task_result_when_all: cannot move a task being polled")}}
     var fault:typedecl(ce_task_fault(ce_task_source(children[0]).value))
@@ -227,6 +251,8 @@ def private ce_task_result_array(var children:array<auto(CC)>) {
     return <- task_create(events)
 }
 
+//! The same as ``task_when_all`` of an array of tasks for an array of ``TaskShared<T>`` handles: the
+//! array is consumed, and each shared task stays with its other holders.
 def task_when_all(var children:array<tuple<tag:TaskSharedTag;owner:iterator<auto(ShareStateT)?>>>) {
     var inscope sources:array<typedecl(ce_task_source(children[0]))>
     for(i in range(length(children))) {sources |> emplace(ce_task_source(children[i]))}
@@ -234,6 +260,10 @@ def task_when_all(var children:array<tuple<tag:TaskSharedTag;owner:iterator<auto
     return <- task_when_all(sources)
 }
 
+//! ``task_race`` for two tasks that produce a ``Result``: returns a
+//! ``Task<Result<tuple<index:int;value:T>;E>>``. The first child to finish decides: its ``ok`` value
+//! comes with its ``index`` (0 for ``left``, 1 for ``right``), and its ``err`` becomes the error of
+//! the race. The other child is cancelled.
 def task_result_race(var left:auto;var right:auto) {
     task_check_distinct(left,right)
     var inscope first <- ce_task_source(left)
@@ -267,9 +297,10 @@ def task_result_race(var left:auto;var right:auto) {
     return <- task_create(events)
 }
 
-// Give a task's error another type. A task that fails with a string, as the
-// library's own sources do, can then be bound in a computation that fails
-// with E: task_map_error(fetch(id), @@classify) |> bind.
+//! Gives a task's error another type: returns a ``Task<Result<T;E>>`` that awaits ``task``, which is
+//! moved in, and passes its ``err`` through ``convert``. A task that fails with a string, as the
+//! library's own sources do, can then be bound in a computation that fails with ``E``:
+//! ``task_map_error(fetch(id), @@classify) |> bind``.
 [task]
 def task_map_error(var task:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:variant<err:auto(FF);ok:auto(TT)>>>;status:TaskStatus;value:variant<err:FF;ok:TT>;error:string;polling:bool>;
                    convert:function<(FF):auto(EE)>) : Result<TT;EE> {
@@ -303,6 +334,10 @@ def private task_race_impl(var left,right:auto(TT)) {
     } finally {ce_sequence_finalize($ {task_release_pair(left,right)})}
     return <- task_create(events)
 }
+//! Returns a ``Task<tuple<index:int;value:T>>`` that completes with the first of two tasks of the
+//! same type to succeed; ``index`` is 0 for ``left`` and 1 for ``right``, and ``left`` wins a tie.
+//! A child that fails fails the race, and a cancelled child cancels it. The loser is cancelled and
+//! released. Arguments are taken as in ``task_when_all``; panics when the same owner is passed twice.
 def task_race(var left,right:auto(TT)) {
     task_check_distinct(left,right)
     var inscope first <- ce_task_source(left)

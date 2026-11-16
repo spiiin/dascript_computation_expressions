@@ -2,6 +2,11 @@ options gen2
 module deferred_runtime public
 require ./sequence_runtime.das public
 
+//! Runtime of deferred computations: ``run_deferred`` and the value that ``deferred`` returns.
+//! ``deferred_computation`` requires it publicly; require that module, not this one.
+
+//! Marker of the value that ``deferred`` returns: a tuple ``(kind, owner)`` that owns the saved builder,
+//! data and body. The value is move-only; deleting it, or the end of its ``var inscope``, releases them.
 struct DeferredComputation {_ce_marker:uint8}
 struct CeDeferredValueBuilder {_ce_marker:uint8}
 struct CeDeferredTypeBuilder {_ce_marker:uint8}
@@ -74,6 +79,9 @@ def ce_deferred_create(builder:auto(BB); data:auto(EE); body:function<(frame:tup
     return <- ce_deferred_hold(thunk)
 }
 
+//! Runs a deferred computation once and returns its outcome. Every run works on a fresh copy of the
+//! saved builder and data, so ``task`` stays valid and can be run again. An iterator outcome owns its
+//! copy until it is closed. Panics if ``task`` has been moved from or deleted.
 def run_deferred(var task:tuple<kind:DeferredComputation;owner:iterator<lambda<():auto(RR)>>>) : RR {
     var body:lambda<():RR>
     if (!next(task.owner,body)) { panic("deferred: computation has been moved or disposed") }

@@ -5,11 +5,21 @@ require ../computation/sequence_function.das public
 require daslib/rtti
 require daslib/typemacro_boost
 
+//! Asynchronous streams. ``computation(AsyncSequenceBuilder(type<T>)) { ... }`` returns an
+//! ``AsyncSequence<T>``: a producer that can await tasks between the elements it yields. A consumer
+//! takes one element at a time with ``async_sequence_next(stream) |> bind``, or iterates the stream
+//! with ``for`` inside another async sequence. Brings the task combinators and the
+//! ``[async_sequence]`` annotation along.
+
+//! Marker of the builder that ``AsyncSequenceBuilder(type<T>)`` returns.
 struct AsyncSequenceContext {_ce_marker:uint8}
+//! Marker field that makes a tuple an ``AsyncSequence<T>``; it carries no data.
 struct AsyncSequenceTag {_ce_marker:uint8}
 
-// `AsyncSequence<T>` names the stream that computation(AsyncSequenceBuilder(type<T>))
-// returns. ce_sequence_run declares it as its result, so the layout written
+//! The stream that ``computation(AsyncSequenceBuilder(type<T>))`` returns. The value owns the
+//! producer: deleting it, or ``async_sequence_close``, stops the producer and runs its cleanup, also
+//! while a next-task is pending. Take its elements with ``async_sequence_next``.
+// ce_sequence_run declares it as its result, so the layout written
 // here and the value built there cannot drift apart. Option<T> is spelled as
 // its variant: a template type inside the layout would keep the name from
 // matching an argument.
@@ -27,6 +37,10 @@ def ce_merge_sources(builder:tuple<kind:AsyncSequenceContext;element:auto>;
     var right:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(RR)>>;status:TaskStatus;value:RR;error:string;polling:bool>) =>
         <- task_when_all(left,right)
 
+//! The builder of ``computation(AsyncSequenceBuilder(type<T>)) { ... }``, which returns an
+//! ``AsyncSequence<T>``. In the block ``yield value`` emits an element (``yield <- value`` when it
+//! cannot be copied), ``source |> bind`` awaits a task, and a bare ``return`` or the end of the block
+//! ends the stream. A bound task that fails or is cancelled stops the stream in the same way.
 def AsyncSequenceBuilder(unused:type<auto(TT)>) {
     static_assert(typeinfo ce_resumable_payload(default<TT>))
     var marker:TT -const -&?
@@ -257,6 +271,9 @@ def private ce_async_sequence_state(stream:tuple<tag:AsyncSequenceTag;owner:iter
         return state
     }
 }
+//! Stops the producer and runs its cleanup. A pending or a later next-task of a stream that was
+//! closed before its end becomes ``TaskStatus.Cancelled``; closing a stream that has ended changes
+//! nothing. Panics when called while the producer is being polled.
 def async_sequence_close(stream:tuple<tag:AsyncSequenceTag;owner:iterator<auto(StateT)?>;element:auto>) {
     var state=ce_async_sequence_state(stream)
     if(state.polling) {panic("async sequence: cannot close during producer poll")}
@@ -267,6 +284,10 @@ def ce_dispose(var stream:tuple<tag:AsyncSequenceTag;owner:iterator<auto(StateT)
     if(!empty(stream.owner)) {async_sequence_close(stream)}
     delete stream
 }
+//! Returns a ``Task<Option<T>>`` for the next element: ``some(element)``, or ``none`` when the stream
+//! has ended. Only one next-task may exist at a time: asking for another before the previous one has
+//! finished or was released panics. A panic in the producer fails this task, and every later one, with
+//! its message. A next-task that is cancelled or released before it delivered closes the stream.
 def async_sequence_next(stream:tuple<tag:AsyncSequenceTag;owner:iterator<auto(StateT)?>;element:iterator<auto(TT)>>) : tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:Option<TT>>>;status:TaskStatus;value:Option<TT>;error:string;polling:bool> {
     var state=ce_async_sequence_state(stream)
     unsafe {

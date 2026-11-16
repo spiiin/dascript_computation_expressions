@@ -1,10 +1,20 @@
 options gen2
 module move_builders public
 require ./computation_builders.das public
-// Consuming outcomes: bind owns the variant, continuation only borrows payload.
+
+//! ``MoveResultBuilder`` and ``MoveOptionBuilder``: Result and Option computations whose payloads are moved,
+//! for values that cannot be copied, such as arrays. Bind with ``var item & = source |> bind`` and return
+//! with ``return <- item``. The ``computation`` facade includes this module.
+
+//! Builder of a computation that produces ``Result<T;string>`` with a moved payload. A ``bind`` takes
+//! ownership of its source and lends the payload to the rest of the scope; ``return <- value`` moves a
+//! value into the result, which the caller owns.
 struct MoveResultBuilder {_ce_marker:uint8}
+//! The same for ``Option<T>``: a ``bind`` of a ``none`` source ends the computation with ``none``.
 struct MoveOptionBuilder {_ce_marker:uint8}
 
+//! Moves ``value`` into the ``ok`` of a ``Result<T;string>``; the source is left empty. Use it for a
+//! payload that cannot be copied, such as an array.
 def move_ok(var value:auto(TT)) : Result<TT -const -&;string> {
     // SDK 0.6.5-RC2 AOT does not clear a tuple payload's source when it is
     // moved directly in a variant initializer. Enter ok with an empty payload,
@@ -21,6 +31,8 @@ def ce_move_ok(var value:auto(TT); unused:type<auto(EE)>) : Result<TT -const -&;
     result as ok <- value
     return <- result
 }
+//! A failed ``Result<T;string>`` that holds ``message``; the ``type<T>`` witness names the payload type
+//! of a success. It is ``err`` for the results of ``MoveResultBuilder``.
 def move_error(message:string; unused:type<auto(TT)>) : Result<TT -const -&;string> =>
     <- variant type<Result<TT -const -&;string>>(err=message)
 def ce_protocol(_builder:MoveResultBuilder) => CeOwnedProtocol()
@@ -64,6 +76,7 @@ def ce_merge_sources(builder:MoveResultBuilder; var left:Result<auto;string>;
     }
 }
 
+//! An empty ``Option<T>``; the ``type<T>`` witness names the payload type.
 def move_none(unused:type<auto(TT)>) : Option<TT -const -&> => <- default<Option<TT -const -&>>
 def ce_protocol(_builder:MoveOptionBuilder) => CeOwnedProtocol()
 def ce_unwrap(builder:MoveOptionBuilder; var source:Option<auto(TT)>) : TT& {unsafe {return source as some}}

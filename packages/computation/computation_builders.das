@@ -3,7 +3,15 @@ module computation_builders public
 require ./builder_protocol.das public
 require ./zip_runtime.das public
 
+//! ``ResultBuilder`` and ``OptionBuilder``: computations over the standard ``Result`` and ``Option`` of daslib,
+//! in which a ``bind`` of a failed source ends the computation with that failure. Values are copied; for
+//! payloads that cannot be copied use ``move_builders``. The ``computation`` facade includes this module.
+
+//! Builder of a computation that produces ``Result<T;string>``: ``return value`` gives ``ok``, and a ``bind``
+//! of an ``err`` source ends the computation with that error. Values are copied.
 struct ResultBuilder {_ce_marker:uint8}
+//! Builder of a computation that produces ``Option<T>``: ``return value`` gives ``some``, and a ``bind`` of
+//! a ``none`` source ends the computation with ``none``. Values are copied.
 struct OptionBuilder {_ce_marker:uint8}
 
 // [inline] splices a body into its call, so a bind costs a test and a read, as
@@ -139,10 +147,11 @@ def ce_bind2(builder:OptionBuilder; left:Option<auto(AA)>; right:Option<auto(BB)
 // Loops need no operations here: a direct builder's loop is native, and its
 // body is lowered into the computation's own scope.
 
-// Result with any copyable error type: ResultBuilder(type<E>). `return value`
-// says nothing about the error type, so the builder carries it. ResultBuilder()
-// is the same computation with string errors.
+//! Marker of the builder that ``ResultBuilder(type<E>)`` returns.
 struct ResultErrorContext {_ce_marker:uint8}
+//! Builder of a computation that produces ``Result<T;E>`` for a copyable error type ``E``; any other ``E``
+//! is a compile error. ``return value`` says nothing about the error type, so the builder carries it.
+//! ``ResultBuilder()`` is the same computation with ``string`` errors.
 def ResultBuilder(unused : type<auto(EE)>) {
     static_assert(typeinfo can_copy(type<EE>), "ResultBuilder(type<E>): the error type must be copyable")
     var marker : EE -const -&?

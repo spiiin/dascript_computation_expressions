@@ -2,6 +2,11 @@ options gen2
 module sequence_runtime public
 require ./builder_protocol.das public
 
+//! Runtime of lazy sequences: the functions that walk and close the iterator of a Sequence computation
+//! (``sequence_each``, ``sequence_each_move``, ``sequence_next_move``, ``sequence_close``) and the
+//! ``ce_sequence_*`` helpers for a module that defines a sequence builder of its own.
+//! ``sequence_builder`` requires it publicly.
+
 // LambdaIterator::close saves/restores the caller's stop flags but does not
 // clear them before running the finalizer (0.6.4). Enter recover to clear the
 // inherited break/return flag before invoking arbitrary multi-statement code.
@@ -24,7 +29,9 @@ def ce_sequence_protect(var source : iterator<auto(TT)>) : iterator<TT> {
     } finally { ce_sequence_finalize($ { sequence_close(source) }) }
 }
 
-// Visit every element and close the iterator.
+//! Invokes ``action`` with every element of ``source`` and then closes it, which leaves ``source`` empty.
+//! An element that cannot be copied is deleted after ``action`` returns, unless the iterator lends it by
+//! reference.
 def sequence_each(var source : iterator<auto(TT)>; action : block<(value:auto(VV)) : void>) {
     static_if (typeinfo is_ref_value(type<TT>)) {
         var slot:TT -&?
@@ -67,6 +74,8 @@ def ce_sequence_scoped(var source : iterator<auto(TT)>; var cleanup : lambda<() 
 
 
 
+//! Closes ``source`` wherever it has stopped: the finalizers of the computation behind it run, which
+//! releases its resources, and ``source`` is left empty. Closing an empty iterator does nothing.
 // Detach before finalization, so the source is empty while its finalizer runs.
 def sequence_close(var source : iterator<auto(TT)>) {
     var owned <- source
@@ -104,7 +113,9 @@ def ce_sequence_own_elements(var source:iterator<auto(TT)>) : iterator<TT&> {
         })
     }
 }
-// Mutable borrow for consumers that explicitly move a yielded item elsewhere.
+//! Invokes ``action`` with a mutable reference to every element of an iterator that lends its elements,
+//! as a Sequence of elements that cannot be copied does, and then closes it. ``action`` may move the
+//! element elsewhere; what it leaves behind is deleted by the iterator.
 def sequence_each_move(var source:iterator<auto(TT)&>; action:block<(var value:auto(VV)):void>) {
     var slot:TT -&?
     while (true) {
@@ -122,7 +133,9 @@ def ce_sequence_next_value(var source:iterator<auto(TT)>; var slot:TT&) : bool {
     unsafe {return _builtin_iterator_iterate(source,addr(slot))}
 }
 
-// Pull one owning element. Exhaustion/error preserves the last delivered value.
+//! Moves the next element of ``source`` into ``value``, deleting what ``value`` held, and returns true.
+//! At the end it closes ``source``, leaves ``value`` as it was and returns false. It is for elements that
+//! cannot be copied; a copyable element type is a compile error, use ``next`` for it.
 // Reference iterators lend their current slot; value iterators fill a temporary.
 def sequence_next_move(var source:iterator<auto(TT)>; var value:TT -&) : bool {
     static_if (typeinfo can_copy(type<TT -&>)) {

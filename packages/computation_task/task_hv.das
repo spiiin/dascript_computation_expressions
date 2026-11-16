@@ -4,6 +4,15 @@ require ./task_builder.das public
 require dashv/dashv_boost
 require strings
 
+//! A WebSocket client as tasks, built on dasHV. ``hv_websocket()`` creates the owner of one connection;
+//! ``ws_connect``, ``ws_send_text`` and ``ws_receive_text`` return tasks whose values are ``Result``, so
+//! they bind in a ``TaskResultBuilder`` computation. Network events are processed when these tasks
+//! are polled, on the polling thread. Require it for text messages over ``ws://`` or ``wss://``; it
+//! needs the dasHV module.
+
+//! Receive limits of one socket: the largest text message accepted, and how many messages and bytes
+//! may wait unread. A message beyond a limit makes the pending or next operation return an error
+//! and closes the connection. All three must be positive.
 struct HvWebSocketConfig {
     max_message_bytes:int=65536
     max_queued_messages:int=16
@@ -50,10 +59,15 @@ class CeHvSocket : HvWebSocketClient {
     }
 }
 
-// A move-only public owner. Operation leases retain the das object, not ownership
-// of the connection: disposing this owner closes transport immediately.
+//! The move-only owner of one WebSocket connection, created by ``hv_websocket``. Deleting it, or
+//! leaving the ``use_resource`` scope that holds it, closes the connection at once; operations that
+//! are still pending on it then complete with an error.
+// Operation leases retain the das object, not ownership of the connection.
 struct HvWebSocket {lease:iterator<CeHvSocket?>}
 
+//! Returns counters for leak checks: sockets ``created``, ``released`` and ``active``; native clients
+//! started, stopped and active; operations (the tasks of this module) created, released and active.
+//! The active counts are 0 when every socket and task has been released.
 def hv_websocket_stats() {
     return (created=hv_created,released=hv_released,active=hv_created-hv_released,
         clients_started=hv_started,clients_stopped=hv_stopped,active_clients=hv_started-hv_stopped,
@@ -93,6 +107,9 @@ def private ce_hv_state(socket:HvWebSocket) : CeHvSocket? {
     return state
 }
 
+//! Creates a socket that is not connected yet; the caller owns it and must delete it or hold it with
+//! ``use_resource``. No network activity starts before a ``ws_connect`` task is polled. Panics if a
+//! limit in ``config`` is not positive.
 def hv_websocket(config:HvWebSocketConfig=HvWebSocketConfig()) : HvWebSocket {
     if(config.max_message_bytes<1 || config.max_queued_messages<1 || config.max_queued_bytes<1) {
         panic("hv_websocket: limits must be positive")
@@ -109,6 +126,7 @@ def ce_dispose(var socket:HvWebSocket) {
         sequence_close(socket.lease)
     })
 }
+//! Runs when a socket is deleted: closes the connection, as described for ``HvWebSocket``.
 def finalize(var socket:HvWebSocket) {ce_dispose(socket)}
 
 struct CeHvOperation {
@@ -193,11 +211,18 @@ def private ce_hv_poll_unit(var op:CeHvOperation?) {
     return task_ready(ok(CeUnit(), type<string>))
 }
 
+//! Returns a ``Task<Result<CeUnit;string>>`` that opens the connection to ``url`` (``ws://`` or
+//! ``wss://``) and completes when the handshake is done; a failure is an err value. A socket connects
+//! once and runs one operation at a time: a second one completes with an error. Cancelling the task
+//! after its first poll closes the connection; cancelled earlier, it starts no network activity.
 def ws_connect(socket:HvWebSocket;url:string) {
     var op=ce_hv_operation(socket,0,url)
     return <- task_from_poll(@(){return ce_hv_poll_unit(op)},@(){ce_hv_finish(op)})
 }
 
+//! Returns a ``Task<Result<CeUnit;string>>`` that sends ``text`` as one text message. It completes on
+//! its first poll: err if the connection is not open, if another operation is in progress or if the
+//! send fails, which closes the connection.
 def ws_send_text(socket:HvWebSocket;text:string) {
     var op=ce_hv_operation(socket,1,text)
     return <- task_from_poll(@(){return ce_hv_poll_unit(op)},@(){ce_hv_finish(op)})
@@ -226,6 +251,10 @@ def private ce_hv_poll_text(var op:CeHvOperation?) {
     return task_pending(type<Result<string;string>>)
 }
 
+//! Returns a ``Task<Result<string;string>>`` that completes with the next text message, in order of
+//! arrival. It is err if the socket was never connected, if the peer closed the connection before a
+//! message arrived, or on a binary message or one beyond the limits of ``HvWebSocketConfig``.
+//! Cancelling the task while it waits closes the connection.
 def ws_receive_text(socket:HvWebSocket) {
     var op=ce_hv_operation(socket,2)
     return <- task_from_poll(@(){return ce_hv_poll_text(op)},@(){ce_hv_finish(op)})

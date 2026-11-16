@@ -1,6 +1,11 @@
 options gen2
 module computation_resources public
 
+//! Macro internals: the default resource operations of the builder protocol. ``ce_try_finally`` is behind
+//! ``try_finally(body, cleanup)``; ``ce_using`` and ``ce_using_move`` are behind ``resource |> use_resource``.
+//! They suit builders with copyable outcomes; a builder with owned outcomes overloads the first two.
+//! ``builder_protocol`` requires this module publicly, so there is no need to require it directly.
+
 // Cleanup runs when the body returns, however it returns: with a value, with
 // an Error or None, or through an early exit. A panic is fatal and runs nothing.
 def ce_try_finally(builder : auto; body : block<() : auto(RR)>; cleanup : block<() : void>) : RR {

@@ -5,15 +5,23 @@ require daslib/templates
 require daslib/templates_boost
 require daslib/typemacro_boost
 
+//! ``ValidationBuilder``: checks that report every error instead of the first one. ``validation_zip``, or an
+//! ``and_bind`` group, combines independent checks and collects the errors of all of them; an ordinary
+//! ``bind`` stops at the first invalid source. Require it in addition to ``computation``. Values are copied.
+
+//! Builder of a computation that produces ``Validation<T>``: ``return value`` gives ``valid``, and a
+//! ``bind`` of an invalid source ends the computation with the errors of that source.
 struct ValidationBuilder {_ce_marker:uint8}
+//! The errors of a failed validation: ``messages`` holds the texts, one per line, in the order the checks
+//! were combined, and ``count`` is their number.
 struct ValidationErrors {
     messages : string
     count : int
 }
 
-// What a validation produces: the value, or every error collected so far.
-// Validation<int> is the variant that validation_ok and validation_error
-// return, so a variable, a field or a function result can be declared with it.
+//! What a validation produces: the value, or every error collected so far.
+//! ``Validation<int>`` is the variant that ``validation_ok`` and ``validation_error``
+//! return, so a variable, a field or a function result can be declared with it.
 // A type macro serves the modules that require this one, not this module:
 // the functions below spell the variant out.
 [template_variant(TT)]
@@ -22,11 +30,15 @@ struct template Validation {
     invalid : ValidationErrors
 }
 
+//! A successful validation that holds a copy of ``value``.
 def validation_ok(value : auto(TT)) : variant<valid:TT -const -&;invalid:ValidationErrors> =>
     variant<valid:TT -const -&;invalid:ValidationErrors>(valid=value)
+//! A failed validation with the single error ``message``; the ``type<T>`` witness names the type of the
+//! value that a success would hold.
 def validation_error(message : string; unused : type<auto(TT)>) : variant<valid:TT -const -&;invalid:ValidationErrors> =>
     variant<valid:TT -const -&;invalid:ValidationErrors>(invalid=ValidationErrors(messages=message, count=1))
-// Inputs are already computed. Combine independent failures in left-to-right order.
+//! Combines two validations that are already computed: the pair ``(first, second)`` of their values when
+//! both are valid, otherwise the errors of both, those of ``left`` first.
 def validation_zip(left : variant<valid:auto(AA);invalid:ValidationErrors>;
                    right : variant<valid:auto(BB);invalid:ValidationErrors>) {
     if (left is invalid) {

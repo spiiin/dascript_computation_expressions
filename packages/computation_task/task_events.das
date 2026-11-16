@@ -5,10 +5,17 @@ require daslib/templates
 require daslib/templates_boost
 require daslib/typemacro_boost
 
+//! Broadcast events for tasks. ``task_event_source(type<T>)`` returns a source, and
+//! ``task_wait_event`` returns a task that completes with the next value that ``task_event_emit``
+//! broadcasts. Require it to let tasks wait for something the host reports from outside, such as
+//! input or a native callback.
+
+//! Marker field that makes a tuple a ``TaskEventSource<T>``; it carries no data.
 struct TaskEventSourceTag {_ce_marker:uint8}
-// `TaskEventSource<T>` names the handle that task_event_source(type<T>)
-// returns. The state layout is repeated in task_event_source; its declared
-// result type keeps the two in step.
+//! The handle that ``task_event_source(type<T>)`` returns. It owns the source: deleting it closes
+//! the source, and the waits that are still pending then complete with an error.
+// The state layout is repeated in task_event_source; its declared result
+// type keeps the two in step.
 [template_tuple(TT)]
 struct template TaskEventSource {
     tag : TaskEventSourceTag
@@ -21,6 +28,8 @@ var private event_waits_released=0
 var private event_subscribed=0
 var private event_unsubscribed=0
 
+//! Returns counters over all event sources, for leak checks: the ``sources`` and ``waits`` that are
+//! alive, the ``subscriptions`` that are registered, and the totals ``subscribed`` and ``unsubscribed``.
 def task_event_stats() {
     return (sources=event_sources_created-event_sources_released,
         waits=event_waits_created-event_waits_released,
@@ -52,6 +61,8 @@ def private ce_event_state(source:tuple<tag:TaskEventSourceTag;owner:iterator<au
     }
 }
 
+//! Creates an event source for values of ``T``, which must be copyable: every waiting task gets its
+//! own copy. The caller owns the returned handle, and deleting it closes the source.
 def task_event_source(unused:type<auto(TT)>) : TaskEventSource<TT -const -&> {
     static_assert(typeinfo ce_resumable_payload(default<TT -const -&>))
     concept_assert(typeinfo can_copy(type<TT -const -&>),"task events: broadcast payload must be copyable")
@@ -62,6 +73,8 @@ def task_event_source(unused:type<auto(TT)>) : TaskEventSource<TT -const -&> {
     }
 }
 
+//! Closes the source: later emits deliver nothing, and the waits that have not received an event
+//! complete with ``err``. Returns false if the source was already closed.
 def task_event_close(source:tuple<tag:TaskEventSourceTag;owner:iterator<auto(SS)?>>) : bool {
     var state=ce_event_state(source)
     if(state.closed) {return false}
@@ -73,13 +86,17 @@ def ce_dispose(var source:tuple<tag:TaskEventSourceTag;owner:auto>) {
     sequence_close(source.owner)
 }
 
+//! Returns the number of waits registered on the source: those that were polled at least once and
+//! are not released yet.
 def task_event_subscriber_count(source:tuple<tag:TaskEventSourceTag;owner:iterator<auto(SS)?>>) : int {
     let state=ce_event_state(source)
     unsafe {return length(state.slots)}
 }
 
-// Broadcast only to already registered waits. Each wait latches its first event.
-// No user continuation or callback runs while emit walks the slots.
+//! Broadcasts a copy of ``value`` to the waits that are registered at this moment and returns how
+//! many took it. Each wait keeps the first event it gets, and a wait that subscribes later does not
+//! see this one. No task runs inside the call: a wait picks its value up at its next poll.
+//! Returns 0 on a closed source.
 def task_event_emit(source:tuple<tag:TaskEventSourceTag;owner:iterator<auto(SS)?>>;value:auto(TT)) : int {
     var state=ce_event_state(source)
     unsafe {
@@ -134,6 +151,9 @@ def private ce_event_finish(var op:auto(OO)?) {
     }
 }
 
+//! Returns a ``Task<Result<T;string>>`` that completes with the first value emitted after its first
+//! poll, which is when it subscribes. It completes with ``err`` when the source is closed before an
+//! event arrives. Releasing the task unsubscribes it.
 def task_wait_event(source:tuple<tag:TaskEventSourceTag;owner:iterator<auto(SS)?>>) {
     var state=ce_event_state(source)
     unsafe {

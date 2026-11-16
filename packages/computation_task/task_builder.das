@@ -12,6 +12,15 @@ require daslib/templates
 require daslib/templates_boost
 require daslib/typemacro_boost
 
+//! The task types and their builders. ``computation(TaskBuilder(type<T>)) { ... }`` returns a cold
+//! ``Task<T>`` that the caller drives with ``task_poll``; inside the block ``source |> bind`` awaits
+//! another task. ``TaskResultBuilder`` adds ``Result`` short-circuiting, ``task_share`` lets several
+//! holders await one task, and ``task_from_poll`` / ``task_from_async`` adapt external operations.
+//! Brings the ``[task]`` / ``[task_result]`` annotations and ``CancellationToken`` along.
+
+//! Where a task is in its life. ``Created`` has never been polled and ``Waiting`` is suspended; the
+//! other three are final: ``Succeeded`` holds a value, ``Failed`` holds the message of the panic
+//! that stopped the body, and ``Cancelled`` holds neither.
 enum TaskStatus {
     Created
     Waiting
@@ -19,18 +28,26 @@ enum TaskStatus {
     Cancelled
     Failed
 }
+//! Marker field that makes a tuple a ``Task<T>``; it carries no data.
 struct TaskTag {_ce_marker:uint8}
+//! Marker field that makes a tuple a ``TaskEvent<T>``; it carries no data.
 struct TaskEventTag {_ce_marker:uint8}
 
-// Names for the task types: `Task<T>` is the cold single-shot task that
-// computation(TaskBuilder(type<T>)) returns, `TaskEvent<T>` one step of it.
-// Both are named tuples, so a value built field by field has the same type.
+//! One step of a task's source: ``ready == false`` says the task is still waiting, and
+//! ``ready == true`` carries the result in ``value``. Build one with ``task_pending``,
+//! ``task_ready`` or ``task_ready_move``. ``TaskEvent<T>`` is a named tuple, so a value built
+//! field by field has the same type.
 [template_tuple(TT)]
 struct template TaskEvent {
     tag : TaskEventTag
     ready : bool
     value : TT
 }
+//! The cold single-shot task that ``computation(TaskBuilder(type<T>))`` returns. Nothing runs until
+//! ``task_poll``; each poll runs the body to its next suspension or to its result. The task owns its
+//! source and its result and is moved, never copied: hand it to a bind, a combinator or a scheduler,
+//! or drive it yourself and read it with ``task_status``, ``task_value``, ``task_take`` and
+//! ``task_error``. ``Task<T>`` is a named tuple, so a value built field by field has the same type.
 [template_tuple(TT)]
 struct template Task {
     tag : TaskTag
@@ -40,7 +57,9 @@ struct template Task {
     error : string
     polling : bool
 }
+//! Marker of the builder that ``TaskBuilder(type<T>)`` returns.
 struct TaskContext {_ce_marker:uint8}
+//! Marker of the builder that ``TaskResultBuilder(type<T>)`` returns.
 struct TaskResultContext {_ce_marker:uint8}
 // A deferred task runs on a frame of its own. The task's source keeps the
 // frame until the task is done.
@@ -98,6 +117,8 @@ def ce_await_borrow_value(builder:auto; source:auto) {
     concept_assert(false,"task: reference binding requires an owning array Task")
 }
 
+//! The scope that one ``task_poll`` or ``task_cancel`` call opens; ``cancelled`` records that a task
+//! nested in the call reported cancellation. The runtime keeps these: user code does not create one.
 // Task is single-threaded. Each poll or cancel opens a scope that a nested
 // task uses to signal cancellation to it.
 struct TaskPollScope {cancelled:bool}
@@ -134,25 +155,41 @@ def private task_cleanup_end() {
     task_cleanup_scopes.resize(length(task_cleanup_scopes)-1)
 }
 
+//! Returns the event of a task that has no result yet: ``ready`` is false and ``value`` is the
+//! default ``T``. A poll callback returns it to leave its task ``TaskStatus.Waiting``.
 def task_pending(unused:type<auto(TT)>) {
     static_if(typeinfo can_copy(type<TT -const -&>)) {
         return (tag=TaskEventTag(),ready=false,value=default<TT -const -&>)
     } else {return <- (tag=TaskEventTag(),ready=false,value <- default<TT -const -&>)}
 }
+//! Returns the event that completes a task with a copy of ``value``. A value that cannot be copied
+//! is a compile error here: use ``task_ready_move``.
 def task_ready(value:auto(TT)) {
     concept_assert(typeinfo can_copy(type<TT>),"task: move-only return needs 'return <- value' or task_ready_move")
     return tuple<tag:TaskEventTag;ready:bool;value:TT -const -&>(tag=TaskEventTag(),ready=true,value=value)
 }
 
+//! Returns the event that completes a task with ``value``, which is moved into the event.
 def task_ready_move(var value:auto(TT)) {
     static_assert(typeinfo ce_resumable_payload(default<TT -const -&>))
     return <- (tag=TaskEventTag(),ready=true,value <- value)
 }
+//! Makes a ``Task<T>`` in status ``TaskStatus.Created`` from an iterator of events, which is moved
+//! into the task. Each ``task_poll`` takes one event: the task succeeds on the first ready one, and
+//! fails if the iterator ends before that.
 def task_create(var source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(TT)>>) {
     static_assert(typeinfo ce_resumable_payload(default<TT>))
     return <- (tag=TaskTag(),source <- source,status=TaskStatus.Created,value <- default<TT>,error="",polling=false)
 }
+//! The builder of ``computation(TaskBuilder(type<T>)) { ... }``, which returns a ``Task<T>``. In the
+//! block ``source |> bind`` awaits a task and gives its value, and ``return value`` completes the task.
+//! A bound task that fails or is cancelled fails or cancels this one; a ``Result`` or ``Option`` value
+//! is plain data.
 def TaskBuilder(unused:type<auto(TT)>) {var marker:TT -const -&?;return (kind=TaskContext(),element=marker)}
+//! The builder of a task that can fail with a message: the computation returns a
+//! ``Task<Result<T;string>>``. ``return value`` completes it with ``ok``; binding a task whose result
+//! is ``err`` skips the rest of the block and completes this task with that error. A ``Task<CeUnit>``
+//! such as ``task_delay_ms`` can be bound as well.
 def TaskResultBuilder(unused:type<auto(TT)>) {var marker:TT -const -&?;return (kind=TaskResultContext(),element=marker)}
 
 // Resumable streams may emit values; single-result Task builders may not.
@@ -231,10 +268,12 @@ def ce_sequence_run(builder:tuple<kind:TaskContext;element:auto(TT)?>; var sourc
 def ce_sequence_run(builder:tuple<kind:TaskResultContext;element:auto(TT)?>; var source:iterator<tuple<tag:TaskEventTag;ready:bool;value:Result<TT;string>>>) =>
     <- task_create(source)
 
-// TaskResultBuilder(type<T>, type<E>): the same task with any copyable error
-// type, Task<Result<T;E>>. `return value` says nothing about the error type,
-// so the builder carries it. A bound task must fail with the same E.
+//! Marker of the builder that ``TaskResultBuilder(type<T>, type<E>)`` returns.
 struct TaskResultErrorContext {_ce_marker:uint8}
+//! The same builder with an error type of your own: the computation returns a ``Task<Result<T;E>>``.
+//! ``return value`` says nothing about the error type, so the builder carries it. ``E`` must be
+//! copyable, and a bound task must fail with the same ``E``: ``task_map_error`` converts one that
+//! fails with another type.
 def TaskResultBuilder(unused:type<auto(TT)>; failure:type<auto(EE)>) {
     static_assert(typeinfo can_copy(type<EE -const -&>), "TaskResultBuilder(type<T>, type<E>): the error type must be copyable")
     var marker:TT -const -&?
@@ -296,14 +335,19 @@ def ce_await_failure(builder:tuple<kind:TaskResultErrorContext;element:auto(TT)?
 def ce_sequence_run(builder:tuple<kind:TaskResultErrorContext;element:auto(TT)?;error:auto(EE)?>; var source:iterator<tuple<tag:TaskEventTag;ready:bool;value:Result<TT;EE>>>) =>
     <- task_create(source)
 
+//! Returns the task's current status without polling it.
 def task_status(task:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(TT)>>;status:TaskStatus;value:TT;error:string;polling:bool>) =>
     task.status
+//! Returns the result of a succeeded task and leaves it in the task: a copy, or a clone when ``T``
+//! cannot be copied. Panics unless the status is ``TaskStatus.Succeeded``.
 def task_value(task:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(TT)>>;status:TaskStatus;value:TT;error:string;polling:bool>) : TT {
     if(task.status!=TaskStatus.Succeeded) {panic("task_value: task has not succeeded")}
     static_if(typeinfo can_copy(type<TT>)) {return task.value}
     else {return <- clone(task.value)}
 }
 
+//! Moves the result out of a succeeded task and deletes the task. Panics if the task has not
+//! succeeded or is being polled.
 def task_take(var task:auto) {
     if(ce_task_is_polling(task)) {panic("task_take: task is being polled")}
     if(task_status(task)!=TaskStatus.Succeeded) {panic("task_take: task has not succeeded")}
@@ -311,9 +355,14 @@ def task_take(var task:auto) {
     delete task
     return <- result
 }
+//! Returns the message of the panic that made the task ``TaskStatus.Failed``, or an empty string
+//! for a task in any other status.
 def task_error(task:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(TT)>>;status:TaskStatus;value:TT;error:string;polling:bool>) =>
     task.error
 
+//! Stops a task that has not finished: its status becomes ``TaskStatus.Cancelled`` and its source is
+//! closed, which runs the body's cleanup and cancels the task it was awaiting. Returns false, and
+//! changes nothing, for a task that has already finished. Panics when called while the task is being polled.
 def task_cancel(var task:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(TT)>>;status:TaskStatus;value:TT;error:string;polling:bool>) : bool {
     if(task.polling) {panic("task_cancel: task is being polled")}
     if(task.status!=TaskStatus.Created && task.status!=TaskStatus.Waiting) {return false}
@@ -324,10 +373,11 @@ def task_cancel(var task:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTa
     return true
 }
 
-// One poll drives the continuation to its next suspension or final result.
-// Terminal results are cached. There is no implicit busy-wait or worker thread.
-// A panic in the task's body is caught here, and nowhere else: the task becomes
-// Failed and is closed, which releases what its body still owned.
+//! Runs the task to its next suspension or to its result and returns the new status. A finished task
+//! returns its cached status; nothing here waits or uses another thread. A panic in the task's body is
+//! caught here, and nowhere else: the task becomes ``TaskStatus.Failed`` and is closed, which releases
+//! what its body still owned. A requested ``CancellationToken`` in scope cancels the task instead.
+//! Panics on a reentrant poll of the same task.
 def task_poll(var task:tuple<tag:TaskTag;source:iterator<tuple<tag:TaskEventTag;ready:bool;value:auto(TT)>>;status:TaskStatus;value:TT;error:string;polling:bool>) : TaskStatus {
     if(task.polling) {panic("task_poll: reentrant polling is unsupported")}
     if(task.status!=TaskStatus.Created && task.status!=TaskStatus.Waiting) {return task.status}
@@ -415,6 +465,10 @@ def ce_await_source(builder:auto; var task:tuple<tag:TaskTag;source:iterator<tup
     })}
 }
 
+//! Moves ``task`` into a new task of the same type that is polled under ``token``: once the token is
+//! requested, the new task and what it awaits become ``TaskStatus.Cancelled`` at their next poll. The
+//! new task keeps a handle of its own to the token, so the caller's handle stays theirs to cancel and
+//! delete. Panics if ``task`` is being polled.
 // Own both a child and a lease on the handle token. The dynamic scope lasts
 // only for task_poll, so nested binds observe the token without stack captures.
 def task_with_cancellation(var task:auto; token:CancellationToken) {
@@ -449,6 +503,9 @@ def private task_close_callbacks(var poll:lambda<():auto(TT)>; var close:lambda<
     unsafe {delete poll;delete close}
 }
 
+//! Makes a task from the poll callback of a non-blocking operation. Each ``task_poll`` invokes ``poll``
+//! once: it returns ``task_pending(type<T>)`` to keep waiting, or a ready event to finish. ``close``
+//! runs once when the task ends, however it ends. The task owns both lambdas and what they capture.
 def task_from_poll(var poll:lambda<():tuple<tag:TaskEventTag;ready:bool;value:auto(TT)>>; var close:lambda<():void>) {
     var source <- generator<tuple<tag:TaskEventTag;ready:bool;value:TT>> capture(<-poll,<-close) {
         while(true) {
@@ -463,6 +520,9 @@ def task_from_poll(var poll:lambda<():tuple<tag:TaskEventTag;ready:bool;value:au
     return <- task_create(source)
 }
 
+//! Returns a task that stays ``TaskStatus.Waiting`` for ``count`` polls and succeeds with a copy of
+//! ``value`` on the next one: a stand-in for an operation that takes a known number of polls.
+//! Panics on a negative ``count``.
 def task_after_polls(count:int; value:auto(TT)) {
     if(count<0) {panic("task_after_polls: count must be non-negative")}
     var source <- generator<tuple<tag:TaskEventTag;ready:bool;value:TT -const -&>> {
@@ -473,6 +533,7 @@ def task_after_polls(count:int; value:auto(TT)) {
     return <- task_create(source)
 }
 
+//! The same as ``task_after_polls`` for a value that cannot be copied: ``value`` is moved into the task.
 def task_after_polls_move(count:int;var value:auto(OwnedValueT)) {
     if(count<0) {panic("task_after_polls_move: count must be non-negative")}
     var events <- generator<tuple<tag:TaskEventTag;ready:bool;value:OwnedValueT -const -&>> capture(<-value) {
@@ -483,9 +544,10 @@ def task_after_polls_move(count:int;var value:auto(OwnedValueT)) {
     return <- task_create(events)
 }
 
-// Standard [async] generators can produce several res events. Like native await,
-// finish the producer and retain its last result; only wait events suspend us.
-// This also observes side effects after the last yielded value.
+//! Makes a task from the iterator of a daslib ``[async]`` function; the iterator is moved into the
+//! task. A ``wait`` event suspends the task. As a native ``await`` does, the task runs the producer to
+//! its end, so the side effects after its last value happen, and succeeds with the last ``res`` it
+//! produced. The task fails if the producer ends without a result.
 def task_from_async(var source:iterator<variant<res:auto(TT);wait:bool>>) {
     static_assert(typeinfo ce_resumable_payload(default<TT>))
     var events <- generator<tuple<tag:TaskEventTag;ready:bool;value:TT -const -&>> capture(<-source) {
@@ -512,7 +574,8 @@ def task_from_async(var source:iterator<variant<res:auto(TT);wait:bool>>) {
     return <- task_create(events)
 }
 
-// Void [async] functions produce iterator<bool>; completion yields successful Unit.
+//! The same for a void ``[async]`` function, whose iterator yields ``bool``: every element suspends
+//! the task, and the task succeeds with ``CeUnit`` when the iterator ends.
 def task_from_async(var source:iterator<bool>) {
     var events <- generator<tuple<tag:TaskEventTag;ready:bool;value:CeUnit>> capture(<-source) {
         var waiting=false
@@ -524,8 +587,9 @@ def task_from_async(var source:iterator<bool>) {
     return <- task_create(events)
 }
 
-// Own an external operation/resource until the async source is closed. The
-// Sequence owner runs close even for an unstarted source and frees the lambda.
+//! The same with a cleanup that the task owns: ``close`` runs once when the source is closed, also
+//! when the task was never polled, and is then deleted. Use it to release the external operation or
+//! resource behind ``source``.
 def task_from_async(var source:iterator<auto(TT)>; var close:lambda<():void>) {
     var owner <- @ capture(move(close)) {
         invoke(close)
@@ -535,7 +599,8 @@ def task_from_async(var source:iterator<auto(TT)>; var close:lambda<():void>) {
     return <- task_from_async(scoped)
 }
 
-// Own a task for the length of a block: it is cancelled, if still running, and released.
+//! Owns a task for the length of a block: ``task`` is moved in and passed to ``body``; when the block
+//! returns, the task is cancelled, if it is still running, and deleted.
 def task_scope(var task:auto(TT); body:block<(var owned:TT):void>) {
     var owned <- task
     invoke(body,owned)
@@ -543,8 +608,11 @@ def task_scope(var task:auto(TT); body:block<(var owned:TT):void>) {
     delete owned
 }
 
+//! Marker field that makes a tuple a ``TaskShared<T>``; it carries no data.
 struct TaskSharedTag {_ce_marker:uint8}
-// `TaskShared<T>` names the handle that task_share returns for a Task<T>.
+//! The handle that ``task_share`` returns for a ``Task<T>``: a counted reference to one task that
+//! several holders can poll, read and bind. ``task_shared_clone`` or ``:=`` makes another handle;
+//! deleting the last one cancels the task, if it is still running, and releases it.
 [template_tuple(TT)]
 struct template TaskShared {
     tag : TaskSharedTag
@@ -566,6 +634,8 @@ def private ce_task_shared_lease(var state:auto(SharedStateT)?) {
     })}
     return <- (tag=TaskSharedTag(),owner <- owner)
 }
+//! Moves a task into shared storage and returns the first ``TaskShared<T>`` handle to it. Panics if
+//! the task is being polled.
 def task_share(var task:auto(SharedOwnerT)) {
     if(ce_task_is_polling(task)) {panic("task_share: cannot move a task being polled")}
     unsafe {
@@ -581,6 +651,7 @@ def private ce_task_shared_state(handle:tuple<tag:TaskSharedTag;owner:iterator<a
         return state
     }
 }
+//! Returns another handle to the same shared task. Panics on a handle that was moved from or deleted.
 def task_shared_clone(handle:tuple<tag:TaskSharedTag;owner:iterator<auto(SharedStateT)?>>) {
     var state=ce_task_shared_state(handle)
     unsafe {
@@ -589,6 +660,7 @@ def task_shared_clone(handle:tuple<tag:TaskSharedTag;owner:iterator<auto(SharedS
         return <- ce_task_shared_lease(state)
     }
 }
+//! Makes ``target := source`` share the task of ``source``; the handle that ``target`` held is released.
 def clone(var target:tuple<tag:TaskSharedTag;owner:iterator<auto(SharedStateT)?>>; source:tuple<tag:TaskSharedTag;owner:iterator<SharedStateT?>>) {
     var next <- task_shared_clone(source)
     delete target
@@ -613,16 +685,23 @@ def ce_task_is_polling(handle:tuple<tag:TaskSharedTag;owner:iterator<auto(Shared
     var state=ce_task_shared_state(handle)
     return state.task.polling
 }
+//! Polls the shared task once and returns its status. The poll does not see the caller's
+//! cancellation tokens: cancelling one waiter never cancels the task that the others share.
 def task_poll(var handle:tuple<tag:TaskSharedTag;owner:iterator<auto(SharedStateT)?>>) {
     var state=ce_task_shared_state(handle)
     var status=TaskStatus.Created
     unsafe {ce_cancellation_isolate($ {status=task_poll(state.task)})}
     return status
 }
+//! Cancels the shared task itself, for every handle. Returns false if it had already finished.
 def task_cancel(var handle:tuple<tag:TaskSharedTag;owner:iterator<auto(SharedStateT)?>>) {
     var state=ce_task_shared_state(handle)
     unsafe {return task_cancel(state.task)}
 }
+//! Consumes a handle and returns a ``Task<T>`` that follows the shared task: it succeeds with a copy
+//! of the shared value (a clone when ``T`` cannot be copied), fails with its error and is cancelled
+//! with it. Cancelling or deleting the returned task only releases the handle. Binding a handle in a
+//! computation does the same with a clone, so the handle itself stays with the caller.
 def task_from_shared(var handle:tuple<tag:TaskSharedTag;owner:iterator<auto(SharedStateT)?>>) {
     typedef SharedValue=typedecl(task_value(handle)) -const -&
     var source <- generator<tuple<tag:TaskEventTag;ready:bool;value:SharedValue>> capture(<-handle) {
@@ -657,8 +736,9 @@ def ce_await_source(builder:auto; handle:tuple<tag:TaskSharedTag;owner:iterator<
     return <- ce_await_source(builder,source)
 }
 
-// A scheduled/shared result may be transferred only with one remaining lease.
-// Observers must release their handles first; the consumed handle becomes empty.
+//! Moves the result out of a shared task and deletes the handle, which must be the last one:
+//! observers release their handles first. Panics while another handle exists, if the task has not
+//! succeeded, or if it is being polled.
 def task_take(var handle:tuple<tag:TaskSharedTag;owner:iterator<auto(SharedStateT)?>>) {
     var state=ce_task_shared_state(handle)
     unsafe {

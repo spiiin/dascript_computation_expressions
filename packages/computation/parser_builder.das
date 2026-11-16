@@ -4,6 +4,17 @@ require ./builder_protocol.das public
 require daslib/strings_convert
 require daslib/strings_boost
 
+//! A text parser written as a computation expression: ``computation(ParserBuilder(text=...)) { ... }``
+//! reads the text one operation at a time (``parser_literal("x") |> bind``) and stops at the first
+//! failure. The outcome is a variant: ``parsed`` with the value, the position after it and a commit
+//! flag, or ``failure`` with a ``ParseDiagnostic``. Require it for small hand-written grammars
+//! with choice, repetition, backtracking and cut.
+
+//! Where and why a parse failed: ``position`` is the byte offset, ``line`` and ``column`` its
+//! 1-based coordinates, ``expected`` what the parser wanted there. ``committed``: the failure came
+//! after a ``parser_commit``, so alternatives are not tried. ``rewound``, ``rewind_position``: a
+//! ``parser_attempt`` backed out to that position. ``consumed``: input was read before failing.
+//! ``fatal``: a repeated parser matched without advancing; no combinator recovers from it.
 struct ParseDiagnostic {
     position:int
     line:int
@@ -15,33 +26,63 @@ struct ParseDiagnostic {
     consumed:bool
     fatal:bool
 }
+//! Builder and cursor of a parse: the ``text`` being read, the current byte ``position`` and whether
+//! this computation has committed. Start with ``ParserBuilder(text=source)``. A subgrammar called
+//! through ``parser_call`` receives a copy of the cursor and passes it to its own
+//! ``computation(cursor) { ... }``, which then reads from that position.
 struct ParserBuilder {
     text:string
     position:int
     committed:bool
 }
+//! The operation ``parser_literal`` returns: match ``text`` exactly.
 struct ParserLiteral {text:string}
+//! The operation ``parser_int`` returns.
 struct ParserInteger {_ce_marker:uint8}
+//! The operation ``parser_eof`` returns.
 struct ParserEnd {_ce_marker:uint8}
+//! The operation ``parser_spaces`` returns.
 struct ParserSpaces {_ce_marker:uint8}
+//! Marks the operation tuple that ``parser_choice`` returns.
 struct parserAlternativesTag {_ce_marker:uint8}
+//! Marks the operation tuple that ``parser_commit(source)`` returns.
 struct parserCutTag {_ce_marker:uint8}
+//! Marks the operation tuple that ``parser_attempt`` returns.
 struct parserAttemptTag {_ce_marker:uint8}
+//! Marks the operation tuple that ``parser_optional`` returns.
 struct parserOptionalTag {_ce_marker:uint8}
+//! Marks the operation tuple that ``parser_many`` and ``parser_many1`` return.
 struct parserRepeatTag {_ce_marker:uint8}
+//! Marks the operation tuple that ``parser_sep_by`` returns.
 struct parserSeparatedTag {_ce_marker:uint8}
 
+//! Operation that matches ``text`` exactly at the current position and yields it as a ``string``.
+//! On a mismatch the failure points at the first byte that differs.
 def parser_literal(text:string) => ParserLiteral(text=text)
+//! Operation that reads a decimal ``int`` with an optional leading ``-``. It fails expecting
+//! ``integer`` when there are no digits and ``32-bit integer`` when the number does not fit.
 def parser_int() => ParserInteger()
+//! Operation that succeeds only at the end of the text. It reads nothing.
 def parser_eof() => ParserEnd()
+//! Operation that skips spaces, tabs and line breaks. It succeeds also when there are none.
 def parser_spaces() => ParserSpaces()
+//! Ordered choice: tries ``left`` and, if that fails, ``right`` from the same position, even when
+//! ``left`` had read input. ``right`` is not tried after a committed or fatal failure of ``left``.
+//! When both fail, the failure that got further is reported; at equal positions their ``expected``
+//! texts are joined with ``or``. Both sides must yield the same value type.
 def parser_choice(left,right:auto) =>
     (parserAlternatives=parserAlternativesTag(),left=left,right=right)
 
+//! Builds a ``parsed`` outcome by hand: ``value``, the ``position`` after it and the commit flag.
+//! Use it in a ``parser_call`` callback that does not go through ``computation``. The value must be
+//! copyable; ``parser_ok_move`` takes the others.
 def parser_ok(value:auto(TT); position:int; committed:bool=false) {
     static_assert(typeinfo can_copy(type<TT>),"ParserBuilder requires copyable parsed values")
     return variant<parsed:tuple<value:TT -const -&;position:int;committed:bool>;failure:ParseDiagnostic>(parsed=(value=value,position=position,committed=committed))
 }
+//! Builds a ``failure`` outcome at ``position`` with the given ``expected`` text; ``unused`` names
+//! the value type the outcome would have carried. Line and column are counted from the builder's
+//! text, and the builder's commit flag is copied into the diagnostic.
 def parser_error(builder:ParserBuilder; position:int; expected:string; unused:type<auto(TT)>) {
     var line=1
     var column=1
@@ -52,6 +93,9 @@ def parser_error(builder:ParserBuilder; position:int; expected:string; unused:ty
     }
     return variant<parsed:tuple<value:TT -const -&;position:int;committed:bool>;failure:ParseDiagnostic>(failure=ParseDiagnostic(position=position,line=line,column=column,expected=expected,committed=builder.committed,consumed=position>builder.position))
 }
+//! Runs one parser operation at the builder's position and returns its outcome; the builder itself
+//! is not advanced. There is an overload for every operation. Inside ``computation`` write
+//! ``op |> bind`` instead, which also moves the cursor past what was read.
 def parser_read(builder:ParserBuilder; op:ParserLiteral) {
     var matched=0
     peek_data(builder.text) $(text) {
@@ -125,6 +169,8 @@ def parser_read(builder:ParserBuilder; op:tuple<parserAlternatives:parserAlterna
     return <- right
 }
 
+//! Like ``parser_ok``, but moves ``value`` into the outcome, for values that cannot be copied such
+//! as arrays. The caller's variable is left empty.
 def parser_ok_move(var value:auto(TT); position:int; committed:bool=false) {
     var inscope result:variant<parsed:tuple<value:TT -const -&;position:int;committed:bool>;failure:ParseDiagnostic>
     // Separate assignment avoids shallow copies in SDK AOT variant initializers.
@@ -133,6 +179,8 @@ def parser_ok_move(var value:auto(TT); position:int; committed:bool=false) {
     (result as parsed).committed=committed
     return <- result
 }
+//! Wraps an existing ``diagnostic`` into a ``failure`` outcome whose value type is named by
+//! ``unused``. Use it to pass a failure on under a different value type.
 def parser_failure(diagnostic:ParseDiagnostic; unused:type<auto(TT)>) =>
     <- variant<parsed:tuple<value:TT -const -&;position:int;committed:bool>;failure:ParseDiagnostic>(failure=diagnostic)
 
@@ -201,19 +249,42 @@ def ce_using(builder:ParserBuilder; resource:auto(TT); body:block<(item:TT):auto
     return <- result
 }
 
-// Named subgrammar: a function pointer owns no stack captures.
+//! Operation that runs a named subgrammar: ``callback`` receives a copy of the cursor and returns
+//! an outcome, usually from its own ``computation(cursor) { ... }``. It takes a function pointer
+//! (``@@grammar``), which captures nothing from the stack.
 def parser_call(callback:function<(cursor:ParserBuilder):auto(RR)>) =>
     (parserFunction=true,callback=callback)
 def parser_read(builder:ParserBuilder; op:tuple<parserFunction:bool;callback:function<(cursor:ParserBuilder):auto(RR)>>) : RR =>
     <- invoke(op.callback,builder)
 
+//! The operation ``parser_commit()`` returns.
 struct ParserCommit {_ce_marker:uint8}
+//! Cut: an operation that reads nothing and commits the current computation. A failure after it is
+//! ``committed``, so an enclosing ``parser_choice`` does not try its other branch, and
+//! ``parser_optional``, ``parser_many`` and ``parser_sep_by`` fail instead of taking it as "absent".
 def parser_commit() => ParserCommit()
+//! Runs ``source`` and marks its outcome committed, whether it parsed or failed: if ``source``
+//! fails, an enclosing ``parser_choice`` does not try its other branch.
 def parser_commit(source:auto) => (parserCut=parserCutTag(),source=source)
+//! Runs ``source`` as a unit that either matches or backs out: a failure is marked ``rewound`` to
+//! the starting position and loses a commit made inside ``source``, so ``parser_choice``,
+//! ``parser_optional`` and the repetitions take it as no match there. Fatal failures pass unchanged.
 def parser_attempt(source:auto) => (parserAttempt=parserAttemptTag(),source=source)
+//! Makes ``source`` optional. Yields ``some(value)`` when it matches, and ``none`` without moving
+//! when it fails at its starting position with no input read or was rewound there by
+//! ``parser_attempt``. A failure after reading input, a committed or a fatal one stays a failure.
 def parser_optional(source:auto) => (parserOptional=parserOptionalTag(),source=source)
+//! Repeats ``source`` zero or more times and yields the values as an ``array``; bind it with
+//! ``var items & = ... |> bind``. It ends at the first repetition that fails without reading input;
+//! one that fails part-way fails the whole operation unless it is wrapped in ``parser_attempt``.
+//! A ``source`` that matches without advancing is a fatal failure.
 def parser_many(source:auto) => (parserRepeat=parserRepeatTag(),source=source,minimum=0)
+//! Like ``parser_many``, but requires at least one match; without one it returns the failure of
+//! the first repetition.
 def parser_many1(source:auto) => (parserRepeat=parserRepeatTag(),source=source,minimum=1)
+//! Reads zero or more ``item`` separated by ``separator`` and yields the items as an ``array``;
+//! separator values are dropped. An item must follow every separator, so a trailing separator is a
+//! failure. An ``item`` that matches without advancing is a fatal failure.
 def parser_sep_by(item,separator:auto) =>
     (parserSeparated=parserSeparatedTag(),item=item,separator=separator)
 

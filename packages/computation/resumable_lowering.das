@@ -4,6 +4,10 @@ require daslib/ast_boost
 require daslib/templates_boost
 require strings
 
+//! Macro internals: the lowering of a resumable computation, such as a task or an asynchronous sequence,
+//! into a generator of the builder's events, and helpers that the lowering modules share.
+//! ``computation_macro`` requires it; there is nothing here for a user of the library to call.
+
 // A source position does not identify a generated name: nested pipes share one
 // position, and one lowered statement can nest inside another built from it.
 // The serial follows expansion order, so names stay stable between compiles.

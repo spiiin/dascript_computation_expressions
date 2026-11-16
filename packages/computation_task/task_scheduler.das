@@ -9,10 +9,19 @@ require daslib/templates_boost
 require daslib/typemacro_boost
 require strings
 
-// max_tick_usec: optional wall-clock budget per tick (0 = unlimited). At least one
-// task is polled; the check runs between top-level polls and cannot preempt one.
+//! A single-threaded scheduler for tasks of one value type. ``task_scheduler(type<T>)`` owns the tasks
+//! spawned into it, and each ``task_tick(scheduler, now_ms)`` polls the active ones in turn within a
+//! poll and time budget. Tasks are addressed by ``TaskId``; a finished task stays readable until its
+//! record is released. Require it to drive tasks from a frame loop, with timeouts and
+//! ``task_delay_ms``; for tasks of different value types in one loop use ``task_runtime``.
+
+//! Limits of one ``task_tick``. ``max_polls_per_tick`` is the most tasks a tick polls; a task is polled
+//! at most once per tick. ``max_tick_usec`` is an optional wall-clock budget per tick (0 = unlimited):
+//! at least one task is polled, and the check runs between polls, so it cannot preempt one.
 struct TaskSchedulerConfig {max_polls_per_tick:int=64;max_tick_usec:int=0}
-// Snapshot for diagnostics. Times are scheduler now_ms; -1 means unknown/none.
+//! Snapshot of one task record for diagnostics, as returned by ``task_dump`` and ``task_stalled``.
+//! Times are scheduler ``now_ms`` values; -1 means unknown or none. ``active`` is true while the task
+//! has not finished, ``polls`` counts its polls, ``deadline_ms`` is when its timeout expires.
 struct TaskInfo {
     id:TaskId
     name:string
@@ -24,8 +33,15 @@ struct TaskInfo {
     polls:int
     deadline_ms:int64
 }
+//! Timeout for ``task_spawn``: the task is cancelled once scheduler time reaches the time of the spawn
+//! plus ``after_ms``. Scheduler time is the ``now_ms`` of the last tick; for a task spawned before the
+//! first tick the timeout counts from that first tick.
 struct TaskTimeout {after_ms:int64}
+//! Identifies a task spawned into one scheduler. It is a plain value to copy and store. It is valid
+//! only for the scheduler that returned it, and only until the task's record is released by
+//! ``task_forget``, ``task_prune`` or ``task_take``; ``task_valid`` checks it. ``TaskId()`` is never valid.
 struct TaskId {owner:uint64;slot:int;generation:uint64}
+//! Marker field that identifies the value ``task_scheduler`` returns; user code does not construct it.
 struct TaskSchedulerTag {_ce_marker:uint8}
 // Private implementation records. Active queue links are 1-based; zero is null.
 struct TaskSlot {
@@ -91,6 +107,10 @@ def private task_scheduler_create(unused:type<auto(TT)>; config:TaskSchedulerCon
     frames |> emplace((state=TaskSchedulerState(config=config,owner=owner),records <- records))
     return <- (kind=TaskSchedulerTag(),frames <- frames)
 }
+//! Creates an empty scheduler for tasks whose value type is ``T``; without ``config`` the defaults of
+//! ``TaskSchedulerConfig`` apply. The caller owns it and must delete it (``var inscope``), which cancels
+//! the tasks still active. It is move-only: after a move, calls on the old variable panic and
+//! ``task_valid`` returns false. Panics if a limit in ``config`` is not valid.
 def task_scheduler(unused:type<auto(TT)>; config:TaskSchedulerConfig) {
     static_assert(typeinfo ce_resumable_payload(default<TT>))
     task_scheduler_validate(config)
@@ -99,10 +119,10 @@ def task_scheduler(unused:type<auto(TT)>; config:TaskSchedulerConfig) {
 }
 def task_scheduler(unused:type<auto(TT)>) => <- task_scheduler(type<TT>,TaskSchedulerConfig())
 
-// `TaskScheduler<T>` names what task_scheduler(type<T>) returns. The records a
-// scheduler keeps are private, so the name is the constructor's own result
-// type rather than a layout written out twice. It declares a variable, a
-// field or a parameter; T cannot be deduced from an argument through it.
+//! ``TaskScheduler<T>`` names the type that ``task_scheduler(type<T>)`` returns. It declares a variable,
+//! a field or a parameter; ``T`` cannot be deduced from an argument through it.
+// The records a scheduler keeps are private, so the name is the constructor's own
+// result type rather than a layout written out twice.
 [typemacro_function]
 def public TaskScheduler(macroArgument, passArgument : TypeDeclPtr; TT : TypeDeclPtr) : TypeDeclPtr {
     if (passArgument != null) { return null }
@@ -111,6 +131,8 @@ def public TaskScheduler(macroArgument, passArgument : TypeDeclPtr; TT : TypeDec
     return named
 }
 
+//! Runs when a scheduler is deleted: cancels the tasks still active, which closes them and releases
+//! the resources they hold, then frees every record.
 def finalize(var scheduler:tuple<kind:TaskSchedulerTag;frames:array<auto(FF)>>) {
     ce_sequence_finalize($ {
         if(!empty(scheduler.frames)) {task_scheduler_dispose(scheduler.frames[0])}
@@ -127,6 +149,8 @@ def private task_scheduler_idle(scheduler:auto) {
 def private task_scheduler_active(status:TaskStatus) : bool =>
     status==TaskStatus.Created || status==TaskStatus.Waiting
 
+//! Returns true while ``id`` names a record this scheduler holds: the task was spawned here and its
+//! record has not been released. Never panics, and returns false for a scheduler that was moved away.
 def task_valid(scheduler:auto; id:TaskId) : bool {
     if(length(scheduler.frames)!=1 || id.owner==uint64(0) || id.owner!=scheduler.frames[0].state.owner
         || id.slot<=0 || id.slot>length(scheduler.frames[0].records)) {return false}
@@ -226,31 +250,46 @@ def private task_scheduler_spawn(var scheduler:auto; var source:auto; timed:bool
     }
 }
 
+//! Moves ``source`` into the scheduler and returns its ``TaskId``. The scheduler owns the task from now
+//! on; a later ``task_tick`` polls it for the first time. A task that has already finished is recorded
+//! without being polled. Panics if the task is being polled. Also panics during a tick and on a
+//! closed scheduler; the task is then still consumed: it is cancelled and released first.
 def task_spawn(var scheduler:auto; var source:auto) : TaskId =>
     task_scheduler_spawn(scheduler,source,false,int64(0),"")
+//! ``task_spawn`` with a deadline: a tick at or after the spawn time plus ``timeout.after_ms`` cancels
+//! the task before it polls anything, and ``task_timed_out`` returns true for it. Panics if
+//! ``after_ms`` is negative; the task is cancelled and released first.
 def task_spawn(var scheduler:auto; var source:auto; timeout:TaskTimeout) : TaskId =>
     task_scheduler_spawn(scheduler,source,true,timeout.after_ms,"")
-// Named variants only add a diagnostic label; names need not be unique.
+//! ``task_spawn`` with a diagnostic label, reported by ``task_name``, ``task_dump`` and
+//! ``task_dump_text``. Names need not be unique.
 def task_spawn_named(var scheduler:auto; name:string; var source:auto) : TaskId =>
     task_scheduler_spawn(scheduler,source,false,int64(0),name)
 def task_spawn_named(var scheduler:auto; name:string; var source:auto; timeout:TaskTimeout) : TaskId =>
     task_scheduler_spawn(scheduler,source,true,timeout.after_ms,name)
+//! Returns the task's diagnostic label, "" if it has none. Panics if ``id`` is not valid.
 def task_name(scheduler:auto; id:TaskId) : string {
     task_scheduler_check_id(scheduler,id)
     return scheduler.frames[0].records[id.slot-1].slot.name
 }
+//! Replaces the task's diagnostic label. Panics if ``id`` is not valid.
 def task_set_name(var scheduler:auto; id:TaskId; name:string) {
     task_scheduler_check_id(scheduler,id)
     scheduler.frames[0].records[id.slot-1].slot.name=name
 }
+//! Returns true if the scheduler cancelled the task because its ``TaskTimeout`` expired; a task
+//! cancelled any other way returns false. Panics if ``id`` is not valid.
 def task_timed_out(scheduler:auto; id:TaskId) : bool {
     task_scheduler_check_id(scheduler,id)
     return scheduler.frames[0].records[id.slot-1].slot.timed_out
 }
+//! Returns the task's current ``TaskStatus``. Panics if ``id`` is not valid.
 def task_status(scheduler:auto; id:TaskId) : TaskStatus {
     task_scheduler_check_id(scheduler,id)
     return task_status(scheduler.frames[0].records[id.slot-1].task)
 }
+//! Returns the result of a succeeded task and leaves it in the record: a copy, or a clone when ``T``
+//! cannot be copied. Panics if the task has not succeeded or ``id`` is not valid.
 def task_value(scheduler:auto; id:TaskId) {
     task_scheduler_check_id(scheduler,id)
     static_if(typeinfo can_copy(type<typedecl(task_value(scheduler.frames[0].records[id.slot-1].task))>)) {
@@ -258,7 +297,9 @@ def task_value(scheduler:auto; id:TaskId) {
     } else {return <- task_value(scheduler.frames[0].records[id.slot-1].task)}
 }
 
-// Transfer an owned result without cloning, and retire its completed record.
+//! Moves the result of a succeeded task out of the scheduler without cloning and releases the task's
+//! record, so ``id`` is no longer valid. Panics if the task has not succeeded, if ``id`` is not valid
+//! or during a tick.
 def task_take(var scheduler:auto;id:TaskId) {
     task_scheduler_idle(scheduler);task_scheduler_check_id(scheduler,id)
     if(task_status(scheduler,id)!=TaskStatus.Succeeded) {panic("task_take: task has not succeeded")}
@@ -266,10 +307,15 @@ def task_take(var scheduler:auto;id:TaskId) {
     task_scheduler_release(scheduler.frames[0],id.slot)
     return <- value
 }
+//! Returns the panic message of a task that ended as ``TaskStatus.Failed``, "" for any other task.
+//! Panics if ``id`` is not valid.
 def task_error(scheduler:auto; id:TaskId) : string {
     task_scheduler_check_id(scheduler,id)
     return task_error(scheduler.frames[0].records[id.slot-1].task)
 }
+//! Cancels a task that is still active: it is closed, which releases the resources it holds, and its
+//! status becomes ``TaskStatus.Cancelled``. The record stays readable until it is released. Returns
+//! false if the task had already finished. Panics if ``id`` is not valid or during a tick.
 def task_cancel(var scheduler:auto; id:TaskId) : bool {
     task_scheduler_idle(scheduler)
     task_scheduler_check_id(scheduler,id)
@@ -280,18 +326,32 @@ def task_cancel(var scheduler:auto; id:TaskId) : bool {
     scheduler.frames[0].state.busy=false
     return cancelled
 }
+//! Replaces the scheduler's limits; the next tick uses them. Panics if a limit is not valid, if the
+//! scheduler is closed or during a tick; the old limits then stay in effect.
 def task_configure(var scheduler:auto; config:TaskSchedulerConfig) {
     task_scheduler_idle(scheduler)
     task_scheduler_validate(config)
     if(scheduler.frames[0].state.closed) {panic("task scheduler: scheduler is closed")}
     scheduler.frames[0].state.config=config
 }
+//! Returns the limits the scheduler currently uses.
 def task_scheduler_config(scheduler:auto) {task_scheduler_live(scheduler);return scheduler.frames[0].state.config}
+//! Returns scheduler time: the ``now_ms`` passed to the last ``task_tick``, 0 before the first tick.
 def task_scheduler_time(scheduler:auto) : int64 {task_scheduler_live(scheduler);return scheduler.frames[0].state.now_ms}
+//! Returns the number of task records the scheduler holds: active tasks and finished ones not yet
+//! released.
 def task_count(scheduler:auto) : int {task_scheduler_live(scheduler);return scheduler.frames[0].state.count}
+//! Returns the number of tasks that have not finished (``TaskStatus.Created`` or ``TaskStatus.Waiting``).
 def task_active_count(scheduler:auto) : int {task_scheduler_live(scheduler);return scheduler.frames[0].state.active_count}
+//! Returns the number of record slots allocated so far, free ones included; later spawns reuse the
+//! slots of released records.
 def task_slot_count(scheduler:auto) : int {task_scheduler_live(scheduler);return length(scheduler.frames[0].records)}
 
+//! Advances the scheduler to time ``now_ms`` and returns the number of tasks still active. It first
+//! cancels every task whose timeout is due, then polls active tasks in turn, each at most once, until
+//! the poll or time budget of ``TaskSchedulerConfig`` is spent; the next tick continues with the task
+//! after the last one polled. A closed scheduler returns 0. Panics if ``now_ms`` is negative or less
+//! than the previous tick's, or when called by a task this scheduler is polling.
 def task_tick(var scheduler:auto; now_ms:int64) : int {
     unsafe {
         task_scheduler_idle(scheduler)
@@ -344,6 +404,9 @@ def task_tick(var scheduler:auto; now_ms:int64) : int {
         return frame.state.active_count
     }
 }
+//! Cancels every active task and closes the scheduler: later spawns and ``task_configure`` panic and
+//! ticks do nothing. The records, including those of the tasks just cancelled, stay readable.
+//! Closing a closed scheduler does nothing. Panics during a tick.
 def task_scheduler_close(var scheduler:auto) {
     unsafe {
         task_scheduler_idle(scheduler)
@@ -369,6 +432,9 @@ def private task_scheduler_release(var frame:auto; index:int) {
     }
     frame.state.count--
 }
+//! Releases the record of a finished task together with its result; ``id`` is no longer valid.
+//! Returns false and keeps the record if the task is still active. Panics if ``id`` is not valid or
+//! during a tick.
 def task_forget(var scheduler:auto; id:TaskId) : bool {
     task_scheduler_idle(scheduler);task_scheduler_check_id(scheduler,id)
     if(scheduler.frames[0].records[id.slot-1].slot.active) {return false}
@@ -377,6 +443,8 @@ def task_forget(var scheduler:auto; id:TaskId) : bool {
     scheduler.frames[0].state.busy=false
     return true
 }
+//! Releases the records of all finished tasks, with their results, and returns how many there were.
+//! Their ids are no longer valid; active tasks are not affected. Panics during a tick.
 def task_prune(var scheduler:auto) : int {
     task_scheduler_idle(scheduler)
     scheduler.frames[0].state.busy=true
@@ -389,6 +457,8 @@ def task_prune(var scheduler:auto) : int {
     scheduler.frames[0].state.busy=false
     return removed
 }
+//! Moves ``scheduler`` into the call, runs ``body`` with it as ``owner`` and then deletes it, which
+//! cancels the tasks still active. The caller's variable is left empty.
 def task_scheduler_scope(var scheduler:auto(SS); body:block<(var owner:SS):void>) {
     var owned <- scheduler
     invoke(body,owned)
@@ -397,11 +467,11 @@ def task_scheduler_scope(var scheduler:auto(SS); body:block<(var owner:SS):void>
 
 def task_tick(var scheduler:auto; now_ms:int) : int => task_tick(scheduler,int64(now_ms))
 
-// Earliest scheduler time at which a tick can make progress on time-based waits:
-// timeouts and task_delay_ms waits polled in the last tick. Returns now_ms when the
-// last tick left active tasks unpolled or before the first tick, and -1 when no
-// active task has a known deadline. Tasks waiting on events, channels, sockets or
-// jobque results are not visible here: keep ticking while such waits can complete.
+//! Returns the earliest scheduler time at which a tick can make progress on time-based waits:
+//! timeouts, and ``task_delay_ms`` waits polled in the last tick. Returns the current scheduler time
+//! when the last tick left active tasks unpolled or no tick has run yet, and -1 when no active task
+//! has a known deadline. Tasks waiting on events, channels, sockets or job queue results are not
+//! visible here: keep ticking while such waits can complete.
 def task_next_deadline(scheduler:auto) : int64 {
     task_scheduler_live(scheduler)
     let state=scheduler.frames[0].state
@@ -428,7 +498,7 @@ def private task_scheduler_info(scheduler:auto; index:int) : TaskInfo {
         polls=slot.polls,
         deadline_ms=slot.timer_queued && scheduler.frames[0].state.has_time ? int64(slot.deadline_ms) : int64(-1))
 }
-// One entry per occupied slot (active and retained terminal records), slot order.
+//! Returns a ``TaskInfo`` for every record the scheduler holds, active and finished, in slot order.
 def task_dump(scheduler:auto) : array<TaskInfo> {
     task_scheduler_live(scheduler)
     var result:array<TaskInfo>
@@ -437,7 +507,8 @@ def task_dump(scheduler:auto) : array<TaskInfo> {
     }
     return <- result
 }
-// Active tasks spawned at least older_than_ms ago (scheduler time).
+//! Returns a ``TaskInfo`` for every active task spawned at least ``older_than_ms`` ago in scheduler
+//! time. Empty before the first tick.
 def task_stalled(scheduler:auto; older_than_ms:int64) : array<TaskInfo> {
     task_scheduler_live(scheduler)
     var result:array<TaskInfo>
@@ -453,6 +524,8 @@ def task_stalled(scheduler:auto; older_than_ms:int64) : array<TaskInfo> {
 }
 def task_stalled(scheduler:auto; older_than_ms:int) : array<TaskInfo> =>
     <- task_stalled(scheduler,int64(older_than_ms))
+//! Returns ``task_dump`` as text for a log: a summary line, then one line per task with its slot,
+//! name, status, age, poll count and timeout.
 def task_dump_text(scheduler:auto) : string {
     var inscope infos <- task_dump(scheduler)
     let now=task_scheduler_time(scheduler)

@@ -3,18 +3,37 @@ module task_parallel public
 require ./task_channel.das public
 require ./task_delay.das public
 
+//! Helpers for running several tasks under control: a counting semaphore, retry with a delay, the
+//! first successful result, and "run them all, at most N at a time". A helper that starts or takes
+//! child tasks returns a ``Task`` that owns them and cancels those still running when it ends or
+//! is cancelled itself.
+
+//! Marker field of a semaphore handle: the semaphore functions accept only what ``task_semaphore``
+//! returns.
 struct TaskSemaphoreTag {_ce_marker:uint8}
 
+//! Creates a counting semaphore with ``permits`` free permits and returns the handle that owns it.
+//! Tasks take a permit with ``task_semaphore_acquire`` or, for the length of a child task, with
+//! ``task_with_semaphore``. Panics if ``permits`` is not positive.
 def task_semaphore(permits:int) {
     var inscope channel <- task_channel(type<CeUnit>,permits)
     for(_permit in range(permits)) {verify(task_channel_try_send(channel,CeUnit()))}
     return <- (tag=TaskSemaphoreTag(),channel <- channel)
 }
+//! Closes the semaphore: free permits are dropped, and waiting and later ``task_semaphore_acquire``
+//! tasks complete with ``err("semaphore is closed")``. A ``task_with_semaphore`` task that is still
+//! waiting for a permit fails with that message.
 def task_semaphore_close(semaphore:tuple<tag:TaskSemaphoreTag;channel:auto>) {task_channel_fail(semaphore.channel,"semaphore is closed")}
-// Explicit acquire/release is available; task_with_semaphore scopes a permit.
+//! Gives back a permit taken with ``task_semaphore_acquire``; call it once per successful acquire.
+//! ``task_with_semaphore`` does the acquire and the release for you. Panics if the semaphore is
+//! closed or more permits are released than were taken.
 def task_semaphore_release(semaphore:tuple<tag:TaskSemaphoreTag;channel:auto>) {
     if(!task_channel_try_send(semaphore.channel,CeUnit())) {panic("task semaphore: closed or released too often")}
 }
+//! Returns a ``Task<Result<CeUnit;string>>`` that completes with ``ok`` once it holds a permit, or
+//! with ``err`` if the semaphore is closed. Waiting tasks get permits in the order of their first
+//! poll. After ``ok`` the caller holds the permit and must call ``task_semaphore_release``;
+//! deleting the task does not give it back.
 def task_semaphore_acquire(semaphore:tuple<tag:TaskSemaphoreTag;channel:auto>) {
     var waiting <- task_channel_receive(semaphore.channel)
     var events <- generator<tuple<tag:TaskEventTag;ready:bool;value:Result<CeUnit;string>>> capture(<-waiting) {
@@ -32,6 +51,10 @@ def task_semaphore_acquire(semaphore:tuple<tag:TaskSemaphoreTag;channel:auto>) {
     } finally {ce_sequence_finalize($ {ce_task_parallel_close(waiting)})}
     return <- task_create(events)
 }
+//! Returns a task that waits for a permit, then calls ``factory`` to create the child task, awaits
+//! it and completes with its value. The permit is given back when this task ends for any reason,
+//! and a child still running is cancelled. ``factory`` is moved in and is not called if no permit
+//! is obtained. The task fails if the child fails or the semaphore is closed while it waits.
 def task_with_semaphore(semaphore:tuple<tag:TaskSemaphoreTag;channel:auto>;var factory:lambda<():auto(ChildT)>) {
     var lease <- task_channel_clone(semaphore.channel)
     var waiting <- task_channel_receive(lease)
@@ -63,7 +86,11 @@ def task_with_semaphore(semaphore:tuple<tag:TaskSemaphoreTag;channel:auto>;var f
     return <- task_create(events)
 }
 
-// Retry only explicit Result.err; cancellation and native failures propagate.
+//! Returns a task that calls ``factory(attempt)``, numbering attempts from 1, and awaits the
+//! ``Result`` task it creates until one completes with ``ok`` or ``max_attempts`` is reached; it
+//! completes with the last outcome. Between attempts it waits ``delay_ms`` of scheduler time, or one
+//! poll when that is 0. Only ``err`` is retried: a child that fails or is cancelled fails or cancels
+//! this task. Panics if ``max_attempts`` is not positive or ``delay_ms`` is negative.
 def task_retry(var factory:lambda<(attempt:int):auto(ChildT)>;max_attempts:int;delay_ms:int64=0l) {
     if(max_attempts<=0 || delay_ms<0l) {panic("task_retry: attempts must be positive and delay non-negative")}
     typedef Outcome=typedecl(invoke(factory,1).value) -const -&
@@ -99,6 +126,10 @@ def task_retry(var factory:lambda<(attempt:int):auto(ChildT)>;max_attempts:int;d
     return <- task_create(events)
 }
 
+//! Takes over ``children``, tasks with a ``Result`` value, polls them together and completes with
+//! the first ``ok``. If all end with ``err`` it completes with the error of the one that ended
+//! last; an empty array gives ``err("task_first_success: no candidates")``. Children still running
+//! at the end are cancelled. A child that fails or is cancelled fails or cancels the whole task.
 def task_first_success(var children:array<auto(ChildT)>) {
     typedef Outcome=typedecl(children[0].value) -const -&
     typedef Item=typedecl(children[0].value as ok) -const -&
@@ -131,7 +162,10 @@ def private ce_task_parallel_release(var children:array<auto>) {
     delete children
 }
 
-// Factories are cold: queued inputs do not create a Task until a slot is free.
+//! Returns a task that calls ``factory(input)`` for every input with at most ``limit`` children
+//! running at a time, and completes with their values in input order. A queued input does not
+//! create its task until a slot is free. ``inputs`` and ``factory`` are moved in. A child that fails
+//! or is cancelled ends the whole task the same way. Panics if ``limit`` is not positive.
 def task_when_all_limited(var inputs:array<auto(InputT)>;limit:int;var factory:lambda<(input:InputT):auto(ChildT)>) {
     if(limit<=0) {panic("task_when_all_limited: limit must be positive")}
     typedef Item=typedecl(invoke(factory,inputs[0]).value) -const -&
@@ -163,7 +197,9 @@ def task_when_all_limited(var inputs:array<auto(InputT)>;limit:int;var factory:l
     return <- task_create(events)
 }
 
-// Factories are cold: queued inputs do not create a Task until a slot is free.
+//! Like ``task_when_all_limited`` for children with a ``Result`` value: completes with ``ok`` of
+//! the unwrapped values in input order, or with the first ``err`` a child returns. On that ``err``
+//! the children still running are cancelled and the queued inputs never create a task.
 def task_result_when_all_limited(var inputs:array<auto(InputT)>;limit:int;var factory:lambda<(input:InputT):auto(ChildT)>) {
     if(limit<=0) {panic("task_result_when_all_limited: limit must be positive")}
     typedef Item=typedecl(invoke(factory,inputs[0]).value as ok) -const -&

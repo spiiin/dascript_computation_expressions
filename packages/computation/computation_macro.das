@@ -10,6 +10,10 @@ require daslib/ast_boost
 require daslib/templates_boost
 require math
 
+//! The ``computation(builder) { ... }`` call macro: the core of the library, without any builder.
+//! Require it together with the module of a builder; the ``computation`` facade adds the standard builders.
+//! Everything else in this module is the lowering behind the macro and is not meant to be called.
+
 // Preserve expression reference-ness; standard is_ref includes all ref types.
 [typeinfo_macro(name="ce_source_is_borrowed")]
 class CeSourceBorrowed : AstTypeInfoMacro {
@@ -2107,6 +2111,12 @@ def ce_run_scope(builder:string; outcome:ExpressionPtr; owned:bool; at:LineInfo)
     return qmacro_block() { var $i(input)=$e(outcome); $e(finish); }
 }
 
+//! ``computation(builder) { ... }`` rewrites its block into calls of the builder's ``ce_*`` operations and
+//! evaluates to the builder's outcome; ``builder`` is evaluated once. In the block ``source |> bind`` binds
+//! a source and ``left |> and_bind(right) |> bind`` a group; ``return``, ``yield``, ``source |> return_from``
+//! and ``source |> yield_from`` produce the result; ``resource |> use_resource`` and
+//! ``try_finally(body, cleanup)`` scope cleanup. What is accepted depends on the builder's ``ce_protocol``;
+//! a block with arguments or a native ``finally`` is a compile error.
 [call_macro(name="computation")]
 class ComputationMacro : AstCallMacro {
     serial : int = 0

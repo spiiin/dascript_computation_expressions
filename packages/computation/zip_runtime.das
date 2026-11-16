@@ -3,6 +3,10 @@ module zip_runtime public
 require ./sequence_runtime.das public
 require daslib/rtti
 
+//! Macro internals: the cursors, array locks and source adapter with which a lowered ``for`` walks its
+//! sources and closes them when the loop ends. ``computation_macro`` requires it publicly because
+//! generated code calls these functions; there is nothing here for a user of the library to call.
+
 struct CeZipReadOnly {_ce_marker:uint8}
 struct CeZipMutable {_ce_marker:uint8}
 // A mutable collection: its elements are writable even where each() yields

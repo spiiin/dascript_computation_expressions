@@ -3,8 +3,17 @@ module list_builder public
 require ./computation_builders.das public
 require daslib/rtti
 
+//! ``ListBuilder(type<T>)``: computations that collect an owned ``array<T>``. A ``bind`` of an array runs the
+//! rest of the scope for every element, ``yield`` and ``return`` add elements, and an ``and_bind`` group
+//! walks every pair of two arrays. The ``computation`` facade includes this module.
+
+//! Marker of the builder that ``ListBuilder(type<T>)`` returns for a copyable element type.
 struct ListContext {_ce_marker:uint8}
+//! Marker of the builder that ``ListBuilder(type<T>)`` returns for an element type that cannot be copied.
 struct MoveListContext {_ce_marker:uint8}
+//! Builder of a computation that collects ``array<T>``. The caller owns the result and holds it with
+//! ``var inscope``. When ``T`` cannot be copied, elements are added with ``return <-`` or ``yield <-``, and a
+//! ``bind`` consumes its source array: ``var item & = source |> bind``.
 def ListBuilder(unused : type<auto(TT)>) {
     static_if (typeinfo can_copy(type<TT>)) {
         return (kind=ListContext(), element=default<TT -const>)

@@ -8,12 +8,22 @@ require daslib/ast_boost
 require daslib/templates_boost
 require daslib/typemacro_boost
 
+//! Runs work on daslang's job queue threads and returns its outcome through a ``Task``, so the thread
+//! that polls the tasks does not block. ``task_jobque`` submits one function call,
+//! ``task_jobque_cancellable`` one that can be asked to stop, ``task_jobque_stream`` a worker that
+//! emits a series of values. A worker's panic arrives as an error value. Require it for blocking or
+//! heavy work; the job queue must be running (``with_job_que``) when the tasks are polled.
+
+//! Marker field that identifies a ``TaskJobQueue``; user code does not construct it.
 struct TaskJobQueueTag {_ce_marker:uint8}
-// The handle that task_job_queue() returns, by name. The state layout is
-// repeated in task_job_queue; its declared result type keeps the two in step.
+//! ``TaskJobQueue`` names the handle type that ``task_job_queue()`` returns, to declare a variable, a
+//! field or a parameter.
+// The state layout is repeated in task_job_queue; its declared result type keeps the two in step.
 typedef TaskJobQueue = tuple<tag:TaskJobQueueTag;owner:iterator<tuple<references:uint64;closed:bool;records:array<tuple<channel:Channel?;waiting:bool;cancel:Atomic32?;pending:Atomic32?>>>?>>
+//! Marker field that identifies a ``TaskJobStream``; user code does not construct it.
 struct TaskJobStreamTag {_ce_marker:uint8}
-// Worker-side view of a cancellable job or stream. Valid only inside the job.
+//! The worker's side of a cancellable job or a stream, passed to the work function. Use it only inside
+//! that function, with ``task_job_cancelled`` and ``task_job_emit``; user code does not construct it.
 struct TaskJobSink {
     ch:Channel?
     cancel:Atomic32?
@@ -22,6 +32,8 @@ struct TaskJobSink {
 }
 var private native_channels=0
 
+//! Returns the number of native channels held for jobs: one per started job, until
+//! ``task_jobque_collect`` or the queue's shutdown frees it. A check for leaks: 0 when no job is left.
 def task_jobque_channels() => native_channels
 def private ce_jobque_remove(var record:auto) {
     if(record.channel!=null) {unsafe(channel_remove(record.channel));native_channels--}
@@ -57,10 +69,17 @@ def private ce_jobque_state(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(
         return state
     }
 }
+//! Creates a queue handle through which jobs are submitted; the caller owns it and must delete it.
+//! Deleting it closes the queue, so later submissions panic. When the last handle, task and stream
+//! of the queue is released, cooperative workers are asked to stop and that release blocks until
+//! every worker has finished; keeping the queue handle alive longer than its tasks decides where.
 def task_job_queue() : TaskJobQueue {
     var state=new tuple<references:uint64;closed:bool;records:array<tuple<channel:Channel?;waiting:bool;cancel:Atomic32?;pending:Atomic32?>>>(references=uint64(1))
     return <- (tag=TaskJobQueueTag(),owner <- ce_jobque_lease(state,true))
 }
+//! Frees the native channels of jobs whose worker has finished and whose task or stream no longer
+//! waits for them; returns how many it freed. Call it from time to time: without it the channels
+//! are kept until the queue shuts down. Panics if the queue handle was moved or deleted.
 def task_jobque_collect(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(SS)?>>) {
     var state=ce_jobque_state(queue);var removed=0
     unsafe {for(record in state.records) {
@@ -118,8 +137,11 @@ def private ce_jobque_poll(var op:auto(OO)?) {unsafe {
     if(ready) {return <- task_ready_move(result)}
     return <- task_pending(type<Result<JobValue;string>>)
 }}
-// Work is a function pointer, not a closure borrowing main-thread state.
-// The SDK clones input/result across contexts; no cooperative channel is shared.
+//! Returns a ``Task<Result<V;string>>`` that runs ``work(input)`` on a job queue thread: ok with the
+//! returned value, err with the message if the worker panics. ``input`` is moved into the task. The
+//! job starts on the task's first poll; the worker gets clones and ``work`` is a function
+//! (``@@name``), not a closure, so nothing is shared with the calling thread. Cancelling the task
+//! stops the wait, not the worker. Panics if the queue is closed.
 def task_jobque_move(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(SS)?>>;
     var input:auto(InputT);work:function<(input:InputT):auto(ValueT)>) {
     static_assert(typeinfo ce_resumable_payload(default<InputT -const -&>))
@@ -134,13 +156,17 @@ def task_jobque_move(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(SS)?>>;
     }
 }
 
-// Copy/clone the submission snapshot; use task_jobque_move to transfer it.
+//! ``task_jobque_move`` with a clone of ``input`` taken at the call: the caller keeps its value, and
+//! later changes to it do not reach the worker.
 def task_jobque(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(SS)?>>;
     input:auto(InputT);work:function<(input:InputT):auto(ValueT)>) {
     var inscope snapshot <- default<tuple<value:InputT -const -&>>;snapshot.value := input
     return <- task_jobque_move(queue,snapshot.value,work)
 }
 
+//! Returns another handle to the same queue; the caller owns it. It does not keep the queue open:
+//! deleting the handle that ``task_job_queue`` returned closes the queue for new jobs. Panics if
+//! ``queue`` was moved or deleted.
 def task_job_queue_clone(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(SS)?>>) {
     var state=ce_jobque_state(queue);unsafe {
         if(state.references==uint64(-1)) {panic("task jobque: references exhausted")}
@@ -148,20 +174,23 @@ def task_job_queue_clone(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(SS)
         return <- (tag=TaskJobQueueTag(),owner <- ce_jobque_lease(state))
     }
 }
+//! ``target := source`` for queue handles: releases what ``target`` held and makes it another handle
+//! to the queue of ``source``.
 def clone(var target:tuple<tag:TaskJobQueueTag;owner:iterator<auto(SS)?>>;source:tuple<tag:TaskJobQueueTag;owner:iterator<SS?>>) {
     var next <- task_job_queue_clone(source);delete target;target <- next
 }
 
 // ---- Cooperative worker API -------------------------------------------------
-// True once the waiting Task was cancelled, timed out or dropped, or the queue
-// is shutting down. Long workers should check it and return early.
+//! Returns true once the task or stream waiting for this job was cancelled, timed out or deleted, or
+//! the queue is shutting down. A long-running worker checks it and returns early.
 def task_job_cancelled(sink:TaskJobSink) : bool {
     if(sink.cancel==null) {return false}
     return (sink.cancel |> get)!=0
 }
-// Stream workers publish values with backpressure: while `capacity` values are
-// unread the worker sleeps 1 ms between checks. Returns false (value dropped)
-// once cancelled. The value type must match the stream's element type exactly.
+//! Publishes one value from a stream worker; the reader receives a clone. While ``capacity`` values
+//! of the stream are unread it waits, sleeping 1 ms between checks. Returns false, dropping the
+//! value, once the stream is cancelled: the worker should then return. The value's type must be
+//! exactly the stream's element type. Panics if the sink does not belong to a stream.
 def task_job_emit(sink:TaskJobSink;value:auto(TT)) : bool {
     if(sink.ch==null || sink.pending==null) {panic("task_job_emit: sink is not a stream")}
     while(sink.capacity>0 && (sink.pending |> get)>=sink.capacity) {
@@ -206,8 +235,9 @@ def private ce_jobque_poll_sink(var op:auto(OO)?) {unsafe {
     if(ready) {return <- task_ready_move(result)}
     return <- task_pending(type<Result<JobValue;string>>)
 }}
-// Like task_jobque, but work also receives a TaskJobSink: cancelling or timing out
-// the Task (or queue shutdown) makes task_job_cancelled(sink) true in the worker.
+//! ``task_jobque`` for a worker that can be asked to stop: ``work`` also receives a ``TaskJobSink``, and
+//! cancelling or timing out the task, or shutting the queue down, makes ``task_job_cancelled(sink)``
+//! return true in the worker. ``input`` is cloned at the call.
 def task_jobque_cancellable(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(SS)?>>;
     input:auto(InputT);work:function<(input:InputT;sink:TaskJobSink):auto(ValueT)>) {
     static_assert(typeinfo ce_resumable_payload(default<InputT -const -&>))
@@ -315,9 +345,11 @@ def private ce_jobque_next_poll(var op:auto(OO)?) {unsafe {
     }
     return <- task_pending(type<Result<Option<Item>;string>>)
 }}
-// Cold stream: the worker starts on the first task_jobque_next poll. work(input,sink)
-// publishes values with task_job_emit(sink,value) and checks task_job_cancelled.
-// At most `capacity` values wait unread (0 = unbounded).
+//! Creates a stream of values of type ``T`` produced by one worker; the caller owns the handle. The
+//! worker starts on the first poll of a ``task_jobque_next`` task; ``work(input, sink)`` publishes
+//! values with ``task_job_emit`` and checks ``task_job_cancelled``. At most ``capacity`` values wait
+//! unread (0 = unbounded). Deleting the handle asks the worker to stop. Panics if ``capacity`` is
+//! negative or the queue is closed.
 def task_jobque_stream(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(SS)?>>;unused:type<auto(TT)>;
     input:auto(InputT);work:function<(input:InputT;sink:TaskJobSink):void>;capacity:int=64) {
     static_assert(typeinfo ce_resumable_payload(default<InputT -const -&>))
@@ -333,9 +365,9 @@ def task_jobque_stream(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(SS)?>
         return <- (tag=TaskJobStreamTag(),owner <- ce_jobque_stream_lease(op,true))
     }
 }
-// `TaskJobStream<T;Input>` names what task_jobque_stream(queue, type<T>, input,
-// @@work) returns: T is what the worker emits, Input what it is given. The
-// name is the constructor's own result type, as with TaskScheduler<T>.
+//! ``TaskJobStream<T;Input>`` names the type that ``task_jobque_stream(queue, type<T>, input, @@work)``
+//! returns: ``T`` is what the worker emits, ``Input`` what it is given.
+// The name is the constructor's own result type, as with TaskScheduler<T>.
 [typemacro_function]
 def public TaskJobStream(macroArgument, passArgument : TypeDeclPtr; TT, InputT : TypeDeclPtr) : TypeDeclPtr {
     if (passArgument != null) { return null }
@@ -344,8 +376,10 @@ def public TaskJobStream(macroArgument, passArgument : TypeDeclPtr; TT, InputT :
         default<function<(input:$t(InputT);sink:TaskJobSink):void>>))
     return named
 }
-// Task<Result<Option<T>,string>>: the next value, none after the worker returned
-// (or after the stream was cancelled), err if the worker panicked.
+//! Returns a ``Task<Result<Option<T>;string>>`` for the next value of the stream: ``some`` value,
+//! ``none`` after the worker returned or the stream was cancelled, err if the worker panicked. The
+//! error arrives after the values emitted before the panic, and every later call repeats it.
+//! The stream handle is not consumed.
 def task_jobque_next(stream:tuple<tag:TaskJobStreamTag;owner:iterator<auto(OO)?>>) {
     var op=ce_jobque_stream_op(stream)
     unsafe {
@@ -356,10 +390,13 @@ def task_jobque_next(stream:tuple<tag:TaskJobStreamTag;owner:iterator<auto(OO)?>
         return <- task_from_poll(@(){return <- ce_jobque_next_poll(holder.op)},@(){holder.op=null;delete holder.lease;delete holder})
     }
 }
-// Requests worker cancellation; later task_jobque_next calls return none.
+//! Asks the worker to stop and ends the stream: values not yet read are dropped, and later
+//! ``task_jobque_next`` tasks complete with ``none`` (with the error, if the worker had failed).
 def task_jobque_stream_cancel(stream:tuple<tag:TaskJobStreamTag;owner:iterator<auto(OO)?>>) {
     var op=ce_jobque_stream_op(stream);ce_jobque_stream_stop(op)
 }
+//! Returns true once a ``task_jobque_next`` task has reached the normal end of the stream: the worker
+//! returned and all its values were read. Stays false for a stream that was cancelled or failed.
 def task_jobque_stream_done(stream:tuple<tag:TaskJobStreamTag;owner:iterator<auto(OO)?>>) : bool {
     var op=ce_jobque_stream_op(stream);return op.done
 }
