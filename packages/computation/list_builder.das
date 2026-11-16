@@ -294,7 +294,6 @@ def ce_bind(builder:tuple<kind:ListContext;element:auto(TT)>; var source:auto(SS
     var inscope owner:array<SS>
     for(i in range(length(source))) {owner |> emplace(source[i])}
     return <- ce_bind(builder,owner,next)
-    return <- default<RR>
 }
 
 def ce_bind(builder:tuple<kind:MoveListContext;element:auto(TT)?>; var source:auto(SS)[];
@@ -302,7 +301,6 @@ def ce_bind(builder:tuple<kind:MoveListContext;element:auto(TT)?>; var source:au
     var inscope owner:array<SS>
     for(i in range(length(source))) {owner |> emplace(source[i])}
     return <- ce_bind(builder,owner,next)
-    return <- default<RR>
 }
 
 def ce_return_from(builder:tuple<kind:MoveListContext;element:auto(TT)?>; var source:TT[]) : array<TT> {
@@ -359,12 +357,10 @@ def ce_collect_each_move(builder:tuple<kind:ListContext;element:auto(TT)>; var o
     var inscope owner:array<SS>
     for(i in range(length(source))) {owner |> emplace(source[i])}
     return ce_list_visit_owned(output,owner,body)
-    return CeUnit()
 }
 def ce_collect_each_move(builder:tuple<kind:MoveListContext;element:auto(TT)?>; var output:array<TT>;
                     var source:auto(SS)[]; body:block<(var item:auto(UU)):CeUnit>) : CeUnit {
     var inscope owner:array<SS>
     for(i in range(length(source))) {owner |> emplace(source[i])}
     return ce_list_visit_owned(output,owner,body)
-    return CeUnit()
 }

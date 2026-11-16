@@ -64,7 +64,7 @@ task_error, task_cancel, task_scope, task_from_poll, task_after_polls.
 | `ok(value,type<string>)`, `err(message,type<T>)` | Стандартные конструкторы Result из daslib/result |
 | `some(value)`, `none(type<T>)` | Стандартные конструкторы Option из daslib/option |
 | `move_ok(value[,type<E>])`, `move_some(value)` | Перемещение: одноаргументный move_ok — обёртка для Result<T,string>, остальные — стандартные функции |
-| `ce_move_some(value)` | Стандартный Option с обходом AOT-перемещения tuple; см. STANDARD_TYPES.md |
+| `ce_move_some(value)` | Стандартный Option с обходом AOT-перемещения tuple |
 | `move_error(message, type<T>)`, `move_none(type<T>)` | Неуспешные owning-результаты |
 | `validation_ok(value)`, `validation_error(message,type<T>)`, `left |> validation_zip(right)` | Проверки и объединение независимых ошибок; их тип называется `Validation<T>` |
 | `deferred(builder,data) $(snapshot) {...}`, `deferred(builder) {...}` | Владеющий снимок для повторных запусков |
@@ -295,7 +295,7 @@ Task Failed/Cancelled останавливает stream; Result.Error/Option.Non
 move-only payload, deferred и shared-await. Task используют task_value для
 копии/clone и task_take для передачи владения. Combinators: task_when_all и
 task_result_when_all (пара и массив), task_race и task_result_race.
-Реальная сеть — task_tcp_request_line из task_tcp.das, см. TASK_TCP.md.
+Реальная сеть — task_tcp_request_line из task_tcp.das; пример — `examples/task_tcp_demo.das`.
 
 ## Ожидание событий
 

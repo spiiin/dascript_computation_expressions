@@ -128,7 +128,8 @@ def ce_sequence_run(builder : MySequenceBuilder; var source : iterator<int>) : i
 
 Bind, yield и resource scopes здесь реализованы общим generator backend;
 перегрузки `ce_bind`/`ce_return` Value-стратегии не вызываются. Ограничения
-однопроходности, захвата переменных и cleanup описаны в `SEQUENCE.md`.
+однопроходности, захвата переменных и cleanup описаны в разделах о времени
+выполнения, циклах и ресурсах [семантики builders](CE_SEMANTICS.md).
 Новый builder внутри этих четырёх стратегий не требует правок ядра. Новая
 стратегия исполнения (например, настоящий async scheduler), новый синтаксис
 или произвольное переопределение раскрытия AST всё ещё требуют расширения ядра.

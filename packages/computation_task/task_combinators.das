@@ -15,8 +15,6 @@ struct TaskAllPolicy {_ce_marker:uint8}
 //! Selects the ``Result`` behaviour of the pair combinator: ``task_result_when_all`` stops at the
 //! first ``err``.
 struct TaskResultAllPolicy {_ce_marker:uint8}
-struct TaskArrayTag {_ce_marker:uint8}
-struct TaskArrayEventTag {_ce_marker:uint8}
 
 // Resumable CE uses the same source grouping protocol as eager builders.
 // The pair combinators consume owners and poll left-to-right cooperatively.

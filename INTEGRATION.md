@@ -92,7 +92,8 @@ Search, Validation, MoveResult, Task и повторными deferred List. Те
 Полный Task-контракт: [семантика builders](CE_SEMANTICS.md).
 Асинхронные последовательности: `require computation_task/async_sequence_builder`,
 контракт и пример — [семантика builders](CE_SEMANTICS.md).
-Сеть подключается отдельным `require computation_task/task_tcp`, см. TASK_TCP.md.
+Сеть подключается отдельным `require computation_task/task_tcp`; что делает `task_tcp_request_line`,
+описано в комментариях модуля, пример — `examples/task_tcp_demo.das`.
 Для WebSocket: `require computation_task/task_hv`, см. [семантика builders](CE_SEMANTICS.md).
 Этот необязательный модуль требует dasHV (`dashv/dashv_boost`) из SDK.
 Остальные модули можно использовать без dasHV.

@@ -271,9 +271,8 @@ builder × ресурс × тип × runtime. Основные существу�
 - [test_deferred.das](tests/test_deferred.das), [test_deferred_snapshots.das](tests/test_deferred_snapshots.das),
   [test_deferred_move_collections.das](tests/test_deferred_move_collections.das): повторные запуски и владение.
 
-Полный запуск: `./run_computation.ps1 -Test` из этой папки, либо
-`../run.ps1 -Test` для всего репозитория. Это проверка интерпретатора
-Daslang v0.6.5-RC2, не подтверждение всех путей под JIT/AOT.
+Полный запуск: `./run_computation.ps1 -Test`. Это проверка интерпретатора,
+не подтверждение всех путей под JIT/AOT.
 Режимы выполнения и их проверки: [RELIABILITY.md](RELIABILITY.md).
 
 Подробные контракты: [публичный API](PUBLIC_API.md), [публичный API](PUBLIC_API.md),

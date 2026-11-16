@@ -348,7 +348,7 @@ ListBuilder использует другое значение Zero/Combine и �
 
 `yield value` и `source |> yield_from` теперь поддерживаются в ListBuilder.
 Для ленивого обхода используйте SequenceBuilder: правила и ограничения
-однопроходного итератора описаны в `SEQUENCE.md`.
+однопроходного итератора описаны в [семантике builders](CE_SEMANTICS.md).
 
 
 ## Короткая запись блока
