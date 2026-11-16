@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require daslib/rtti
 var frees=0
@@ -6,15 +7,15 @@ def finalize(var value:array<int>) {frees++; __builtin_array_free(value,typeinfo
 [export]
 def main() {
     let baseline=heap_bytes_allocated()
-    assert(!(typeinfo ce_has_collect_sink(ce_collect_sink(ListBuilder()))))
-    {var inscope values <- computation(ListBuilder()) {
+    assert(!(typeinfo ce_has_collect_sink(ce_collect_sink(ListBuilder(type<int>)))))
+    {var inscope values <- computation(ListBuilder(type<int>)) {
         let a=fixed_array(1,2) |> bind
         let unused=0
         let b=fixed_array(3,4) |> bind
         return a+b
     }}
     let before=frees;frees=0
-    {var inscope values <- computation(ListBuilder()) {
+    {var inscope values <- computation(ListBuilder(type<int>)) {
         let a=fixed_array(1,2) |> bind
         let b=fixed_array(3,4) |> bind
         return a+b
@@ -22,4 +23,9 @@ def main() {
     assert(before==frees)
     let current=heap_bytes_allocated();assert(current==baseline)
     print("List custom array finalizer checks OK\n")
+}
+
+[test]
+def test_list_array_finalizer() {
+    main()
 }

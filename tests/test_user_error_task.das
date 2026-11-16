@@ -1,4 +1,9 @@
 options gen2
+expect 30295
+expect 30838
+// diagnostic: can't locate variable 'missing_task'
+// anchor: missing_task
+// first
 require ../packages/computation/computation.das
 require ../packages/computation_task/task_runtime.das
 

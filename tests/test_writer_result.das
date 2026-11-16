@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../support/purchase_example.das
 struct Trace { calls : int; completed : int; after : int; condition : int; source : int; builder : int }
 def step(var trace : Trace; index, fail_at : int) {
@@ -105,14 +106,14 @@ def test_lifts() {
     let unit_value = computation(WriterResultBuilder()) { tell("unit;") |> bind }
     assert(unit_value.result is ok && unit_value.log == "unit;")
     let plain = computation(WriterResultBuilder()) {
-        let n = result_ok(7) |> bind
+        let n = ok(7, type<string>) |> bind
         return "n={n}"
     }
     assert(plain.result is ok && (plain.result as ok) == "n=7" && plain.log == "")
     var skipped = 0
     let plain_error = computation(WriterResultBuilder()) {
         tell("before;") |> bind
-        result_error("plain", type<int>) |> bind
+        err("plain", type<int>) |> bind
         skipped++
         tell("WRONG;") |> bind
         return "unreachable"
@@ -126,7 +127,7 @@ def test_lifts() {
     assert(forwarded.result is err && forwarded.log == "before;failure;")
     let forwarded_plain = computation(WriterResultBuilder()) {
         tell("before;") |> bind
-        return result_error("plain", type<int>) |> return_from
+        return err("plain", type<int>) |> return_from
     }
     assert(forwarded_plain.result is err && forwarded_plain.log == "before;")
     let forwarded_tell = computation(WriterResultBuilder()) { return tell("last;") |> return_from }
@@ -171,4 +172,9 @@ def main() {
     for (fail_at in range(-1, 4)) { test_nested(fail_at) }
     test_lifts()
     print("writer/result checks OK: first failure, retained logs, exact order, lifts, branches, nested loops\n")
+}
+
+[test]
+def test_writer_result() {
+    main()
 }

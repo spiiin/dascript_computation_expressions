@@ -24,11 +24,11 @@ def main() {
         var inscope loading <- task_spawn(runtime,task_result_when_all_limited(assets,2,
             @(asset:int) {return <- load(asset)}),TaskTimeout(after_ms=5000))
         var inscope caption <- task_spawn(runtime,task_retry(@(attempt:int) {
-            return <- task_after_polls(0,attempt<3 ? result_error("offline",type<string>) : result_ok("ready"))
+            return <- task_after_polls(0,attempt<3 ? err("offline",type<string>) : ok("ready", type<string>))
         },3,10l))
         var candidates:array<Task<Result<int;string>>>
-        candidates |> emplace(task_after_polls(0,result_error("mirror unavailable",type<int>)))
-        candidates |> emplace(task_after_polls(2,result_ok(7)))
+        candidates |> emplace(task_after_polls(0,err("mirror unavailable",type<int>)))
+        candidates |> emplace(task_after_polls(2,ok(7, type<string>)))
         var inscope mirror <- task_spawn(runtime,task_first_success(candidates))
         for(now_ms in range(5001)) {
             let active=task_tick(runtime,now_ms)

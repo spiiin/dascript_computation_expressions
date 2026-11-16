@@ -4,33 +4,32 @@ require ../../packages/computation/list_builder.das public
 require math
 require daslib/rtti
 struct QueryContext {_ce_marker:uint8}
-def QueryBuilder(unused:type<auto(T)>) {
-    static_assert(typeinfo can_copy(type<T>),"QueryBuilder requires copyable rows")
-    return (kind=QueryContext(),element=default<T -const>)
+def QueryBuilder(unused:type<auto(TT)>) {
+    static_assert(typeinfo can_copy(type<TT>),"QueryBuilder requires copyable rows")
+    return (kind=QueryContext(),element=default<TT -const>)
 }
-def QueryBuilder() {return QueryBuilder(type<int>)}
-def ce_protocol(builder:tuple<kind:QueryContext;element:auto(T)>) {return CeCollectProtocol()}
-def ce_zero(builder:tuple<kind:QueryContext;element:auto(T)>) {return <- ce_zero(ListBuilder(type<T>))}
-def ce_return(builder:tuple<kind:QueryContext;element:auto(T)>; value:T) {return <- ce_return(ListBuilder(type<T>),value)}
-def ce_unwrap(builder:tuple<kind:QueryContext;element:auto(T)>; source:auto) {return ce_unwrap(ListBuilder(type<T>),source)}
-def ce_bind(builder:tuple<kind:QueryContext;element:auto(T)>; source:array<auto(U)>; next:block<(row:U):array<T>>) {
-    return <- ce_bind(ListBuilder(type<T>),source,next)
+def ce_protocol(builder:tuple<kind:QueryContext;element:auto(TT)>) {return CeCollectProtocol()}
+def ce_zero(builder:tuple<kind:QueryContext;element:auto(TT)>) {return <- ce_zero(ListBuilder(type<TT>))}
+def ce_return(builder:tuple<kind:QueryContext;element:auto(TT)>; value:TT) {return <- ce_return(ListBuilder(type<TT>),value)}
+def ce_unwrap(builder:tuple<kind:QueryContext;element:auto(TT)>; source:auto) {return ce_unwrap(ListBuilder(type<TT>),source)}
+def ce_bind(builder:tuple<kind:QueryContext;element:auto(TT)>; source:array<auto(UU)>; next:block<(row:UU):array<TT>>) {
+    return <- ce_bind(ListBuilder(type<TT>),source,next)
 }
-def ce_bind(builder:tuple<kind:QueryContext;element:auto(T)>; source:auto(U)[]; next:block<(row:U):array<T>>) {
-    return <- ce_bind(ListBuilder(type<T>),source,next)
+def ce_bind(builder:tuple<kind:QueryContext;element:auto(TT)>; source:auto(UU)[]; next:block<(row:UU):array<TT>>) {
+    return <- ce_bind(ListBuilder(type<TT>),source,next)
 }
-def ce_return_from(builder:tuple<kind:QueryContext;element:auto(T)>; source:auto) {return <- ce_return_from(ListBuilder(type<T>),source)}
-def ce_delay(builder:tuple<kind:QueryContext;element:auto(T)>; body:block<():array<T>>) {return <- invoke(body)}
-def ce_combine(builder:tuple<kind:QueryContext;element:auto(T)>; first:array<T>; next:block<():array<T>>) {
-    return <- ce_combine(ListBuilder(type<T>),first,next)
+def ce_return_from(builder:tuple<kind:QueryContext;element:auto(TT)>; source:auto) {return <- ce_return_from(ListBuilder(type<TT>),source)}
+def ce_delay(builder:tuple<kind:QueryContext;element:auto(TT)>; body:block<():array<TT>>) {return <- invoke(body)}
+def ce_combine(builder:tuple<kind:QueryContext;element:auto(TT)>; first:array<TT>; next:block<():array<TT>>) {
+    return <- ce_combine(ListBuilder(type<TT>),first,next)
 }
-def ce_collect_append(builder:tuple<kind:QueryContext;element:auto(T)>; var accumulated:array<T>; step:array<T>) {ce_list_append(accumulated,step)}
-def ce_merge_sources(builder:tuple<kind:QueryContext;element:auto(T)>; left,right:auto) {return <- ce_list_merge_sources(left,right)}
-def ce_try_finally(builder:tuple<kind:QueryContext;element:auto(T)>; body:block<():array<T>>; cleanup:block<():void>) {
-    return <- ce_try_finally(ListBuilder(type<T>),body,cleanup)
+def ce_collect_append(builder:tuple<kind:QueryContext;element:auto(TT)>; var accumulated:array<TT>; step:array<TT>) {ce_list_append(accumulated,step)}
+def ce_merge_sources(builder:tuple<kind:QueryContext;element:auto(TT)>; left,right:auto) {return <- ce_list_merge_sources(left,right)}
+def ce_try_finally(builder:tuple<kind:QueryContext;element:auto(TT)>; body:block<():array<TT>>; cleanup:block<():void>) {
+    return <- ce_try_finally(ListBuilder(type<TT>),body,cleanup)
 }
-def ce_using(builder:tuple<kind:QueryContext;element:auto(T)>; resource:auto(U); body:block<(row:U):array<T>>; cleanup:block<(var row:U):void>) {
-    return <- ce_using(ListBuilder(type<T>),resource,body,cleanup)
+def ce_using(builder:tuple<kind:QueryContext;element:auto(TT)>; resource:auto(UU); body:block<(row:UU):array<TT>>; cleanup:block<(var row:UU):void>) {
+    return <- ce_using(ListBuilder(type<TT>),resource,body,cleanup)
 }
 // where as a CE step: skip the remaining continuation for rejected rows.
 def query_where(accept:bool) {
@@ -39,19 +38,19 @@ def query_where(accept:bool) {
     return <- rows
 }
 // Collection operators are ordinary pipes, also usable outside CE.
-def query_where(source:auto; predicate:block<(row:auto(T)):bool>) {
-    var inscope rows:array<T -const -&>
+def query_where(source:auto; predicate:block<(row:auto(TT)):bool>) {
+    var inscope rows:array<TT -const -&>
     for(i in range(length(source))) {if(invoke(predicate,source[i])) {rows |> push(source[i])}}
     return <- rows
 }
-def query_select(source:auto; project:block<(row:auto(T)):auto(U)>) {
-    var inscope rows:array<U -const -&>
+def query_select(source:auto; project:block<(row:auto(TT)):auto(UU)>) {
+    var inscope rows:array<UU -const -&>
     for(i in range(length(source))) {rows |> push(invoke(project,source[i]))}
     return <- rows
 }
 // Stable inner equijoin: outer left order, then right order; duplicates retained.
-def query_join(left,right:auto; leftKey:block<(row:auto(L)):auto(K)>; rightKey:block<(row:auto(R)):K>) {
-    var inscope rows:array<tuple<first:L -const -&;second:R -const -&>>
+def query_join(left,right:auto; leftKey:block<(row:auto(LL)):auto(KK)>; rightKey:block<(row:auto(RR)):KK>) {
+    var inscope rows:array<tuple<first:LL -const -&;second:RR -const -&>>
     for(i in range(length(left))) {
         let key=invoke(leftKey,left[i])
         for(j in range(length(right))) {
@@ -63,13 +62,13 @@ def query_join(left,right:auto; leftKey:block<(row:auto(L)):auto(K)>; rightKey:b
 
 // Stable ascending order (descending=true reverses key order, not ties).
 // Keys are evaluated exactly once per row, in source order.
-def query_order_by(source:auto; key:block<(row:auto(T)):auto(K)>; descending:bool=false) {
-    static_assert(typeinfo can_copy(type<T>),"query_order_by requires copyable rows")
-    static_assert(typeinfo can_copy(type<K>),"query_order_by requires copyable keys")
-    var inscope keys:array<K -const -&>
+def query_order_by(source:auto; key:block<(row:auto(TT)):auto(KK)>; descending:bool=false) {
+    static_assert(typeinfo can_copy(type<TT>),"query_order_by requires copyable rows")
+    static_assert(typeinfo can_copy(type<KK>),"query_order_by requires copyable keys")
+    var inscope keys:array<KK -const -&>
     var inscope order:array<int>
     var inscope scratch:array<int>
-    var inscope rows:array<T -const -&>
+    var inscope rows:array<TT -const -&>
     let count=length(source)
     for(i in range(count)) {keys |> push(invoke(key,source[i]));order |> push(i)}
     scratch.resize(count)
@@ -103,10 +102,10 @@ def query_order_by(source:auto; key:block<(row:auto(T)):auto(K)>; descending:boo
 
 // Stable groups: first appearance of key, then source order inside each group.
 // Equality-based lookup deliberately needs no hash function on user keys.
-def query_group_by(source:auto; key:block<(row:auto(T)):auto(K)>) {
-    static_assert(typeinfo can_copy(type<T>),"query_group_by requires copyable rows")
-    static_assert(typeinfo can_copy(type<K>),"query_group_by requires copyable keys")
-    var inscope groups:array<tuple<key:K -const -&;values:array<T -const -&>>>
+def query_group_by(source:auto; key:block<(row:auto(TT)):auto(KK)>) {
+    static_assert(typeinfo can_copy(type<TT>),"query_group_by requires copyable rows")
+    static_assert(typeinfo can_copy(type<KK>),"query_group_by requires copyable keys")
+    var inscope groups:array<tuple<key:KK -const -&;values:array<TT -const -&>>>
     for(i in range(length(source))) {
         let rowKey=invoke(key,source[i])
         var found=-1
@@ -114,7 +113,7 @@ def query_group_by(source:auto; key:block<(row:auto(T)):auto(K)>) {
             if(groups[j].key==rowKey) {found=j;break}
         }
         if(found<0) {
-            var inscope group:tuple<key:K -const -&;values:array<T -const -&>>
+            var inscope group:tuple<key:KK -const -&;values:array<TT -const -&>>
             group.key=rowKey
             groups |> emplace(group)
             found=length(groups)-1
@@ -125,11 +124,11 @@ def query_group_by(source:auto; key:block<(row:auto(T)):auto(K)>) {
 }
 
 // Keep the first row for each key. Keys are evaluated once per input row.
-def query_distinct(source:auto; key:block<(row:auto(T)):auto(K)>) {
-    static_assert(typeinfo can_copy(type<T>),"query_distinct requires copyable rows")
-    static_assert(typeinfo can_copy(type<K>),"query_distinct requires copyable keys")
-    var inscope keys:array<K -const -&>
-    var inscope rows:array<T -const -&>
+def query_distinct(source:auto; key:block<(row:auto(TT)):auto(KK)>) {
+    static_assert(typeinfo can_copy(type<TT>),"query_distinct requires copyable rows")
+    static_assert(typeinfo can_copy(type<KK>),"query_distinct requires copyable keys")
+    var inscope keys:array<KK -const -&>
+    var inscope rows:array<TT -const -&>
     for(i in range(length(source))) {
         let rowKey=invoke(key,source[i])
         var found=false
@@ -144,15 +143,15 @@ def query_distinct(source:auto) {
 }
 
 // Groups contain owning arrays; bind them explicitly by mutable reference.
-def ce_unwrap_borrow(builder:tuple<kind:QueryContext;element:auto(T)>; var source:array<auto(U)>) : U& {
+def ce_unwrap_borrow(builder:tuple<kind:QueryContext;element:auto(TT)>; var source:array<auto(UU)>) : UU& {
     unsafe {return source[0]}
 }
-def ce_bind(builder:tuple<kind:QueryContext;element:auto(T)>; var source:array<auto(S)>;
-            next:block<(var row:auto(U)):auto(R)>) : R {
-    return <- ce_bind(ListBuilder(type<T>),source,next)
+def ce_bind(builder:tuple<kind:QueryContext;element:auto(TT)>; var source:array<auto(SS)>;
+            next:block<(var row:auto(UU)):auto(RR)>) : RR {
+    return <- ce_bind(ListBuilder(type<TT>),source,next)
 }
 
 // Block-last overload for source |> query_order_by(true) <| key.
-def query_order_by(source:auto; descending:bool; key:block<(row:auto(T)):auto(K)>) {
+def query_order_by(source:auto; descending:bool; key:block<(row:auto(TT)):auto(KK)>) {
     return <- query_order_by(source,key,descending)
 }

@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 
 struct Trace {
@@ -12,8 +13,8 @@ struct Trace {
 }
 def step(builder : ResultBuilder; var trace : Trace; value, fail_at : int) {
     trace.attempted++
-    if (value == fail_at) { return result_error("failed {value}", type<int>) }
-    return result_ok(value)
+    if (value == fail_at) { return err("failed {value}", type<int>) }
+    return ok(value, type<string>)
 }
 def step(builder : OptionBuilder; var trace : Trace; value, fail_at : int) {
     trace.attempted++
@@ -195,3 +196,7 @@ def main() {
     print("control flow checks OK: Result/Option, branches, empty scopes, for/while, nested loops, exact effects\n")
 }
 
+[test]
+def test_computation_control() {
+    main()
+}

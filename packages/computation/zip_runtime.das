@@ -3,6 +3,10 @@ module zip_runtime public
 require ./sequence_runtime.das public
 require daslib/rtti
 
+//! Macro internals: the cursors, array locks and source adapter with which a lowered ``for`` walks its
+//! sources and closes them when the loop ends. ``computation_macro`` requires it publicly because
+//! generated code calls these functions; there is nothing here for a user of the library to call.
+
 struct CeZipReadOnly {_ce_marker:uint8}
 struct CeZipMutable {_ce_marker:uint8}
 // A mutable collection: its elements are writable even where each() yields
@@ -10,17 +14,17 @@ struct CeZipMutable {_ce_marker:uint8}
 struct CeZipWritable {_ce_marker:uint8}
 
 // Reference iterators write an address, value iterators write the value itself.
-def private ce_zip_pack(var source:iterator<auto(T)>; mode:auto) {
-    static_if (typeinfo is_ref_value(type<T>)) {
-        var value:T -&?
+def private ce_zip_pack(var source:iterator<auto(TT)>; mode:auto) {
+    static_if (typeinfo is_ref_value(type<TT>)) {
+        var value:TT -&?
         return <- (stream <- source, slot=value, mode=mode)
     } else {
-        concept_assert(typeinfo can_copy(type<T>), "zip: value iterator elements must be copyable")
-        var value:T
+        concept_assert(typeinfo can_copy(type<TT>), "zip: value iterator elements must be copyable")
+        var value:TT
         return <- (stream <- source, slot=value, mode=mode)
     }
 }
-def ce_zip_cursor(var source:iterator<auto>) { return <- ce_zip_pack(source,CeZipMutable()) }
+def ce_zip_cursor(var source:iterator<auto>) => <- ce_zip_pack(source,CeZipMutable())
 def ce_zip_cursor(source:auto ==const) {
     unsafe {
         var stream <- each(source)
@@ -33,7 +37,7 @@ def ce_zip_cursor(var source:auto ==const) {
         return <- ce_zip_pack(stream,CeZipWritable())
     }
 }
-def ce_zip_next(var cursor:tuple<stream:iterator<auto(T)>;slot:auto;mode:auto>) : bool {
+def ce_zip_next(var cursor:tuple<stream:iterator<auto(TT)>;slot:auto;mode:auto>) : bool {
     unsafe {return _builtin_iterator_iterate(cursor.stream,addr(cursor.slot))}
 }
 def ce_zip_close(var cursor:tuple<stream:iterator<auto>;slot:auto;mode:auto>) {
@@ -57,12 +61,12 @@ def ce_loop_unlock(var source:auto ==const) {
 }
 
 // An iterator used as a nested Sequence source, preserving ref elements.
-def ce_sequence_input(var source:iterator<auto(T)>) : iterator<T> {
+def ce_sequence_input(var source:iterator<auto(TT)>) : iterator<TT> {
     var cursor <- ce_zip_cursor(source)
-    return <- generator<T> capture(<-cursor) {
+    return <- generator<TT> capture(<-cursor) {
         while (ce_zip_next(cursor)) {
-            static_if (typeinfo is_ref_value(type<T>)) {
-                unsafe {yield *cursor.slot}
+            static_if (typeinfo is_ref_value(type<TT>)) {
+                yield *cursor.slot
             } else {yield cursor.slot}
         }
         return false

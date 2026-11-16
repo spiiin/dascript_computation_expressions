@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation/coroutine_scheduler.das
 require daslib/rtti
@@ -113,4 +114,9 @@ def main() {
     bounded_storage()
     generation_boundary()
     print("coroutine slot checks OK\n")
+}
+
+[test]
+def test_coroutine_slots() {
+    main()
 }

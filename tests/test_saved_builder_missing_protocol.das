@@ -1,4 +1,6 @@
 options gen2
+expect 50503
+// diagnostic: missing ce_protocol
 require ../packages/computation/computation_macro.das
 struct UnknownBuilder {}
 [export]

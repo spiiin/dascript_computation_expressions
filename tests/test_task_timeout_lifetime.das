@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_scheduler.das
 require daslib/async_boost
@@ -34,7 +35,7 @@ def game_job() {
 def checked_job() {
     return <- computation(TaskResultBuilder(type<int>)) {
         var r & = acquire() |> use_resource
-        let n=task_after_polls(20,result_ok(4)) |> bind
+        let n=task_after_polls(20,ok(4, type<string>)) |> bind
         continued++
         return n+length(r.items)
     }
@@ -89,4 +90,9 @@ def main() {
     for(i in range(32)) {checks()}
     verify(heap_bytes_allocated()==baseline && opened==closed)
     print("Task timeout lifetime checks OK\n")
+}
+
+[test]
+def test_task_timeout_lifetime() {
+    main()
 }

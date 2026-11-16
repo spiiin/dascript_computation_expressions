@@ -6,7 +6,7 @@ def make_reward() {
     var inscope rewards <- [10,20,30]
     return <- deferred(ResultBuilder(),rewards) $(snapshot) {
         steps++
-        let base=result_ok(snapshot[0]+snapshot[1]+snapshot[2]) |> bind
+        let base=ok(snapshot[0]+snapshot[1]+snapshot[2], type<string>) |> bind
         snapshot[0]=999
         return base+5
     }

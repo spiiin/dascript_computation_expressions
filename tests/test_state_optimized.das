@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../examples/builders/computation_effects.das
 require ../packages/computation/deferred_computation.das
@@ -66,3 +67,7 @@ def main() {
     print("State optimized loops checks OK\n")
 }
 
+[test]
+def test_state_optimized() {
+    main()
+}

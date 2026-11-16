@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../support/game_logged_transaction.das
 require ../packages/computation/computation.das
 require ../examples/builders/computation_effects.das
@@ -24,7 +25,7 @@ def basics() {
     let failed=computation(StateWriterResultBuilder(10)) {
         state_put(20) |> bind
         tell("a") |> bind
-        let missing=result_error("failed",type<int>) |> bind
+        let missing=err("failed",type<int>) |> bind
         after++
         tell("unreachable") |> bind
         return missing
@@ -44,7 +45,7 @@ def basics() {
     let raw=computation(StateWriterResultBuilder(10)) {
         state_put(20) |> bind
         tell("raw") |> bind
-        return result_error("raw error",type<int>) |> return_from
+        return err("raw error",type<int>) |> return_from
     }
     assert(raw.result is err && raw.state==10 && raw.log=="raw")
 }
@@ -52,7 +53,7 @@ def child(initial:int; fail:bool) {
     return computation(StateWriterResultBuilder(initial)) {
         state_put(initial+5) |> bind
         tell("child;") |> bind
-        if (fail) {result_error("child",type<CeUnit>) |> bind}
+        if (fail) {err("child",type<CeUnit>) |> bind}
         return 7
     }
 }
@@ -73,7 +74,7 @@ def nested() {
     }
     let later=computation(StateWriterResultBuilder(10)) {
         child(20,false) |> bind
-        result_error("later",type<CeUnit>) |> bind
+        err("later",type<CeUnit>) |> bind
     }
     assert(later.result is err && later.state==10 && later.log=="child;")
 }
@@ -87,7 +88,7 @@ def loops(failAt:int; useWhile:bool) {
                 state_put(current+1) |> bind
                 tell("{visits};") |> bind
                 visits++
-                if (visits-1==failAt) {result_error("loop",type<CeUnit>) |> bind}
+                if (visits-1==failAt) {err("loop",type<CeUnit>) |> bind}
             }
         } else {
             for (i in range(3)) {
@@ -95,7 +96,7 @@ def loops(failAt:int; useWhile:bool) {
                 state_put(current+1) |> bind
                 tell("{i};") |> bind
                 visits++
-                if (i==failAt) {result_error("loop",type<CeUnit>) |> bind}
+                if (i==failAt) {err("loop",type<CeUnit>) |> bind}
             }
         }
         tell("end;") |> bind
@@ -113,7 +114,7 @@ def zip_loop() {
             let state=state_get() |> bind
             state_put(state+a+b) |> bind
             tell("{a}{b};") |> bind
-            if (a==1) {result_error("zip",type<CeUnit>) |> bind}
+            if (a==1) {err("zip",type<CeUnit>) |> bind}
         }
         after++
         return 42
@@ -126,7 +127,7 @@ def resources() {
         let resource=Resource() |> use_resource
         tell("open;") |> bind
         state_put(20) |> bind
-        result_error("stop",type<CeUnit>) |> bind
+        err("stop",type<CeUnit>) |> bind
     }
     assert(failed.result is err && failed.state==10 && failed.log=="open;" && closed==before+1)
 }
@@ -162,4 +163,9 @@ def main() {
     resources()
     deferred_runs()
     print("state/writer/result checks OK\n")
+}
+
+[test]
+def test_state_writer_result() {
+    main()
 }

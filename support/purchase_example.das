@@ -8,7 +8,7 @@ def find_item(id : int) {
     return computation(WriterResultBuilder()) {
         tell("find item {id}\n") |> bind
         if (id == 1) { return ShopItem(name="potion", price=10) }
-        else { return result_error("item not found", type<ShopItem>) |> return_from }
+        else { return err("item not found", type<ShopItem>) |> return_from }
     }
 }
 def check_balance(balance, price : int) : Result<CeUnit;string> {

@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../examples/builders/reader_result_builder.das
 require ../packages/computation/deferred_computation.das
@@ -13,11 +14,11 @@ struct Resource {}
 def acquire() {opened++; return Resource()}
 def ce_dispose(var resource:Resource) {closed++}
 def allowed(value,limit:int) {
-    if (value>=limit) {return result_error("limit",type<CeUnit>)}
-    return result_ok(CeUnit())
+    if (value>=limit) {return err("limit",type<CeUnit>)}
+    return ok(CeUnit(), type<string>)
 }
 def feed() {
-    return <- computation(SequenceBuilder()) {
+    return <- computation(SequenceBuilder(type<int>)) {
         let resource=acquire() |> use_resource
         for (i in range(5)) {
             yield i
@@ -34,47 +35,47 @@ def basics() {
     }
     assert(mapped as ok==3)
     let skipped=computation(ReaderResultBuilder(builder.environment)) {
-        let missing=result_error("missing",type<int>) |> bind
+        let missing=err("missing",type<int>) |> bind
         reached++
         let config=reader_ask() |> bind
         return missing*config.multiplier
     }
     assert(skipped is err && skipped as err=="missing" && reached==0)
     let optimized=computation(ReaderResultBuilder(builder.environment)) {
-        let missing=result_error("map",type<int>) |> bind
+        let missing=err("map",type<int>) |> bind
         return missing+1
     }
     assert(optimized is err && optimized as err=="map")
     let empty=computation(ReaderResultBuilder(builder.environment)) { }
     assert(empty is ok)
     let forwarded=computation(ReaderResultBuilder(builder.environment)) {
-        return result_error("forwarded",type<int>) |> return_from
+        return err("forwarded",type<int>) |> return_from
     }
     assert(forwarded is err && forwarded as err=="forwarded")
     let branch=computation(ReaderResultBuilder(builder.environment)) {
-        if (true) {result_error("branch",type<CeUnit>) |> bind}
+        if (true) {err("branch",type<CeUnit>) |> bind}
         reached++
         return 1
     }
     assert(branch is err && reached==0)
     let paired=computation(ReaderResultBuilder(builder.environment)) {
-        let pair=reader_ask() |> and_bind(result_ok(4)) |> bind
+        let pair=reader_ask() |> and_bind(ok(4, type<string>)) |> bind
         return pair.first.multiplier*pair.second
     }
     assert(paired as ok==12)
     let triple=computation(ReaderResultBuilder(builder.environment)) {
-        let pair=result_ok(4) |> and_bind(reader_ask()) |> and_bind(result_ok(5)) |> bind
+        let pair=ok(4, type<string>) |> and_bind(reader_ask()) |> and_bind(ok(5, type<string>)) |> bind
         return pair.first.first+pair.first.second.multiplier+pair.second
     }
     assert(triple as ok==12)
     let failedPair=computation(ReaderResultBuilder(builder.environment)) {
-        let pair=result_error("left",type<int>) |> and_bind(result_error("right",type<int>)) |> bind
+        let pair=err("left",type<int>) |> and_bind(err("right",type<int>)) |> bind
         reached++
         return pair.first+pair.second
     }
     assert(failedPair is err && failedPair as err=="left" && reached==0)
     let rightFailure=computation(ReaderResultBuilder(builder.environment)) {
-        let pair=reader_ask() |> and_bind(result_error("right",type<int>)) |> bind
+        let pair=reader_ask() |> and_bind(err("right",type<int>)) |> bind
         return pair.first.multiplier+pair.second
     }
     assert(rightFailure is err && rightFailure as err=="right")
@@ -126,7 +127,7 @@ def resources() {
     let builder=ReaderResultBuilder(Rules())
     let failed=computation(ReaderResultBuilder(builder.environment)) {
         let resource=acquire() |> use_resource
-        result_error("resource",type<CeUnit>) |> bind
+        err("resource",type<CeUnit>) |> bind
         reached++
         return 1
     }
@@ -139,7 +140,7 @@ def resources() {
     assert(stopped is err && opened==closed && reached==0)
     let completed=computation(ReaderResultBuilder(builder.environment)) {
         let resource=acquire() |> use_resource
-        for (i in feed()) {result_ok(CeUnit()) |> bind}
+        for (i in feed()) {ok(CeUnit(), type<string>) |> bind}
         return 42
     }
     assert(completed as ok==42 && opened==closed)
@@ -151,7 +152,7 @@ def task_factory() {
     var inscope task <- deferred(ReaderResultBuilder(rules),7) $(snapshot) {
         runs++
         let config=reader_ask() |> bind
-        let value=result_ok(snapshot) |> bind
+        let value=ok(snapshot, type<string>) |> bind
         return value*config.multiplier
     }
     rules.multiplier=99
@@ -180,4 +181,7 @@ def main() {
     print("reader/result checks OK\n")
 }
 
-
+[test]
+def test_reader_result() {
+    main()
+}

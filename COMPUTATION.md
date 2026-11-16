@@ -40,8 +40,8 @@ let outcome = computation(ResultBuilder()) {
 Конструкторы:
 
 ```das
-result_ok(42)
-result_error("not found", type<int>)
+ok(42, type<string>)
+err("not found", type<int>)
 ```
 
 У ошибки указывается тип отсутствующего успешного значения, поскольку его
@@ -95,7 +95,7 @@ let absent = computation(OptionBuilder()) {
 
 ```das
 let forwarded = computation(ResultBuilder()) {
-    return result_error("forwarded", type<string>) |> return_from
+    return err("forwarded", type<string>) |> return_from
 }
 ```
 
@@ -276,11 +276,10 @@ let found = computation(OptionBuilder()) {
 }
 ```
 
-Типы всех `return` области должны совпадать. Тело `try_finally`
-и область после `use_resource` — отдельные области: `return` со значением из
-них всю computation не завершает, и перед последующим кодом они должны
-вычислять Unit. `break` и `continue` из них работают: цикл вокруг получает
-команду, ресурс освобождается, cleanup выполняется.
+Типы всех `return` области должны совпадать. `return` со значением из тела
+`try_finally` и из области после `use_resource` завершает всю computation, а
+`break` и `continue` — цикл вокруг них: cleanup выполняется, ресурс
+освобождается, код после блока не исполняется.
 
 У остальных Value-builders тело цикла и промежуточная ветка перед последующим
 кодом должны вычислять Unit. Обычно для этого достаточно не писать return.
@@ -349,7 +348,7 @@ ListBuilder использует другое значение Zero/Combine и �
 
 `yield value` и `source |> yield_from` теперь поддерживаются в ListBuilder.
 Для ленивого обхода используйте SequenceBuilder: правила и ограничения
-однопроходного итератора описаны в `SEQUENCE.md`.
+однопроходного итератора описаны в [семантике builders](CE_SEMANTICS.md).
 
 
 ## Короткая запись блока

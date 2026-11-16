@@ -40,8 +40,8 @@ TaskBuilder и TaskResultBuilder предоставляют cold single-shot з�
 | CoroutineBuilder | `iterator<CoroutineFrame>` | Нет | Да / да / да | Да, до завершения/отмены | Да: новый сценарий на запуск | Не контейнер результата; выдаёт кадры, поддерживает owning-ресурсы |
 
 `Result<T>` в таблице — сокращение для variant с `ok` и `error`, а не отдельное
-объявление типа в библиотеке. ListBuilder()/SequenceBuilder() выбирают `int`;
-для другого типа результата передайте `type<T>`.
+объявление типа в библиотеке. Builders коллекций и последовательностей всегда
+получают тип элемента: `ListBuilder(type<int>)`, `SequenceBuilder(type<string>)`.
 
 Поддержка move-only результата не равна поддержке move-only ресурса.
 `var resource & = acquire() |> use_resource` доступен через общий ресурсный
@@ -168,7 +168,7 @@ Combine или return_from, возвращают начальное состоя
 ```das
 let outcome = computation(StateResultBuilder(100)) {
     state_put(75) |> bind
-    result_error("отказ", type<CeUnit>) |> bind
+    err("отказ", type<CeUnit>) |> bind
     return "готово"
 }
 assert(outcome.result is err && outcome.state == 100)
@@ -181,8 +181,8 @@ State/StateResult не выполняют глубокий clone произво�
 копируемые поля действительно независимы. Move-only состояние не поддержано.
 
 Готовый дочерний результат без bind/return_from не меняет контекст родителя.
-`return result_error(...)` возвращает Result как вложенный payload; это не то же
-самое, что `return result_error(...) |> return_from`, распространяющий ошибку.
+`return err(...)` возвращает Result как вложенный payload; это не то же
+самое, что `return err(...) |> return_from`, распространяющий ошибку.
 
 ## Error/None и panic
 
@@ -271,9 +271,8 @@ builder × ресурс × тип × runtime. Основные существу�
 - [test_deferred.das](tests/test_deferred.das), [test_deferred_snapshots.das](tests/test_deferred_snapshots.das),
   [test_deferred_move_collections.das](tests/test_deferred_move_collections.das): повторные запуски и владение.
 
-Полный запуск: `./run_computation.ps1 -Test` из этой папки, либо
-`../run.ps1 -Test` для всего репозитория. Это проверка интерпретатора
-Daslang v0.6.5-RC2, не подтверждение всех путей под JIT/AOT.
+Полный запуск: `./run_computation.ps1 -Test`. Это проверка интерпретатора,
+не подтверждение всех путей под JIT/AOT.
 Режимы выполнения и их проверки: [RELIABILITY.md](RELIABILITY.md).
 
 Подробные контракты: [публичный API](PUBLIC_API.md), [публичный API](PUBLIC_API.md),

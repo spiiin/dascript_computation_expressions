@@ -13,7 +13,7 @@ def pages(first:int) : array<int> {
 }
 
 def totals() {
-    return <- deferred(AsyncSequenceBuilder(),10) $(first) {
+    return <- deferred(AsyncSequenceBuilder(type<int>),10) $(first) {
         // row borrows the owning array until this iteration ends, including bind.
         for(row in pages(first)) {
             task_delay_ms(2) |> bind

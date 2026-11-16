@@ -1,4 +1,7 @@
 options gen2
+expect 20800
+// diagnostic: needs the type of one element
+// anchor: [sequence]
 require ../packages/computation/computation.das
 
 // The builder needs the element type before the body is known, so [sequence]

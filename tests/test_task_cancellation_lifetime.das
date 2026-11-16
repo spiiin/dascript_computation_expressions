@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_scheduler.das
 require ../packages/computation_task/task_combinators.das
@@ -94,7 +95,7 @@ def checks() {
         var inscope group <- cancellation_token()
         var source <- computation(TaskResultBuilder(type<int>)) {
             var resource & = acquire() |> use_resource
-            let n=task_after_polls(10,result_ok(4)) |> bind
+            let n=task_after_polls(10,ok(4, type<string>)) |> bind
             effects++
             return n
         }
@@ -131,4 +132,9 @@ def main() {
     for(i in range(32)) {checks()}
     verify(heap_bytes_allocated()==baseline && opened==closed)
     print("Task cancellation lifetime checks OK\n")
+}
+
+[test]
+def test_task_cancellation_lifetime() {
+    main()
 }

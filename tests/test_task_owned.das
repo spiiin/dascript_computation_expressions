@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_scheduler.das
 require daslib/rtti
@@ -21,7 +22,7 @@ def result_job(n:int;waits:int=0;fail:bool=false) {
     return <- computation(TaskResultBuilder(type<array<int>>)) {
         var data <- [n,n+1]
         task_after_polls(waits,CeUnit()) |> bind
-        if(fail) {let ignored=task_after_polls(0,result_error("denied",type<int>)) |> bind}
+        if(fail) {let ignored=task_after_polls(0,err("denied",type<int>)) |> bind}
         return <- data
     }
 }
@@ -57,7 +58,7 @@ def checks() {
     }
     {
         var inscope task <- computation(TaskResultBuilder(type<int>)) {
-            let p=task_after_polls(1,CeUnit()) |> and_bind(task_after_polls(0,result_ok(5))) |> bind
+            let p=task_after_polls(1,CeUnit()) |> and_bind(task_after_polls(0,ok(5, type<string>))) |> bind
             return p.second
         }
         verify(task_poll(task)==TaskStatus.Waiting && task_poll(task)==TaskStatus.Succeeded)
@@ -136,4 +137,9 @@ def main() {
     for(i in range(24)) {checks()}
     verify(heap_bytes_allocated()==baseline)
     print("Task owned checks OK\n")
+}
+
+[test]
+def test_task_owned() {
+    main()
 }

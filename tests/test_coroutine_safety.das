@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation/coroutine_scheduler.das
 require daslib/strings_boost
@@ -117,4 +118,9 @@ def main() {
     host_scope()
     mutation_guards()
     print("coroutine scheduler safety checks OK\n")
+}
+
+[test]
+def test_coroutine_safety() {
+    main()
 }

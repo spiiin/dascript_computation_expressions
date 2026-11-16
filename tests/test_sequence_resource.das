@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 struct Resource { id:int }
 var opens=0
@@ -12,7 +13,7 @@ def acquire(id:int) {
 def ce_dispose(var r:Resource) { closes++; log+="{r.id}"; r.id=0 }
 def reset() { opens=0; closes=0; log=""; steps=0 }
 def make_sequence() {
- return <- computation(SequenceBuilder()) {
+ return <- computation(SequenceBuilder(type<int>)) {
   let a=acquire(1) |> use_resource
   let b=acquire(2) |> use_resource
   try_finally($ {
@@ -52,7 +53,7 @@ def main() {
  assert(closes==2 && log=="F!21")
  reset()
  {
-  var inscope seq <- computation(SequenceBuilder()) {
+  var inscope seq <- computation(SequenceBuilder(type<int>)) {
    for(i in range(1,4)) {
     let r=acquire(i) |> use_resource
     yield r.id
@@ -64,7 +65,7 @@ def main() {
  }
  reset()
  {
-  var inscope seq <- computation(SequenceBuilder()) {
+  var inscope seq <- computation(SequenceBuilder(type<int>)) {
    try_finally($ {yield 1}, $ {log+="a"})
    assert(log=="a")
    try_finally($ {}, $ {log+="b"})
@@ -85,7 +86,7 @@ def main() {
  }
  reset()
  {
-  var inscope seq <- computation(SequenceBuilder()) {
+  var inscope seq <- computation(SequenceBuilder(type<int>)) {
    let a=acquire(1) |> use_resource
    let n=[2,3] |> bind
    let b=acquire(n) |> use_resource
@@ -103,5 +104,7 @@ def main() {
  print("sequence resource checks OK\n")
 }
 
-
-
+[test]
+def test_sequence_resource() {
+    main()
+}

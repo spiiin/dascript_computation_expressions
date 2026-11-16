@@ -1,4 +1,7 @@
 options gen2
+expect 20800
+// diagnostic: declare it var to move it into the task
+// anchor: [task]
 require ../packages/computation/computation.das
 require ../packages/computation_task/task_runtime.das
 

@@ -5,7 +5,7 @@ from pathlib import Path
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--daslang',required=True)
-    parser.add_argument('--script',default=str(Path(__file__).resolve().parents[1]/'tests/test_task_tcp.das'))
+    parser.add_argument('--script',default=str(Path(__file__).resolve().parents[1]/'tests/integration/test_task_tcp.das'))
     parser.add_argument('--jit',action='store_true')
     args=parser.parse_args()
     with socket.socket() as server:

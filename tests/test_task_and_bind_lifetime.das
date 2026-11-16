@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_scheduler.das
 require daslib/strings_boost
@@ -12,14 +13,14 @@ var group:CancellationToken
 struct Payload {remaining:int; data:array<int>}
 def finalize(var state:Payload) {delete state.data}
 
-def owned(id,waits:int; value:auto(T); fail:bool=false; request:bool=false) {
+def owned(id,waits:int; value:auto(TT); fail:bool=false; request:bool=false) {
     opened[id]++
     var state=new Payload(remaining=waits,data <- [1,2,3])
     return <- task_from_poll(@() {
         polls[id]++
         if(fail) {panic("poll {id} failed")}
         if(request) {cancellation_cancel(group)}
-        if(state.remaining>0) {state.remaining--;return task_pending(type<T -const -&>)}
+        if(state.remaining>0) {state.remaining--;return task_pending(type<TT -const -&>)}
         return task_ready(value)
     },@() {
         closed[id]++;order+="{id};"
@@ -76,7 +77,7 @@ def checks() {
     reset()
     {
         var inscope task <- computation(TaskResultBuilder(type<int>)) {
-            let p=owned(0,3,result_ok(1)) |> and_bind(owned(1,0,result_error("denied",type<int>))) |> bind
+            let p=owned(0,3,ok(1, type<string>)) |> and_bind(owned(1,0,err("denied",type<int>))) |> bind
             continued++;return p.first+p.second
         }
         verify(task_poll(task)==TaskStatus.Succeeded && continued==0 && order=="1;0;")
@@ -97,7 +98,7 @@ def checks() {
     {
         var inscope token <- cancellation_token()
         var source <- computation(TaskResultBuilder(type<int>)) {
-            let p=owned(0,3,result_ok(1)) |> and_bind(owned(1,3,result_ok(2))) |> bind
+            let p=owned(0,3,ok(1, type<string>)) |> and_bind(owned(1,3,ok(2, type<string>))) |> bind
             continued++;return p.first
         }
         var inscope task <- task_with_cancellation(source,token)
@@ -173,4 +174,9 @@ def main() {
     for(i in range(24)) {checks()}
     verify(heap_bytes_allocated()==baseline)
     print("Task and_bind lifetime checks OK\n")
+}
+
+[test]
+def test_task_and_bind_lifetime() {
+    main()
 }

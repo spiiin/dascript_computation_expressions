@@ -1,5 +1,6 @@
 options gen2
 options max_infer_passes=256
+require dastest/testing_boost public
 require ../packages/computation/deferred_computation.das
 require ../packages/computation_task/async_sequence_builder.das
 require ../packages/computation_task/task_scheduler.das
@@ -30,7 +31,7 @@ def initial(wait:int=1;fail:bool=false) {
 }
 def saved_copy() {
     var inscope data <- initial()
-    return <- deferred(AsyncSequenceBuilder(),data) $(snapshot) {
+    return <- deferred(AsyncSequenceBuilder(type<int>),data) $(snapshot) {
         try_finally($ {
             for(i in range(length(snapshot.rows))) {
                 task_delay_ms(snapshot.wait) |> bind
@@ -232,7 +233,7 @@ def unopened_and_pending() {
     }
     {
         var number=7
-        var builder=AsyncSequenceBuilder()
+        var builder=AsyncSequenceBuilder(type<int>)
         unsafe {builder.element=addr(number)}
         var caught=false
         try {var inscope invalid <- deferred(builder) {yield 1}} recover {
@@ -249,4 +250,9 @@ def main() {
     for(i in range(16)) {checks()}
     verify(heap_bytes_allocated()==baseline)
     print("Deferred async sequence checks OK\n")
+}
+
+[test]
+def test_async_sequence_deferred() {
+    main()
 }

@@ -1,4 +1,6 @@
 options gen2
+expect 30910
+// diagnostic: left side can't be constant
 require ../packages/computation/computation.das
 [export]
 def main() {

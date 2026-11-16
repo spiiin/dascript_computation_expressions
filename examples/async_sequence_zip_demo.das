@@ -19,7 +19,7 @@ def offsets() : int {
     }
 }
 def combined() {
-    return <- deferred(AsyncSequenceBuilder(),10) $(first) {
+    return <- deferred(AsyncSequenceBuilder(type<int>),10) $(first) {
         // The two next operations wait concurrently. Stop at the shorter input.
         for(row,offset in pages(first),offsets()) {
             task_delay_ms(2) |> bind

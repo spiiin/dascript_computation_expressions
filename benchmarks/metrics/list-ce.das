@@ -2,7 +2,7 @@ options gen2
 require ../../packages/computation/computation.das
 
 def work(seed:int) : int64 {
-    var inscope values <- computation(ListBuilder()) {
+    var inscope values <- computation(ListBuilder(type<int>)) {
         let x=fixed_array(seed,seed+1,seed+2,seed+3) |> bind
         let y=fixed_array(1,2,3,4) |> bind
         return x*y

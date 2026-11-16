@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 
 // ResultBuilder(type<E>) keeps the standard Result with any copyable error type.
@@ -110,4 +111,9 @@ def main() {
     test_loops_and_groups()
     test_struct_error()
     print("result error type checks OK\n")
+}
+
+[test]
+def test_result_error_type() {
+    main()
 }

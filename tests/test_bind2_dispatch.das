@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 struct Probe {}
 struct Legacy {}
@@ -12,39 +13,39 @@ var order=""
 def source(n:int) { order+="{n}"; return (value=n) }
 def ce_protocol(builder:Probe) { return CeValueProtocol() }
 def ce_protocol(builder:Legacy) { return CeValueProtocol() }
-def ce_unwrap(builder:Probe; value:tuple<value:auto(T)>) : T { return value.value }
-def ce_unwrap(builder:Legacy; value:tuple<value:auto(T)>) : T { return value.value }
-def ce_return(builder:Probe; value:auto(T)) { returns++; return (value=value) }
-def ce_return(builder:Legacy; value:auto(T)) { returns++; return (value=value) }
-def ce_bind(builder:Probe; value:tuple<value:auto(T)>; next:block<(x:T):auto(R)>) : R { binds++; return invoke(next,value.value) }
-def ce_bind(builder:Legacy; value:tuple<value:auto(T)>; next:block<(x:T):auto(R)>) : R { binds++; return invoke(next,value.value) }
-def ce_merge_sources(builder:Probe; left:tuple<value:auto(A)>; right:tuple<value:auto(B)>) {
+def ce_unwrap(builder:Probe; value:tuple<value:auto(TT)>) : TT { return value.value }
+def ce_unwrap(builder:Legacy; value:tuple<value:auto(TT)>) : TT { return value.value }
+def ce_return(builder:Probe; value:auto(TT)) { returns++; return (value=value) }
+def ce_return(builder:Legacy; value:auto(TT)) { returns++; return (value=value) }
+def ce_bind(builder:Probe; value:tuple<value:auto(TT)>; next:block<(x:TT):auto(RR)>) : RR { binds++; return invoke(next,value.value) }
+def ce_bind(builder:Legacy; value:tuple<value:auto(TT)>; next:block<(x:TT):auto(RR)>) : RR { binds++; return invoke(next,value.value) }
+def ce_merge_sources(builder:Probe; left:tuple<value:auto(AA)>; right:tuple<value:auto(BB)>) {
     merges++; return (value=ce_source_pair(left.value,right.value))
 }
-def ce_merge_sources(builder:Legacy; left:tuple<value:auto(A)>; right:tuple<value:auto(B)>) {
+def ce_merge_sources(builder:Legacy; left:tuple<value:auto(AA)>; right:tuple<value:auto(BB)>) {
     merges++; return (value=ce_source_pair(left.value,right.value))
 }
-def ce_bind_return(builder:Probe; value:tuple<value:auto(T)>; mapper:block<(x:T):auto(U)>) {
+def ce_bind_return(builder:Probe; value:tuple<value:auto(TT)>; mapper:block<(x:TT):auto(UU)>) {
     ones++; return (value=invoke(mapper,value.value))
 }
-def ce_bind2_return(builder:Probe; left:tuple<value:auto(A)>; right:tuple<value:auto(B)>;
-                    mapper:block<(p:tuple<first:A -const -&;second:B -const -&>):auto(U)>) {
+def ce_bind2_return(builder:Probe; left:tuple<value:auto(AA)>; right:tuple<value:auto(BB)>;
+                    mapper:block<(p:tuple<first:AA -const -&;second:BB -const -&>):auto(UU)>) {
     twos++; return (value=invoke(mapper,ce_source_pair(left.value,right.value)))
 }
-def ce_bind2(builder:Probe; left:tuple<value:auto(A)>; right:tuple<value:auto(B)>;
-             next:block<(p:tuple<first:A -const -&;second:B -const -&>):auto(R)>) : R {
+def ce_bind2(builder:Probe; left:tuple<value:auto(AA)>; right:tuple<value:auto(BB)>;
+             next:block<(p:tuple<first:AA -const -&;second:BB -const -&>):auto(RR)>) : RR {
     grouped++; return invoke(next,ce_source_pair(left.value,right.value))
 }
 struct OnlyTwo {}
 def ce_protocol(builder:OnlyTwo) { return CeValueProtocol() }
-def ce_unwrap(builder:OnlyTwo; value:tuple<value:auto(T)>) : T { return value.value }
-def ce_return(builder:OnlyTwo; value:auto(T)) { returns++; return (value=value) }
-def ce_bind(builder:OnlyTwo; value:tuple<value:auto(T)>; next:block<(x:T):auto(R)>) : R { binds++; return invoke(next,value.value) }
-def ce_merge_sources(builder:OnlyTwo; left:tuple<value:auto(A)>; right:tuple<value:auto(B)>) {
+def ce_unwrap(builder:OnlyTwo; value:tuple<value:auto(TT)>) : TT { return value.value }
+def ce_return(builder:OnlyTwo; value:auto(TT)) { returns++; return (value=value) }
+def ce_bind(builder:OnlyTwo; value:tuple<value:auto(TT)>; next:block<(x:TT):auto(RR)>) : RR { binds++; return invoke(next,value.value) }
+def ce_merge_sources(builder:OnlyTwo; left:tuple<value:auto(AA)>; right:tuple<value:auto(BB)>) {
     merges++; return (value=ce_source_pair(left.value,right.value))
 }
-def ce_bind2(builder:OnlyTwo; left:tuple<value:auto(A)>; right:tuple<value:auto(B)>;
-             next:block<(p:tuple<first:A -const -&;second:B -const -&>):auto(R)>) : R {
+def ce_bind2(builder:OnlyTwo; left:tuple<value:auto(AA)>; right:tuple<value:auto(BB)>;
+             next:block<(p:tuple<first:AA -const -&;second:BB -const -&>):auto(RR)>) : RR {
     grouped++; return invoke(next,ce_source_pair(left.value,right.value))
 }
 [export]
@@ -67,4 +68,9 @@ def main() {
     let only=computation(OnlyTwo()) { let p=source(4) |> and_bind(source(5)) |> bind; return p.first+p.second }
     assert(only.value==9 && grouped==4 && merges==2 && twos==1 && ones==1 && binds==1)
     print("bind2 dispatch checks OK\n")
+}
+
+[test]
+def test_bind2_dispatch() {
+    main()
 }

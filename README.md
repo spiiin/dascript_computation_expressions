@@ -13,7 +13,7 @@ require computation/computation
 [export]
 def main() {
     let result = computation(ResultBuilder()) {
-        let value = result_ok(21) |> bind
+        let value = ok(21, type<string>) |> bind
         return value * 2
     }
     assert(result is ok && (result as ok) == 42)
@@ -22,9 +22,10 @@ def main() {
 
 ## Начало работы
 
-Нужны PowerShell 7 и Python 3. CI использует Windows x64 и закреплённый SDK
-**0.6.5-RC2** с проверкой SHA-256. Для AOT нужны также CMake и Visual Studio 2022
-с C++ tools. SDK в библиотеку не входит.
+Нужны PowerShell 7 и Python 3. CI использует Windows x64 и два закреплённых SDK
+с проверкой SHA-256: **0.6.5-RC2** — минимальный поддерживаемый, **0.6.5** —
+текущий стабильный. Для AOT нужны также CMake и Visual Studio 2022 с C++ tools.
+SDK в библиотеку не входит.
 
 ```powershell
 git clone https://github.com/spiiin/dascript_computation_expressions.git
@@ -33,6 +34,7 @@ $env:DASLANG_EXE = & ./.github/scripts/install-daslang.ps1 -Destination ./.work/
 ./run_computation.ps1 -Test
 ```
 
+Скрипт установки ставит 0.6.5-RC2; другой закреплённый релиз выбирает `-Version 0.6.5`.
 Существующий SDK можно выбрать через `-Daslang`, `DASLANG_EXE` или `PATH`.
 Скрипты находят исходники относительно своего каталога. В приложении пакеты
 лежат в `modules/` и подключаются по имени: `require computation/computation`,
@@ -67,18 +69,37 @@ $env:DASLANG_EXE = & ./.github/scripts/install-daslang.ps1 -Destination ./.work/
 ```powershell
 ./tests/test_sdk_paths.ps1
 ./run_computation.ps1 -Test
+./run_tests.ps1
+./run_lint.ps1
 ./run_modes.ps1 -Mode Jit
 ./run_modes.ps1 -Mode AotGenerate
 ./run_aot.ps1
 ```
 
-Основной runner выполняет 291 проверку файлов, диагностику, экспорт и проверки
-раскрытия оптимизаций. Набор `mode_tests.json` содержит 73 теста и примера;
+Тесты лежат в `tests/` и идут под dastest: `run_tests.ps1` запускает все 230 файлов,
+каждый в своём процессе. `run_computation.ps1 -Test` запускает их же, 65 примеров,
+экспорт и проверки раскрытия оптимизаций. Набор `mode_tests.json` содержит 74 теста и примера;
 строгий AOT-хост исполняет 66 из них. Генерация C++ отдельно не означает успех AOT runtime.
 Тесты TCP/HTTP/WebSocket используют локальные серверы; GLFW-тест создаёт скрытое окно.
+Они лежат в `tests/integration`, и dastest их не собирает: их запускают `test_task_*.ps1`.
+
+Новый файл в `tests/` подхватывается сам, регистрировать его не нужно.
+
+- **Обычный тест** — функция `[test]`, которая вызывает `main` того же файла. Файл
+  остаётся скриптом, поэтому тот же тест исполняют JIT и AOT-хост.
+- **Тест, который не должен компилироваться,** перечисляет ошибки строками
+  `expect КОД` в начале файла; их сверяет dastest. Что должно быть в сообщении и
+  на какую строку оно указывает, говорят комментарии `// diagnostic: текст` и
+  `// anchor: текст строки`; их проверяет `tests/test_diagnostics.das`.
+
+`run_lint.ps1` прогоняет линтер SDK по `packages/`: предупреждений быть не должно.
+Замечание исправляется в коде; если форма кода намеренная, оно снимается на своей
+строке комментарием `// nolint:КОД - причина`. Правила для всего репозитория
+задаёт `.lint_config`.
 
 [GitHub Actions](https://github.com/spiiin/dascript_computation_expressions/actions)
-проверяет интерпретатор, JIT/AOT, AOT runtime и интеграции отдельными заданиями.
+проверяет интерпретатор, JIT/AOT, AOT runtime и интеграции отдельными заданиями
+на каждом из двух SDK, а lint — на 0.6.5-RC2: набор правил меняется от релиза к релизу.
 Логи сохраняются как CI artifacts; локальные результаты игнорируются Git.
 
 `packages/computation` — ядро (20 модулей): макрос и builders Result/Option,

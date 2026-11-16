@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../support/protocol_test_builders.das
 require ../support/protocol_collect_fixture.das
@@ -9,7 +10,7 @@ struct Resource {}
 def ce_dispose(var resource : Resource) { closes++ }
 [export]
 def main() {
-    var inscope totals <- computation(ExternalCollectionBuilder()) {
+    var inscope totals <- computation(ExternalCollectionBuilder(type<int>)) {
         yield 1
         for (i in range(4)) { yield i }
         if (true) { yield 10 }
@@ -39,3 +40,7 @@ def main() {
     print("builder protocol checks OK\n")
 }
 
+[test]
+def test_builder_protocol() {
+    main()
+}

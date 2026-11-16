@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../support/game_state_example.das
 
 struct OtherState { number : int }
@@ -178,7 +179,7 @@ def test_writer() {
     // Result is merely a payload here: Writer does not gain failure semantics.
     let payload = computation(WriterBuilder()) {
         tell("kept") |> bind
-        return result_error("failure as data", type<int>)
+        return err("failure as data", type<int>)
     }
     assert(payload.value is err && payload.log == "kept")
 }
@@ -189,3 +190,7 @@ def main() {
     print("state/writer checks OK: snapshots, isolation, composition, loops, exact log order\n")
 }
 
+[test]
+def test_computation_effects() {
+    main()
+}

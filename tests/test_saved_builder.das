@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../examples/builders/state_result_builder.das
 require ../examples/builders/reader_result_builder.das
@@ -12,7 +13,7 @@ def from_parameter(builder:auto) {
     return computation(builder) {return 42}
 }
 def saved_sequence() {
-    let builder=SequenceBuilder()
+    let builder=SequenceBuilder(type<int>)
     return <- computation(builder) {for (i in range(3)) {yield i+10}}
 }
 [export]
@@ -30,13 +31,13 @@ def main() {
     let field=computation(wrapped.builder) {let env=reader_ask() |> bind; return env}
     assert(field.value==4)
     let resultBuilder=ResultBuilder()
-    let result=computation(resultBuilder) {let value=result_ok(20) |> bind; return value+2}
+    let result=computation(resultBuilder) {let value=ok(20, type<string>) |> bind; return value+2}
     assert(result as ok==22)
     var stateBuilder=StateResultBuilder(10)
     let changed=computation(stateBuilder) {state_put(30) |> bind; return 1}
     let original=computation(stateBuilder) {let state=state_get() |> bind; return state}
     assert(changed.state==30 && original.state==10 && original.result as ok==10 && stateBuilder.state==10)
-    let listBuilder=ListBuilder()
+    let listBuilder=ListBuilder(type<int>)
     var inscope values <- computation(listBuilder) {let x=fixed_array(1,2) |> bind; return x*3}
     assert(length(values)==2 && values[0]==3 && values[1]==6)
     let owned=MoveResultBuilder()
@@ -58,4 +59,9 @@ def main() {
     let b=run_deferred(delayed)
     assert(a as ok==8 && b as ok==8 && factories==1)
     print("saved builder checks OK\n")
+}
+
+[test]
+def test_saved_builder() {
+    main()
 }

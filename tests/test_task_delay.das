@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_scheduler.das
 require ../packages/computation_task/task_combinators.das
@@ -54,7 +55,7 @@ def budgets_and_result() {
     var inscope results <- task_scheduler(type<Result<int;string>>)
     var source <- computation(TaskResultBuilder(type<int>)) {
         task_delay_ms(5) |> bind
-        let n=task_after_polls(0,result_ok(6)) |> bind
+        let n=task_after_polls(0,ok(6, type<string>)) |> bind
         return n+1
     }
     let id=task_spawn(results,source)
@@ -105,4 +106,9 @@ def clocks() {
 def main() {
     boundaries();budgets_and_result();clocks()
     print("Task delay checks OK\n")
+}
+
+[test]
+def test_task_delay() {
+    main()
 }

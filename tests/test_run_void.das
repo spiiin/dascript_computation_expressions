@@ -1,4 +1,6 @@
 options gen2
+expect 31211
+// diagnostic: ce_run must return a value, not void
 require ../packages/computation/computation_macro.das
 struct VoidRun {}
 def ce_protocol(builder:VoidRun) { return CeValueProtocol() }

@@ -17,7 +17,7 @@ def main() {
     while(task_poll(player)==TaskStatus.Waiting) {frame++;print("Frame {frame}: loading\n")}
     print("{task_value(player)}\n")
     var inscope checked <- computation(TaskResultBuilder(type<int>)) {
-        let pair=task_result_when_all(task_after_polls(1,result_ok(10)),task_after_polls(2,result_ok(20))) |> bind
+        let pair=task_result_when_all(task_after_polls(1,ok(10, type<string>)),task_after_polls(2,ok(20, type<string>))) |> bind
         return pair.first+pair.second
     }
     while(task_poll(checked)==TaskStatus.Waiting) {}

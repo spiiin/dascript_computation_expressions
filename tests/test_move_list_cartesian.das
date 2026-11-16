@@ -1,4 +1,7 @@
 options gen2
+expect 30949:2
+expect 31400:2
+// diagnostic: Cartesian product requires copyable input elements
 require ../support/move_collection_support.das
 [export]
 def main() {

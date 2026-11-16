@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation/validation_builder.das
 
@@ -27,7 +28,7 @@ def reset() {
 }
 // A source with something to release when the loop stops early.
 def stream(id : int) {
-    return <- computation(SequenceBuilder()) {
+    return <- computation(SequenceBuilder(type<int>)) {
         let resource = acquire(id) |> use_resource
         for (i in range(5)) {
             pulled[id]++
@@ -36,7 +37,7 @@ def stream(id : int) {
     }
 }
 def step(value : int) : Result<int;string> {
-    return value == 3 ? result_error("three", type<int>) : result_ok(value)
+    return value == 3 ? err("three", type<int>) : ok(value, type<string>)
 }
 
 def test_break_and_continue() {
@@ -45,7 +46,7 @@ def test_break_and_continue() {
         for (i in range(10)) {
             if (i == 1) { continue }
             if (i == 5) { break }
-            let value = result_ok(i) |> bind
+            let value = ok(i, type<string>) |> bind
             seen |> push(value)
         }
         return length(seen)
@@ -327,4 +328,9 @@ def main() {
     test_leaving_from_scopes()
     test_other_direct_builders()
     print("direct loop checks OK\n")
+}
+
+[test]
+def test_direct_loops() {
+    main()
 }

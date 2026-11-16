@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation/deferred_computation.das
 require daslib/strings_boost
@@ -12,7 +13,7 @@ def acquire(id:int) {opened[id]++; return Resource(id=id)}
 def ce_dispose(var r:Resource) {closed[r.id]++; order+="{r.id}"}
 def reset() {for(v in opened) {v=0}; for(v in closed) {v=0}; reads=0;after=0;order=""}
 def source(id:int=1) {
-    return <- computation(SequenceBuilder()) {
+    return <- computation(SequenceBuilder(type<int>)) {
         let resource=acquire(id) |> use_resource
         for(i in range(4)) {
             reads++
@@ -21,7 +22,7 @@ def source(id:int=1) {
     }
 }
 def outer(mode:int) {
-    return <- computation(SequenceBuilder()) {
+    return <- computation(SequenceBuilder(type<int>)) {
         let resource=acquire(0) |> use_resource
         if(mode==0) {
             for(value in source()) {
@@ -72,7 +73,7 @@ def reference_case() {
     let baseline=heap_bytes_allocated()
     mutableValues <- [1,2,3]
     {
-        var inscope stream <- computation(SequenceBuilder()) {
+        var inscope stream <- computation(SequenceBuilder(type<int>)) {
             for(value in references()) {value+=10;yield value}
         }
         for(value in stream) {assert(value==11);break}
@@ -84,7 +85,7 @@ def reference_case() {
     assert(baseline==current)
 }
 def deferred_case() {
-    var inscope task <- deferred(SequenceBuilder(),fixed_array(5,6)) $(snapshot) {
+    var inscope task <- deferred(SequenceBuilder(type<int>),fixed_array(5,6)) $(snapshot) {
         let resource=acquire(0) |> use_resource
         let value=source() |> bind
         yield snapshot[0]+value
@@ -116,7 +117,7 @@ def zip_case() {
     reset()
     let baseline=heap_bytes_allocated()
     {
-        var inscope stream <- computation(SequenceBuilder()) {
+        var inscope stream <- computation(SequenceBuilder(type<int>)) {
             let resource=acquire(0) |> use_resource
             for(a,b in raw_source(1),raw_source(2)) {yield a+b}
             after++
@@ -133,7 +134,7 @@ def chained_bind() {
     reset()
     let baseline=heap_bytes_allocated()
     {
-        var inscope stream <- computation(SequenceBuilder()) {
+        var inscope stream <- computation(SequenceBuilder(type<int>)) {
             let resource=acquire(0) |> use_resource
             let a=source(1) |> bind
             let b=source(2) |> bind
@@ -157,4 +158,9 @@ def main() {
     }
     deferred_case()
     print("nested Sequence cleanup checks OK\n")
+}
+
+[test]
+def test_sequence_nested_cleanup() {
+    main()
 }

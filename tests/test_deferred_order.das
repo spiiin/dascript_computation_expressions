@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation/deferred_computation.das
 var events=""
@@ -6,7 +7,7 @@ struct Observed {}
 def builder() { events+="B"; return Observed() }
 def environment() { events+="D"; return [7] }
 def ce_protocol(b:Observed) { events+="P"; return CeValueProtocol() }
-def ce_return(b:Observed; value:int) { events+="T"; return result_ok(value) }
+def ce_return(b:Observed; value:int) { events+="T"; return ok(value, type<string>) }
 def ce_run(b:Observed; result:Result<int;string>) { events+="R"; return result as ok }
 [export]
 def main() {
@@ -25,4 +26,9 @@ def main() {
     let after=heap_bytes_allocated()
     assert(after==baseline)
     print("deferred ordering checks OK\n")
+}
+
+[test]
+def test_deferred_order() {
+    main()
 }

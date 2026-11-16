@@ -14,7 +14,7 @@ def main() {
     assert(trained.state.gold==7 && trained.value=="XP: 5")
     let rejected=computation(StateResultBuilder(GameState())) {
         state_put(GameState(gold=0,experience=100)) |> bind
-        let reward=result_error("Quest is incomplete",type<int>) |> bind
+        let reward=err("Quest is incomplete",type<int>) |> bind
         return reward*2
     }
     assert(rejected.result is err && rejected.state.gold==10 && rejected.state.experience==0)

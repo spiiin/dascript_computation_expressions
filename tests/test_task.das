@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_builder.das
 require daslib/rtti
@@ -25,4 +26,9 @@ def main() {
     verify(task_value(task)==22)
     verify(task_poll(task)==TaskStatus.Succeeded && trace=="start;a;b;")
     print("Task checks OK\n")
+}
+
+[test]
+def test_task() {
+    main()
 }

@@ -14,13 +14,19 @@ concurrency:
 
 jobs:
   windows:
-    name: ${{ matrix.suite }} / Daslang 0.6.5-RC2
+    name: ${{ matrix.suite }} / Daslang ${{ matrix.sdk }}
     runs-on: windows-2022
     timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
         suite: [interpreter, modes, aot, integrations]
+        # The oldest supported SDK and the current stable release.
+        sdk: ['0.6.5-RC2', '0.6.5']
+        include:
+          # Lint rules change between releases: one pinned SDK keeps the verdict stable.
+          - suite: lint
+            sdk: '0.6.5-RC2'
     defaults:
       run:
         shell: pwsh
@@ -30,7 +36,7 @@ jobs:
           persist-credentials: false
       - name: Install pinned SDK
         run: |
-          $exe = & ./.github/scripts/install-daslang.ps1 -Destination (Join-Path $env:RUNNER_TEMP 'daslang-sdk')
+          $exe = & ./.github/scripts/install-daslang.ps1 -Destination (Join-Path $env:RUNNER_TEMP 'daslang-sdk') -Version '${{ matrix.sdk }}'
           "DASLANG_EXE=$exe" >> $env:GITHUB_ENV
       - name: Run suite
         run: |
@@ -51,6 +57,9 @@ jobs:
               'aot' {
                 & ./run_aot.ps1 -OutputDirectory ci-results/aot-runtime -BuildDirectory "$env:RUNNER_TEMP/ce-aot-build"
               }
+              'lint' {
+                & ./run_lint.ps1
+              }
               'integrations' {
                 & ./test_task_tcp.ps1 -Jit
                 & ./test_task_hv.ps1 -Jit
@@ -66,6 +75,6 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: ce-${{ matrix.suite }}
+          name: ce-${{ matrix.suite }}-${{ matrix.sdk }}
           path: ci-results/
           retention-days: 14

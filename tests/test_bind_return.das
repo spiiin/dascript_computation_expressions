@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation/validation_builder.das
 require ../support/protocol_collect_fixture.das
@@ -9,16 +10,16 @@ def map_value(n:int) { mappedCount++; return n*2 }
 def numbers() { sourceCount++; return <- [1,2,3] }
 [export]
 def main() {
-    let failed=computation(ResultBuilder()) { let x=result_error("bad",type<int>) |> bind; return map_value(x) }
+    let failed=computation(ResultBuilder()) { let x=err("bad",type<int>) |> bind; return map_value(x) }
     let absent=computation(OptionBuilder()) { let x=none(type<int>) |> bind; return map_value(x) }
     let invalid=computation(ValidationBuilder()) { let x=validation_error("bad",type<int>) |> bind; return map_value(x) }
     assert(failed is err && absent is none && invalid is invalid && mappedCount==0)
-    let ok=computation(ResultBuilder()) { let x=result_ok(3) |> bind; return map_value(x) }
+    let ok=computation(ResultBuilder()) { let x=ok(3, type<string>) |> bind; return map_value(x) }
     assert(ok is ok && (ok as ok)==6 && mappedCount==1)
     let baseline=heap_bytes_allocated()
     for (iteration in range(20)) {
         {
-            var inscope values <- computation(ListBuilder()) { let n=numbers() |> bind; return map_value(n) }
+            var inscope values <- computation(ListBuilder(type<int>)) { let n=numbers() |> bind; return map_value(n) }
             assert(length(values)==3 && values[0]==2 && values[2]==6)
         }
         let after=heap_bytes_allocated()
@@ -27,12 +28,17 @@ def main() {
     assert(sourceCount==20 && mappedCount==61)
     {
         var inscope borrowed <- [1,2,3]
-        var inscope values <- computation(ListBuilder()) { let n=borrowed |> bind; return n+1 }
+        var inscope values <- computation(ListBuilder(type<int>)) { let n=borrowed |> bind; return n+1 }
         assert(length(borrowed)==3 && length(values)==3)
-        var inscope legacy <- computation(ExternalCollectionBuilder()) { let n=borrowed |> bind; return n+2 }
+        var inscope legacy <- computation(ExternalCollectionBuilder(type<int>)) { let n=borrowed |> bind; return n+2 }
         assert(length(legacy)==3 && legacy[0]==3 && length(borrowed)==3)
     }
     let after=heap_bytes_allocated()
     assert(after==baseline)
     print("bind_return behavior and lifetime checks OK\n")
+}
+
+[test]
+def test_bind_return() {
+    main()
 }

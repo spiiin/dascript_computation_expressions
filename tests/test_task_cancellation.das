@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_combinators.das
 require daslib/strings_boost
@@ -54,7 +55,7 @@ def checks() {
     {
         var inscope token <- cancellation_token()
         var source <- computation(TaskResultBuilder(type<int>)) {
-            var child <- task_after_polls(1,result_ok(1))
+            var child <- task_after_polls(1,ok(1, type<string>))
             task_cancel(child)
             let n=child |> bind
             effects++
@@ -97,4 +98,9 @@ def main() {
     var inscope race <- task_race(cancelled_child(),task_after_polls(0,4))
     verify(task_poll(race)==TaskStatus.Cancelled)
     print("Task cancellation checks OK\n")
+}
+
+[test]
+def test_task_cancellation() {
+    main()
 }

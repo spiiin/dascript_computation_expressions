@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation/deferred_computation.das
 var freed=0
@@ -19,7 +20,7 @@ def ce_dispose(var resource:Resource) { closed++; log+="R" }
 def make_task() {
     var inscope data:Snapshot
     data.values <- [10,20]
-    return <- deferred(SequenceBuilder(),data) $(snapshot) {
+    return <- deferred(SequenceBuilder(type<int>),data) $(snapshot) {
         let resource=acquire() |> use_resource
         try_finally($ {
             snapshot.values[0]++
@@ -89,7 +90,7 @@ def main() {
     let afterReturn=heap_bytes_allocated()
     assert(afterReturn==baseline)
     {
-        var inscope task <- deferred(SequenceBuilder(),[1,2]) $(snapshot) { if(false) { yield snapshot[0] } }
+        var inscope task <- deferred(SequenceBuilder(type<int>),[1,2]) $(snapshot) { if(false) { yield snapshot[0] } }
         var inscope seq <- run_deferred(task)
         var count=0
         for(value in seq) { count++ }
@@ -98,4 +99,9 @@ def main() {
     let afterEmpty=heap_bytes_allocated()
     assert(afterEmpty==baseline)
     print("deferred sequence lifetime checks OK\n")
+}
+
+[test]
+def test_deferred_sequence() {
+    main()
 }

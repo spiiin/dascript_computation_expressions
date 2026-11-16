@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 // Stress nested producer/consumer/resource macros beyond the default 50 passes.
 options max_infer_passes=128
 require ../packages/computation/computation_macro.das
@@ -15,7 +16,7 @@ struct StreamResource {data:array<int>}
 def acquire() {var resource:StreamResource;resource.data <- [10,20,30];opened++;return <- resource}
 def ce_dispose(var resource:StreamResource) {closed++;delete resource}
 def producer(wait:int=1; fail:bool=false) {
-    return <- computation(AsyncSequenceBuilder()) {
+    return <- computation(AsyncSequenceBuilder(type<int>)) {
         var resource & = acquire() |> use_resource
         try_finally($ {
             for(i in range(length(resource.data))) {
@@ -174,4 +175,9 @@ def main() {
     for(i in range(24)) {checks()}
     verify(heap_bytes_allocated()==baseline)
     print("Async sequence lifetime checks OK\n")
+}
+
+[test]
+def test_async_sequence_lifetime() {
+    main()
 }

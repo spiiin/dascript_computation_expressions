@@ -4,12 +4,19 @@ require ./task_jobque.das public
 require dashv/dashv_boost
 require strings
 
-// dasHV exposes only a blocking HTTP client. Each request runs on a jobque worker
-// and the waiting Task polls the result, so the game loop never blocks.
+//! HTTP requests as tasks. dasHV has only a blocking HTTP client, so each request runs on a job queue
+//! worker while the waiting ``Task`` polls for the result, and the thread that ticks the tasks does
+//! not block. Require it for ``task_http``, ``task_http_get`` and ``task_http_post``; it needs the
+//! dasHV module and a running job queue (see ``task_jobque``).
+
+//! One HTTP header of a request or a response: its name and value.
 struct TaskHttpHeader {
     key:string
     value:string
 }
+//! One request for ``task_http``. ``method`` is GET, POST, PUT, DELETE, PATCH, HEAD or OPTIONS in any
+//! letter case; ``body`` and ``content_type`` are sent when not empty. ``timeout_s`` and
+//! ``connect_timeout_s`` are in seconds, 1..65535, and bound the request on the worker.
 struct TaskHttpRequest {
     method:string="GET"
     url:string
@@ -22,6 +29,7 @@ struct TaskHttpRequest {
     connect_timeout_s:int=10
     follow_redirects:bool=true
 }
+//! A response as received: the HTTP status code, the body as a string and the response headers.
 struct TaskHttpResponse {
     status:int
     body:string
@@ -75,24 +83,31 @@ def ce_http_work(request:TaskHttpRequest) : TaskHttpResponse {
     return <- response
 }
 
-// Task<Result<TaskHttpResponse,string>>. HTTP error statuses (404, 500, ...) are
-// successful responses; only transport failures (DNS, connect, timeout) are err.
-def task_http(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(S)?>>;request:TaskHttpRequest) {
+//! Returns a ``Task<Result<TaskHttpResponse;string>>`` that performs ``request`` on a worker of
+//! ``queue``, starting on its first poll. HTTP error statuses (404, 500, ...) are ok responses; only
+//! transport failures (DNS, connect, timeout) are err. Cancelling the task stops the wait, not a
+//! request already sent. Panics at the call if the URL is empty, the method is unknown, a timeout
+//! is out of range or the queue is closed.
+def task_http(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(SS)?>>;request:TaskHttpRequest) {
     ce_http_validate(request)
     return <- task_jobque(queue,request,@@ce_http_work)
 }
-def task_http_get(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(S)?>>;url:string) {
+//! ``task_http`` for a GET of ``url`` with the default timeouts of ``TaskHttpRequest``.
+def task_http_get(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(SS)?>>;url:string) {
     var inscope request=TaskHttpRequest(url=url)
     return <- task_http(queue,request)
 }
-def task_http_post(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(S)?>>;url:string;body:string;content_type:string="application/json") {
+//! ``task_http`` for a POST of ``body`` to ``url``, sent with ``content_type``.
+def task_http_post(queue:tuple<tag:TaskJobQueueTag;owner:iterator<auto(SS)?>>;url:string;body:string;content_type:string="application/json") {
     var inscope request=TaskHttpRequest(method="POST",url=url,body=body,content_type=content_type)
     return <- task_http(queue,request)
 }
-// Case-insensitive header lookup; "" when missing.
+//! Returns the value of the response header ``key``, compared without regard to letter case; ""
+//! when the response has no such header.
 def task_http_header(response:TaskHttpResponse;key:string) : string {
     let wanted=to_lower(key)
     for(header in response.headers) {if(to_lower(header.key)==wanted) {return header.value}}
     return ""
 }
-def task_http_ok(response:TaskHttpResponse) : bool {return response.status>=200 && response.status<300}
+//! Returns true if the response status is in 200..299.
+def task_http_ok(response:TaskHttpResponse) : bool => response.status>=200 && response.status<300

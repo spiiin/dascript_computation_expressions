@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 [export]
 def main() {
@@ -6,7 +7,7 @@ def main() {
  var peak0=0ul
  var peak1=0ul
  {
-  var inscope seq <- computation(SequenceBuilder()) {
+  var inscope seq <- computation(SequenceBuilder(type<int>)) {
    for(i in range(1000)) {
     var n=i
     try_finally($ {n++; yield n}, $ {n++})
@@ -22,3 +23,7 @@ def main() {
  print("sequence cell lifetime checks OK\n")
 }
 
+[test]
+def test_sequence_shared_lifetime() {
+    main()
+}

@@ -8,11 +8,11 @@ struct BoundedResultBuilder { limit:int = 100 }
 def ce_protocol(builder:BoundedResultBuilder) { return CeValueProtocol() }
 def ce_zero(builder:BoundedResultBuilder) { return ce_zero(ResultBuilder()) }
 def ce_return(builder:BoundedResultBuilder; value:auto) { return ce_return(ResultBuilder(),value) }
-def ce_unwrap(builder:BoundedResultBuilder; value:Result<auto(T);string>) : T { return value as ok }
-def ce_bind(builder:BoundedResultBuilder; value:Result<auto(T);string>; next:block<(item:T):auto(R)>) : R {
+def ce_unwrap(builder:BoundedResultBuilder; value:Result<auto(TT);string>) : TT { return value as ok }
+def ce_bind(builder:BoundedResultBuilder; value:Result<auto(TT);string>; next:block<(item:TT):auto(RR)>) : RR {
     return ce_bind(ResultBuilder(),value,next)
 }
-def ce_combine(builder:BoundedResultBuilder; first:Result<CeUnit;string>; next:block<():auto(R)>) : R {
+def ce_combine(builder:BoundedResultBuilder; first:Result<CeUnit;string>; next:block<():auto(RR)>) : RR {
     return ce_combine(ResultBuilder(),first,next)
 }
 

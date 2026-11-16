@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation/coroutine_builder.das
 require ../packages/computation_task/async_sequence_builder.das
@@ -103,4 +104,9 @@ def main() {
     while (task_poll(job) == TaskStatus.Waiting) {}
     verify(task_value(job) == 33)
     print("Sequence function checks OK\n")
+}
+
+[test]
+def test_sequence_function() {
+    main()
 }

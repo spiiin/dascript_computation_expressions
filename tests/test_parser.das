@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation/parser_builder.das
 require daslib/rtti
@@ -84,4 +85,9 @@ def main() {
     }
     assert(failure is failure && closed==1)
     print("Parser checks OK\n")
+}
+
+[test]
+def test_parser() {
+    main()
 }

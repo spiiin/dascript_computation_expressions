@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../support/deferred_move_support.das
 
 def interleaved() {
@@ -62,4 +63,9 @@ def arrays() {
 def main() {
     for(round in range(10)) {interleaved();raw_values();arrays()}
     print("sequence_next_move ownership checks OK\n")
+}
+
+[test]
+def test_sequence_next_move() {
+    main()
 }

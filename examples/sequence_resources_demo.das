@@ -7,7 +7,7 @@ def document(text:string) : JsonResource {
  return parsed as ok
 }
 def enemy_health() {
- return <- computation(SequenceBuilder()) {
+ return <- computation(SequenceBuilder(type<int>)) {
   let data=document("\{\"health\":42\}") |> use_resource
   try_finally($ {
    yield int(data.node?["health"] as _longint)

@@ -1,0 +1,9 @@
+options gen2
+
+// The folders `dastest --test tests` walks. The tests in `integration` need a
+// server, a console or a window that their own scripts start (test_task_*.ps1);
+// `repro` holds reproductions of SDK defects, which are not tests of the library.
+[export, pinvoke]
+def can_visit_folder(folder_name : string; var result : bool?) {
+    *result = folder_name != "integration" && folder_name != "repro"
+}

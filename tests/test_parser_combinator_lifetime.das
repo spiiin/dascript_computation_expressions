@@ -1,5 +1,6 @@
 options gen2
 options stack = 1048576
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation/parser_builder.das
 require ../packages/computation/deferred_computation.das
@@ -51,4 +52,9 @@ def main() {
     let baseline=heap_bytes_allocated()
     for(i in range(16)) {check();verify(heap_bytes_allocated()==baseline)}
     print("Parser combinator lifetime checks OK\n")
+}
+
+[test]
+def test_parser_combinator_lifetime() {
+    main()
 }

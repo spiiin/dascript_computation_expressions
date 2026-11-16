@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_scheduler.das
 require daslib/rtti
@@ -130,4 +131,9 @@ def main() {
     verify(task_cancel(batch) && task_status(batch)==TaskStatus.Cancelled)
     verify(heap_bytes_allocated()==before)
     print("Task array lifetime checks OK\n")
+}
+
+[test]
+def test_task_array_lifetime() {
+    main()
 }

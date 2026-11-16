@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 var log=""
 struct Game {health:int;score:int}
@@ -6,7 +7,7 @@ struct Resource {id:int}
 def acquire(id:int) {return Resource(id=id)}
 def ce_dispose(var r:Resource) {log+="dispose:{r.id};"}
 def shared_game() {
- return <- computation(SequenceBuilder()) {
+ return <- computation(SequenceBuilder(type<int>)) {
   var game=Game(health=10,score=0)
   try_finally($ {
    let resource=acquire(7) |> use_resource
@@ -34,7 +35,7 @@ def main() {
  }
  log=""
  {
-  var inscope seq <- computation(SequenceBuilder()) {
+  var inscope seq <- computation(SequenceBuilder(type<int>)) {
    var x=1
    try_finally($ {
     var x=10
@@ -50,7 +51,7 @@ def main() {
  }
  log=""
  {
-  var inscope seq <- computation(SequenceBuilder()) {
+  var inscope seq <- computation(SequenceBuilder(type<int>)) {
    var n=[1,2] |> bind
    try_finally($ {n+=10;yield n}, $ {log+="{n};";n++})
    yield n
@@ -62,7 +63,7 @@ def main() {
  }
  log=""
  {
-  var inscope seq <- computation(SequenceBuilder()) {
+  var inscope seq <- computation(SequenceBuilder(type<int>)) {
    var x=3
    try_finally($ {
     for(x in range(x)) {yield x}
@@ -80,7 +81,7 @@ def main() {
  }
  log=""
  {
-  var inscope seq <- computation(SequenceBuilder()) {
+  var inscope seq <- computation(SequenceBuilder(type<int>)) {
    var n:int
    var a,b:int
    a=1
@@ -95,3 +96,7 @@ def main() {
  print("sequence shared capture checks OK\n")
 }
 
+[test]
+def test_sequence_shared() {
+    main()
+}

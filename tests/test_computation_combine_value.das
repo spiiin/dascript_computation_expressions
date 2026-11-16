@@ -1,4 +1,6 @@
 options gen2
+expect 30341
+// diagnostic: ce_combine
 require ../packages/computation/computation.das
 require ../examples/builders/computation_effects.das
 [export]
@@ -10,5 +12,4 @@ def main() {
         if (true) { return 1 } else { return 2 }
         return 3
     }
-    print("{bad}\n")
 }

@@ -1,21 +1,25 @@
 options gen2
 module computation_resources public
-require daslib/rtti
+
+//! Macro internals: the default resource operations of the builder protocol. ``ce_try_finally`` is behind
+//! ``try_finally(body, cleanup)``; ``ce_using`` and ``ce_using_move`` are behind ``resource |> use_resource``.
+//! They suit builders with copyable outcomes; a builder with owned outcomes overloads the first two.
+//! ``builder_protocol`` requires this module publicly, so there is no need to require it directly.
 
 // Cleanup runs when the body returns, however it returns: with a value, with
 // an Error or None, or through an early exit. A panic is fatal and runs nothing.
-def ce_try_finally(builder : auto; body : block<() : auto(R)>; cleanup : block<() : void>) : R {
-    var result : R
+def ce_try_finally(builder : auto; body : block<() : auto(RR)>; cleanup : block<() : void>) : RR {
+    var result : RR
     result = invoke(body)
     invoke(cleanup)
     return result
 }
 // Ownership is scoped here. The macro creates cleanup in the caller's module
 // so that its ce_dispose overload is visible, without a global default disposer.
-def ce_using(builder : auto; resource : auto(T); body : block<(item : T) : auto(R)>;
-             cleanup : block<(var item : T) : void>) : R {
+def ce_using(builder : auto; resource : auto(TT); body : block<(item : TT) : auto(RR)>;
+             cleanup : block<(var item : TT) : void>) : RR {
     var owned = resource
-    var result : R
+    var result : RR
     result = invoke(body, owned)
     invoke(cleanup, owned)
     return result
@@ -25,22 +29,20 @@ def ce_using(builder : auto; resource : auto(T); body : block<(item : T) : auto(
 
 // Explicit owning use_resource: the continuation borrows the resource.
 // ce_dispose owns cleanup, including any nested allocations in the resource.
-def ce_using_move(builder:auto; var resource:auto(T); body:block<(var item:auto(U)):auto(R)>;
-                  cleanup:block<(var item:T):void>) : R {
+def ce_using_move(builder:auto; var resource:auto(TT); body:block<(var item:auto(UU)):auto(RR)>;
+                  cleanup:block<(var item:TT):void>) : RR {
     var owned <- resource
-    var result:R
-    static_if (typeinfo can_copy(type<R>)) {result=invoke(body,owned)}
+    var result:RR
+    static_if (typeinfo can_copy(type<RR>)) {result=invoke(body,owned)}
     else {result <- invoke(body,owned)}
     invoke(cleanup,owned)
-    static_if (typeinfo can_copy(type<R>)) {return result}
+    static_if (typeinfo can_copy(type<RR>)) {return result}
     else {return <- result}
 }
 
 // Stable address for the body and cleanup generators; no owning value capture.
-def ce_resource_cell_move(var resource:auto(T)) {
-    return new tuple<value:T>(value <- resource)
-}
-def ce_resource_cell_close(var cell:tuple<value:auto(T)>?; cleanup:block<(var item:T):void>) {
+def ce_resource_cell_move(var resource:auto(TT)) => new tuple<value:TT>(value <- resource)
+def ce_resource_cell_close(var cell:tuple<value:auto(TT)>?; cleanup:block<(var item:TT):void>) {
     var owned <- cell.value
     // The cell now holds a moved-from resource; its real payload has one owner.
     unsafe {delete cell}

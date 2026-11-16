@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation/validation_builder.das
 
@@ -14,8 +15,8 @@ struct Token { value : int }
 
 def step(value : int) : Result<int;string> {
     evaluated++
-    if (value < 0) { return result_error("negative {value}", type<int>) }
-    return result_ok(value)
+    if (value < 0) { return err("negative {value}", type<int>) }
+    return ok(value, type<string>)
 }
 def maybe(value : int) : Option<int> {
     evaluated++
@@ -274,4 +275,9 @@ def main() {
     test_validation()
     test_long_chain()
     print("direct lowering checks OK\n")
+}
+
+[test]
+def test_direct_lowering() {
+    main()
 }

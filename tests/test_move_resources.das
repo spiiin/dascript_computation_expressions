@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../support/move_resource_support.das
 require ../packages/computation/deferred_computation.das
 
@@ -42,7 +43,7 @@ def eager() {
     let current=heap_bytes_allocated();assert(current==baseline)
 }
 def make_stream() {
-    return <- computation(SequenceBuilder()) {
+    return <- computation(SequenceBuilder(type<int>)) {
         var a & = acquire_buffer(1) |> use_resource
         var b & = acquire_buffer(2) |> use_resource
         try_finally($ {
@@ -100,4 +101,9 @@ def deferred_resources() {
 def main() {
     for(round in range(5)) {eager();sequences();deferred_resources()}
     print("move-only resource checks OK\n")
+}
+
+[test]
+def test_move_resources() {
+    main()
 }

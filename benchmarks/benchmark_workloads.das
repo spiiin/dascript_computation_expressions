@@ -4,8 +4,8 @@ require ../packages/computation/computation.das public
 require ../examples/builders/computation_effects.das public
 
 def private checked(value:int) {
-    if (value%7==0) {return result_error("invalid",type<int>)}
-    return result_ok(value+1)
+    if (value%7==0) {return err("invalid",type<int>)}
+    return ok(value+1, type<string>)
 }
 def bench_result_ce(seed:int) : int64 {
     let builder=ResultBuilder()
@@ -50,7 +50,7 @@ def private list_checksum(values:array<int>) : int64 {
     return checksum
 }
 def bench_list_ce(seed:int) : int64 {
-    let builder=ListBuilder()
+    let builder=ListBuilder(type<int>)
     var inscope values <- computation(builder) {
         let x=fixed_array(seed,seed+1,seed+2,seed+3) |> bind
         let y=fixed_array(1,2,3,4) |> bind
@@ -72,7 +72,7 @@ def private sequence_checksum(var source:iterator<int>) : int64 {
     return checksum
 }
 def bench_sequence_ce(seed:int) : int64 {
-    let builder=SequenceBuilder()
+    let builder=SequenceBuilder(type<int>)
     var inscope source <- computation(builder) {
         for (i in range(32)) {yield seed+i*2}
     }

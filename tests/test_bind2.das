@@ -1,48 +1,49 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation/validation_builder.das
 var order=""
 var calls=0
-def observed(n:int; value:auto(T)) : T { order+="{n}"; return value }
+def observed(n:int; value:auto(TT)) : TT { order+="{n}"; return value }
 def later() { calls++; return 7 }
 [export]
 def main() {
     {
         order=""; calls=0
         let r0=computation(ResultBuilder()) {
-            let p=observed(1,result_ok(2)) |> and_bind(observed(2,result_ok(3))) |> bind
+            let p=observed(1,ok(2, type<string>)) |> and_bind(observed(2,ok(3, type<string>))) |> bind
             let n=later()
             return p.first+p.second+n
         }
         assert(order=="12" && calls==1 && r0 is ok)
         order=""; calls=0
         let r1=computation(ResultBuilder()) {
-            let p=observed(1,result_error("failure",type<int>)) |> and_bind(observed(2,result_ok(3))) |> bind
+            let p=observed(1,err("failure",type<int>)) |> and_bind(observed(2,ok(3, type<string>))) |> bind
             let n=later()
             return p.first+p.second+n
         }
         assert(order=="12" && calls==0 && r1 is err)
         order=""; calls=0
         let r2=computation(ResultBuilder()) {
-            let p=observed(1,result_ok(2)) |> and_bind(observed(2,result_error("failure",type<int>))) |> bind
+            let p=observed(1,ok(2, type<string>)) |> and_bind(observed(2,err("failure",type<int>))) |> bind
             let n=later()
             return p.first+p.second+n
         }
         assert(order=="12" && calls==0 && r2 is err)
         order=""; calls=0
         let r3=computation(ResultBuilder()) {
-            let p=observed(1,result_error("failure",type<int>)) |> and_bind(observed(2,result_error("failure",type<int>))) |> bind
+            let p=observed(1,err("failure",type<int>)) |> and_bind(observed(2,err("failure",type<int>))) |> bind
             let n=later()
             return p.first+p.second+n
         }
         assert(order=="12" && calls==0 && r3 is err)
         let fast=computation(ResultBuilder()) {
-            let p=result_ok((name="Mage",level=2)) |> and_bind(result_ok(3)) |> bind
+            let p=ok((name="Mage",level=2), type<string>) |> and_bind(ok(3, type<string>)) |> bind
             let n=p.second
             return (hero=p.first,number=n)
         }
         let slow=computation(ResultBuilder()) {
-            let p=ce_merge_sources(ResultBuilder(),result_ok((name="Mage",level=2)),result_ok(3)) |> bind
+            let p=ce_merge_sources(ResultBuilder(),ok((name="Mage",level=2), type<string>),ok(3, type<string>)) |> bind
             let n=p.second
             return (hero=p.first,number=n)
         }
@@ -136,8 +137,8 @@ def main() {
     }
     calls=0
     let nested=computation(ResultBuilder()) {
-        let p=result_ok(1) |> and_bind(result_ok(2)) |> bind
-        let n=result_error("later failure",type<int>) |> bind
+        let p=ok(1, type<string>) |> and_bind(ok(2, type<string>)) |> bind
+        let n=err("later failure",type<int>) |> bind
         let unused=later()
         return p.first+p.second+n
     }
@@ -146,7 +147,7 @@ def main() {
     var caught=false
     try {
         let r=computation(ResultBuilder()) {
-            let p=observed(1,result_ok(1)) |> and_bind(explode()) |> bind
+            let p=observed(1,ok(1, type<string>)) |> and_bind(explode()) |> bind
             let unused=later()
             return p.first+p.second
         }
@@ -154,4 +155,9 @@ def main() {
     assert(caught && order=="1" && calls==0)
     print("bind2 value checks OK\n")
 }
-def explode() : Result<int;string> { panic("source failed"); return result_ok(0) }
+def explode() : Result<int;string> { panic("source failed"); return ok(0, type<string>) }
+
+[test]
+def test_bind2() {
+    main()
+}

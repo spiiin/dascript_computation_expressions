@@ -1,4 +1,7 @@
 options gen2
+expect 31400
+// diagnostic: this task fails with string, and the computation with LoadError
+// anchor: fetch(id) |> bind
 require ../packages/computation/computation.das
 require ../packages/computation_task/task_runtime.das
 
@@ -8,7 +11,7 @@ enum LoadError {
 
 [task_result]
 def fetch(id : int) : int {
-    let value = task_after_polls(1, result_ok(id)) |> bind
+    let value = task_after_polls(1, ok(id, type<string>)) |> bind
     return value
 }
 

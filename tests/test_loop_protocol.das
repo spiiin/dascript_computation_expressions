@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../support/bounded_result_builder.das
 require ../packages/computation/deferred_computation.das
@@ -86,7 +87,7 @@ def arrays(builder:auto) {
 def iterators(builder:auto) {
     releases=0
     reset()
-    var inscope stream <- computation(SequenceBuilder()) {
+    var inscope stream <- computation(SequenceBuilder(type<int>)) {
         try_finally($ { for (i in range(5)) {yield i} }, $ {releases++})
     }
     let r=computation(builder) {
@@ -157,4 +158,9 @@ def main() {
     let second=run_deferred(task)
     assert(first is err && second is err && completed==4)
     print("loop protocol checks OK\n")
+}
+
+[test]
+def test_loop_protocol() {
+    main()
 }

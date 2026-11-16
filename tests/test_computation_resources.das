@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../examples/builders/writer_result_builder.das
 require ../examples/builders/state_result_builder.das
@@ -12,11 +13,11 @@ def acquire(id : int) {
 def ce_dispose(var handle : TestResource) {
     events += "close{handle.id};"
 }
-def fail_source(builder : ResultBuilder) { return result_error("stop", type<int>) }
+def fail_source(builder : ResultBuilder) { return err("stop", type<int>) }
 def fail_source(builder : OptionBuilder) { return none(type<int>) }
-def fail_source(builder : WriterResultBuilder) { return result_error("stop", type<int>) }
-def fail_source(builder : tuple<kind : StateResultContext; initial : auto(S); state : S>) {
-    return result_error("stop", type<int>)
+def fail_source(builder : WriterResultBuilder) { return err("stop", type<int>) }
+def fail_source(builder : tuple<kind : StateResultContext; initial : auto(SS); state : SS>) {
+    return err("stop", type<int>)
 }
 def test_success(builder : auto) {
     events = ""
@@ -111,7 +112,7 @@ def test_effects() {
         try_finally($ {
             let resource = acquire(1) |> use_resource
             state_put(20) |> bind
-            return result_error("rollback", type<int>) |> return_from
+            return err("rollback", type<int>) |> return_from
         }, $ { events += "finally;" })
     }
     assert(sr.result is err && (sr.result as err) == "rollback" && sr.state == 10)
@@ -133,3 +134,7 @@ def main() {
     print("resources checks OK: six builders, LIFO, loops, short circuit\n")
 }
 
+[test]
+def test_computation_resources() {
+    main()
+}

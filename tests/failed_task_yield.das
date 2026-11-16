@@ -1,4 +1,6 @@
 options gen2
+expect 31400
+// diagnostic: yield is not supported
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_builder.das
 [export]

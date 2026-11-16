@@ -1,4 +1,7 @@
 options gen2
+expect 30341
+expect 30941
+// diagnostic: can only move compatible type
 require ../packages/computation_task/task_scheduler.das
 [export]
 def main() {

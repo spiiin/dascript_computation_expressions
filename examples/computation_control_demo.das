@@ -2,8 +2,8 @@ options gen2
 require ../packages/computation/computation.das
 
 def validate(value : int) {
-    if (value == 3) { return result_error("rejected 3", type<int>) }
-    return result_ok(value)
+    if (value == 3) { return err("rejected 3", type<int>) }
+    return ok(value, type<string>)
 }
 def find_value(value : int) {
     if (value == 3) { return none(type<int>) }
@@ -44,7 +44,7 @@ def main() {
     print("Option: None; completed={i}; after={after_option}\n")
 
     let description = computation(ResultBuilder()) {
-        let n = result_ok(4) |> bind
+        let n = ok(4, type<string>) |> bind
         if (n > 0) { return "positive" }
         else { return "nonpositive" }
     }

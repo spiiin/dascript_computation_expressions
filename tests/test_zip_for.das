@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../support/bounded_result_builder.das
 require ../packages/computation/deferred_computation.das
@@ -51,7 +52,7 @@ def check_lengths(builder:auto; a,b,c,failAt:int) {
 }
 
 def stream(id,count:int) {
-    return <- computation(SequenceBuilder()) {
+    return <- computation(SequenceBuilder(type<int>)) {
         try_finally($ {
             for (i in range(count)) {pulled[id]++; yield i}
         }, $ {closed[id]++})
@@ -190,4 +191,9 @@ def main() {
     let second=run_deferred(task)
     assert(first as ok==31 && second as ok==62)
     print("zip for checks OK\n")
+}
+
+[test]
+def test_zip_for() {
+    main()
 }

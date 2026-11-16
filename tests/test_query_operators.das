@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../examples/builders/query_builder.das
 require daslib/rtti
@@ -55,13 +56,13 @@ def check() {
         return "{group.key}:{length(group.values)}"
     }
     verify(length(report)==3 && report[0]=="red:2" && report[2]=="green:1")
-    var inscope best <- computation(QueryBuilder()) {
+    var inscope best <- computation(QueryBuilder(type<int>)) {
         let row=source |> query_order_by(true) <| $(row:Row) {return row.score} |> bind
         query_where(row.score>=20) |> bind
         return row.id
     }
     verify(length(best)==4 && best[0]==2 && best[1]==3 && best[2]==1 && best[3]==5)
-    var inscope teams <- computation(QueryBuilder()) {
+    var inscope teams <- computation(QueryBuilder(type<int>)) {
         let row=source |> query_distinct <| $(row:Row) {return row.team} |> bind
         return row.id
     }
@@ -97,4 +98,9 @@ def main() {
     let baseline=heap_bytes_allocated()
     for(i in range(16)) {check();verify(heap_bytes_allocated()==baseline)}
     print("Query operators checks OK\n")
+}
+
+[test]
+def test_query_operators() {
+    main()
 }

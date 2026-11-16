@@ -1,6 +1,7 @@
 options gen2
 options max_infer_passes=1024
 options stack=524288
+require dastest/testing_boost public
 require daslib/result
 require daslib/option
 require ../packages/computation/computation.das
@@ -45,8 +46,8 @@ def checks() {
         return p.first.first+p.first.second.n+p.second
     }
     verify(option::unwrap(groupedOption)==6)
-    verify(result::unwrap(result_ok(7))==7)
-    verify(result::is_err(result_error("failure",type<int>)))
+    verify(result::unwrap(ok(7, type<string>))==7)
+    verify(result::is_err(err("failure",type<int>)))
     // Explicit standard move constructors interoperate with owned CE and empty
     // their original payload. The owned continuation moves its result again.
     {
@@ -93,4 +94,9 @@ def main() {
     for(i in range(3)) {checks()}
     verify(heap_bytes_allocated()==baseline)
     print("Standard outcome interoperability checks OK\n")
+}
+
+[test]
+def test_standard_outcomes() {
+    main()
 }

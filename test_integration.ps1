@@ -66,14 +66,14 @@ def main() {
     assert(length((parsedItems as parsed).value)==2 && (parsedItems as parsed).value[1]==2)
     let parsed=computation(ParserBuilder(text="21")) {let n=parser_int() |> bind;parser_eof() |> bind;return n*2}
     assert(parsed is parsed && (parsed as parsed).value==42)
-    var inscope alternatives <- computation(SearchBuilder()) {
+    var inscope alternatives <- computation(SearchBuilder(type<int>)) {
         let n=search_choose([1,2]) |> search_append(search_choose([10,20])) |> search_take(3) |> bind
         yield n
     }
     var alternativeSum=0
     sequence_each(alternatives) $(n:int) {alternativeSum+=n}
     assert(alternativeSum==13)
-    var inscope found <- computation(SearchBuilder()) {let n=search_choose([1,2]) |> bind;search_guard(n>1) |> bind;yield n}
+    var inscope found <- computation(SearchBuilder(type<int>)) {let n=search_choose([1,2]) |> bind;search_guard(n>1) |> bind;yield n}
     var foundSum=0
     sequence_each(found) $(n:int) {foundSum+=n}
     assert(foundSum==2)
@@ -87,14 +87,14 @@ def main() {
         return <- items
     }
     assert(length(owned as ok)==2)
-    var inscope task <- deferred(ListBuilder(),3) $(n) {
+    var inscope task <- deferred(ListBuilder(type<int>),3) $(n) {
         for(i in range(n)){yield i}
     }
     var inscope first <- run_deferred(task)
     var inscope second <- run_deferred(task)
     assert(length(first)==3 && length(second)==3)
     var inscope asyncTask <- computation(TaskResultBuilder(type<int>)) {
-        let n=task_after_polls(1,result_ok(8)) |> bind
+        let n=task_after_polls(1,ok(8, type<string>)) |> bind
         return n+1
     }
     verify(task_poll(asyncTask)==TaskStatus.Waiting)
@@ -143,7 +143,7 @@ def main() {
     verify(task_event_emit(eventBus,42)==1)
     verify(task_poll(eventWait)==TaskStatus.Succeeded && task_value(eventWait) as ok==42)
     verify(task_event_subscriber_count(eventBus)==0)
-    var inscope stream <- computation(AsyncSequenceBuilder()) {
+    var inscope stream <- computation(AsyncSequenceBuilder(type<int>)) {
         let n=task_after_polls(1,42) |> bind
         yield n
     }

@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_combinators.das
 require daslib/strings_boost
@@ -37,7 +38,7 @@ def main() {
     verify(task_poll(mixed)==TaskStatus.Succeeded)
     verify(task_value(mixed).first==7 && task_value(mixed).second=="text")
     var inscope good <- computation(TaskResultBuilder(type<int>)) {
-        let values=task_result_when_all(task_after_polls(1,result_ok(3)),task_after_polls(0,result_ok(4))) |> bind
+        let values=task_result_when_all(task_after_polls(1,ok(3, type<string>)),task_after_polls(0,ok(4, type<string>))) |> bind
         reached++
         return values.first+values.second
     }
@@ -50,4 +51,9 @@ def main() {
     verify(task_poll(failed)==TaskStatus.Failed && trace=="a:start;a:done;")
     verify(starts_with(task_error(failed),"child failed"))
     print("Task composition checks OK\n")
+}
+
+[test]
+def test_task_combinators() {
+    main()
 }

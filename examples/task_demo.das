@@ -5,8 +5,8 @@ require ../packages/computation_task/task_builder.das
 // The host can keep rendering/processing events between task_poll calls.
 [task_result]
 def load_player(accepted:bool) : string {
-    let name=task_after_polls(2,result_ok("Alice")) |> bind
-    let health=task_after_polls(1,accepted ? result_ok(85) : result_error("access denied",type<int>)) |> bind
+    let name=task_after_polls(2,ok("Alice", type<string>)) |> bind
+    let health=task_after_polls(1,accepted ? ok(85, type<string>) : err("access denied",type<int>)) |> bind
     return "{name}: health={health}"
 }
 [export]

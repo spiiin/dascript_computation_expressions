@@ -1,4 +1,8 @@
 options gen2
+expect 31403
+// diagnostic: ce_merge_sources
+// diagnostic: and_bind is unsupported for builder
+// anchor: and_bind
 require ../packages/computation/computation_macro.das
 require ../examples/builders/reader_builder.das
 [export]

@@ -4,6 +4,17 @@ require ./builder_protocol.das public
 require daslib/strings_convert
 require daslib/strings_boost
 
+//! A text parser written as a computation expression: ``computation(ParserBuilder(text=...)) { ... }``
+//! reads the text one operation at a time (``parser_literal("x") |> bind``) and stops at the first
+//! failure. The outcome is a variant: ``parsed`` with the value, the position after it and a commit
+//! flag, or ``failure`` with a ``ParseDiagnostic``. Require it for small hand-written grammars
+//! with choice, repetition, backtracking and cut.
+
+//! Where and why a parse failed: ``position`` is the byte offset, ``line`` and ``column`` its
+//! 1-based coordinates, ``expected`` what the parser wanted there. ``committed``: the failure came
+//! after a ``parser_commit``, so alternatives are not tried. ``rewound``, ``rewind_position``: a
+//! ``parser_attempt`` backed out to that position. ``consumed``: input was read before failing.
+//! ``fatal``: a repeated parser matched without advancing; no combinator recovers from it.
 struct ParseDiagnostic {
     position:int
     line:int
@@ -15,52 +26,95 @@ struct ParseDiagnostic {
     consumed:bool
     fatal:bool
 }
+//! Builder and cursor of a parse: the ``text`` being read, the current byte ``position`` and whether
+//! this computation has committed. Start with ``ParserBuilder(text=source)``. A subgrammar called
+//! through ``parser_call`` receives a copy of the cursor and passes it to its own
+//! ``computation(cursor) { ... }``, which then reads from that position.
 struct ParserBuilder {
     text:string
     position:int
     committed:bool
 }
+//! The operation ``parser_literal`` returns: match ``text`` exactly.
 struct ParserLiteral {text:string}
+//! The operation ``parser_int`` returns.
 struct ParserInteger {_ce_marker:uint8}
+//! The operation ``parser_eof`` returns.
 struct ParserEnd {_ce_marker:uint8}
+//! The operation ``parser_spaces`` returns.
 struct ParserSpaces {_ce_marker:uint8}
+//! Marks the operation tuple that ``parser_choice`` returns.
 struct parserAlternativesTag {_ce_marker:uint8}
+//! Marks the operation tuple that ``parser_commit(source)`` returns.
 struct parserCutTag {_ce_marker:uint8}
+//! Marks the operation tuple that ``parser_attempt`` returns.
 struct parserAttemptTag {_ce_marker:uint8}
+//! Marks the operation tuple that ``parser_optional`` returns.
 struct parserOptionalTag {_ce_marker:uint8}
+//! Marks the operation tuple that ``parser_many`` and ``parser_many1`` return.
 struct parserRepeatTag {_ce_marker:uint8}
+//! Marks the operation tuple that ``parser_sep_by`` returns.
 struct parserSeparatedTag {_ce_marker:uint8}
 
-def parser_literal(text:string) {return ParserLiteral(text=text)}
-def parser_int() {return ParserInteger()}
-def parser_eof() {return ParserEnd()}
-def parser_spaces() {return ParserSpaces()}
-def parser_choice(left,right:auto) {return (parserAlternatives=parserAlternativesTag(),left=left,right=right)}
+//! Operation that matches ``text`` exactly at the current position and yields it as a ``string``.
+//! On a mismatch the failure points at the first byte that differs.
+def parser_literal(text:string) => ParserLiteral(text=text)
+//! Operation that reads a decimal ``int`` with an optional leading ``-``. It fails expecting
+//! ``integer`` when there are no digits and ``32-bit integer`` when the number does not fit.
+def parser_int() => ParserInteger()
+//! Operation that succeeds only at the end of the text. It reads nothing.
+def parser_eof() => ParserEnd()
+//! Operation that skips spaces, tabs and line breaks. It succeeds also when there are none.
+def parser_spaces() => ParserSpaces()
+//! Ordered choice: tries ``left`` and, if that fails, ``right`` from the same position, even when
+//! ``left`` had read input. ``right`` is not tried after a committed or fatal failure of ``left``.
+//! When both fail, the failure that got further is reported; at equal positions their ``expected``
+//! texts are joined with ``or``. Both sides must yield the same value type.
+def parser_choice(left,right:auto) =>
+    (parserAlternatives=parserAlternativesTag(),left=left,right=right)
 
-def parser_ok(value:auto(T); position:int; committed:bool=false) {
-    static_assert(typeinfo can_copy(type<T>),"ParserBuilder requires copyable parsed values")
-    return variant<parsed:tuple<value:T -const -&;position:int;committed:bool>;failure:ParseDiagnostic>(parsed=(value=value,position=position,committed=committed))
+//! Builds a ``parsed`` outcome by hand: ``value``, the ``position`` after it and the commit flag.
+//! Use it in a ``parser_call`` callback that does not go through ``computation``. The value must be
+//! copyable; ``parser_ok_move`` takes the others.
+def parser_ok(value:auto(TT); position:int; committed:bool=false) {
+    static_assert(typeinfo can_copy(type<TT>),"ParserBuilder requires copyable parsed values")
+    return variant<parsed:tuple<value:TT -const -&;position:int;committed:bool>;failure:ParseDiagnostic>(parsed=(value=value,position=position,committed=committed))
 }
-def parser_error(builder:ParserBuilder; position:int; expected:string; unused:type<auto(T)>) {
+//! Builds a ``failure`` outcome at ``position`` with the given ``expected`` text; ``unused`` names
+//! the value type the outcome would have carried. Line and column are counted from the builder's
+//! text, and the builder's commit flag is copied into the diagnostic.
+def parser_error(builder:ParserBuilder; position:int; expected:string; unused:type<auto(TT)>) {
     var line=1
     var column=1
-    for(i in range(position)) {
-        if(character_at(builder.text,i)==10) {line++;column=1} else {column++}
+    peek_data(builder.text) $(text) {
+        for(i in range(position)) {
+            if(int(text[i])==10) {line++;column=1} else {column++}
+        }
     }
-    return variant<parsed:tuple<value:T -const -&;position:int;committed:bool>;failure:ParseDiagnostic>(failure=ParseDiagnostic(position=position,line=line,column=column,expected=expected,committed=builder.committed,consumed=position>builder.position))
+    return variant<parsed:tuple<value:TT -const -&;position:int;committed:bool>;failure:ParseDiagnostic>(failure=ParseDiagnostic(position=position,line=line,column=column,expected=expected,committed=builder.committed,consumed=position>builder.position))
 }
+//! Runs one parser operation at the builder's position and returns its outcome; the builder itself
+//! is not advanced. There is an overload for every operation. Inside ``computation`` write
+//! ``op |> bind`` instead, which also moves the cursor past what was read.
 def parser_read(builder:ParserBuilder; op:ParserLiteral) {
     var matched=0
-    while(matched<length(op.text) && builder.position+matched<length(builder.text)
-            && character_at(builder.text,builder.position+matched)==character_at(op.text,matched)) {matched++}
+    peek_data(builder.text) $(text) {
+        peek_data(op.text) $(literal) {
+            while(matched<length(literal) && builder.position+matched<length(text)
+                    && text[builder.position+matched]==literal[matched]) {matched++}
+        }
+    }
     if(matched!=length(op.text)) {return parser_error(builder,builder.position+matched,"'{op.text}'",type<string>)}
     return parser_ok(op.text,builder.position+matched,builder.committed)
 }
-def parser_read(builder:ParserBuilder; op:ParserInteger) {
+def parser_read(builder:ParserBuilder; _op:ParserInteger) {
     var end=builder.position
-    if(end<length(builder.text) && character_at(builder.text,end)==45) {end++}
-    let digits=end
-    while(end<length(builder.text) && character_at(builder.text,end)>=48 && character_at(builder.text,end)<=57) {end++}
+    var digits=end
+    peek_data(builder.text) $(text) {
+        if(end<length(text) && int(text[end])==45) {end++}
+        digits=end
+        while(end<length(text) && int(text[end])>=48 && int(text[end])<=57) {end++}
+    }
     if(end==digits) {return parser_error(builder,end,"integer",type<int>)}
     let number=try_to_int(slice(builder.text,builder.position,end))
     if(!is_ok(number)) {
@@ -70,21 +124,23 @@ def parser_read(builder:ParserBuilder; op:ParserInteger) {
     }
     return parser_ok(unwrap(number),end,builder.committed)
 }
-def parser_read(builder:ParserBuilder; op:ParserSpaces) {
+def parser_read(builder:ParserBuilder; _op:ParserSpaces) {
     var end=builder.position
-    while(end<length(builder.text)) {
-        let ch=character_at(builder.text,end)
-        if(ch!=32 && ch!=9 && ch!=10 && ch!=13) {break}
-        end++
+    peek_data(builder.text) $(text) {
+        while(end<length(text)) {
+            let ch=int(text[end])
+            if(ch!=32 && ch!=9 && ch!=10 && ch!=13) {break}
+            end++
+        }
     }
     return parser_ok(CeUnit(),end,builder.committed)
 }
-def parser_read(builder:ParserBuilder; op:ParserEnd) {
+def parser_read(builder:ParserBuilder; _op:ParserEnd) {
     if(builder.position!=length(builder.text)) {return parser_error(builder,builder.position,"end of input",type<CeUnit>)}
     return parser_ok(CeUnit(),builder.position,builder.committed)
 }
 // Ordered choice preserves the original always-backtracking contract unless cut.
-def parser_read(builder:ParserBuilder; op:tuple<parserAlternatives:parserAlternativesTag;left:auto(L);right:auto(R)>) {
+def parser_read(builder:ParserBuilder; op:tuple<parserAlternatives:parserAlternativesTag;left:auto(LL);right:auto(RR)>) {
     var cursor=builder
     cursor.committed=false
     var inscope left <- parser_read(cursor,op.left)
@@ -113,42 +169,47 @@ def parser_read(builder:ParserBuilder; op:tuple<parserAlternatives:parserAlterna
     return <- right
 }
 
-def parser_ok_move(var value:auto(T); position:int; committed:bool=false) {
-    var inscope result:variant<parsed:tuple<value:T -const -&;position:int;committed:bool>;failure:ParseDiagnostic>
+//! Like ``parser_ok``, but moves ``value`` into the outcome, for values that cannot be copied such
+//! as arrays. The caller's variable is left empty.
+def parser_ok_move(var value:auto(TT); position:int; committed:bool=false) {
+    var inscope result:variant<parsed:tuple<value:TT -const -&;position:int;committed:bool>;failure:ParseDiagnostic>
     // Separate assignment avoids shallow copies in SDK AOT variant initializers.
     (result as parsed).value <- value
     (result as parsed).position=position
     (result as parsed).committed=committed
     return <- result
 }
-def parser_failure(diagnostic:ParseDiagnostic; unused:type<auto(T)>) {
-    return <- variant<parsed:tuple<value:T -const -&;position:int;committed:bool>;failure:ParseDiagnostic>(failure=diagnostic)
-}
+//! Wraps an existing ``diagnostic`` into a ``failure`` outcome whose value type is named by
+//! ``unused``. Use it to pass a failure on under a different value type.
+def parser_failure(diagnostic:ParseDiagnostic; unused:type<auto(TT)>) =>
+    <- variant<parsed:tuple<value:TT -const -&;position:int;committed:bool>;failure:ParseDiagnostic>(failure=diagnostic)
 
 // Owning outcomes allow repetitions to return arrays without hidden cloning.
-def ce_protocol(builder:ParserBuilder) {return CeOwnedProtocol()}
-def ce_unwrap(builder:ParserBuilder; var source:variant<parsed:tuple<value:auto(T);position:int;committed:bool>;failure:ParseDiagnostic>) : T& {
+def ce_protocol(_builder:ParserBuilder) => CeOwnedProtocol()
+def ce_unwrap(builder:ParserBuilder; var source:variant<parsed:tuple<value:auto(TT);position:int;committed:bool>;failure:ParseDiagnostic>) : TT& {
     unsafe {return (source as parsed).value}
 }
-def ce_return(builder:ParserBuilder; value:auto) {return parser_ok(value,builder.position,builder.committed)}
-def ce_return_move(builder:ParserBuilder; var value:auto) {return <- parser_ok_move(value,builder.position,builder.committed)}
-def ce_zero(builder:ParserBuilder) {return parser_ok(CeUnit(),builder.position,builder.committed)}
-def ce_delay(builder:ParserBuilder; body:block<():auto(R)>) : R {return <- invoke(body)}
-def ce_bind(var builder:ParserBuilder; var source:variant<parsed:tuple<value:auto(T);position:int;committed:bool>;failure:ParseDiagnostic>;
-            next:block<(var value:auto(V)):auto(R)>) : R {
+def ce_return(builder:ParserBuilder; value:auto) =>
+    parser_ok(value,builder.position,builder.committed)
+def ce_return_move(builder:ParserBuilder; var value:auto) =>
+    <- parser_ok_move(value,builder.position,builder.committed)
+def ce_zero(builder:ParserBuilder) => parser_ok(CeUnit(),builder.position,builder.committed)
+def ce_delay(builder:ParserBuilder; body:block<():auto(RR)>) : RR => <- invoke(body)
+def ce_bind(var builder:ParserBuilder; var source:variant<parsed:tuple<value:auto(TT);position:int;committed:bool>;failure:ParseDiagnostic>;
+            next:block<(var value:auto(VV)):auto(RR)>) : RR {
     var inscope owner <- source
     if(owner is failure) {
         var diagnostic=owner as failure
         diagnostic.committed = diagnostic.committed || builder.committed
-        return <- variant type<R>(failure=diagnostic)
+        return <- variant type<RR>(failure=diagnostic)
     }
     builder.position=(owner as parsed).position
     builder.committed = builder.committed || (owner as parsed).committed
-    var inscope result:R
+    var inscope result:RR
     result <- invoke(next,(owner as parsed).value)
     return <- result
 }
-def ce_return_from(var builder:ParserBuilder; var source:variant<parsed:tuple<value:auto(T);position:int;committed:bool>;failure:ParseDiagnostic>) {
+def ce_return_from(var builder:ParserBuilder; var source:variant<parsed:tuple<value:auto(TT);position:int;committed:bool>;failure:ParseDiagnostic>) {
     if(source is parsed) {
         builder.position=(source as parsed).position
         (source as parsed).committed = (source as parsed).committed || builder.committed
@@ -157,13 +218,14 @@ def ce_return_from(var builder:ParserBuilder; var source:variant<parsed:tuple<va
     return <- source
 }
 def ce_combine(var builder:ParserBuilder; first:variant<parsed:tuple<value:CeUnit;position:int;committed:bool>;failure:ParseDiagnostic>;
-               next:block<():auto(R)>) : R {
-    if(first is failure) {return <- variant type<R>(failure=first as failure)}
+               next:block<():auto(RR)>) : RR {
+    if(first is failure) {return <- variant type<RR>(failure=first as failure)}
     builder.position=(first as parsed).position
     builder.committed = builder.committed || (first as parsed).committed
     return <- invoke(next)
 }
-def ce_loop_failed(builder:ParserBuilder; step:variant<parsed:tuple<value:CeUnit;position:int;committed:bool>;failure:ParseDiagnostic>) {return step is failure}
+def ce_loop_failed(_builder:ParserBuilder; step:variant<parsed:tuple<value:CeUnit;position:int;committed:bool>;failure:ParseDiagnostic>) =>
+    step is failure
 def ce_collect_append(var builder:ParserBuilder; var first:variant<parsed:tuple<value:CeUnit;position:int;committed:bool>;failure:ParseDiagnostic>;
                       step:variant<parsed:tuple<value:CeUnit;position:int;committed:bool>;failure:ParseDiagnostic>) {
     if(first is failure) {return}
@@ -173,45 +235,67 @@ def ce_collect_append(var builder:ParserBuilder; var first:variant<parsed:tuple<
         builder.committed = builder.committed || (step as parsed).committed
     }
 }
-def ce_try_finally(builder:ParserBuilder; body:block<():auto(R)>; cleanup:block<():void>) : R {
-    var inscope result:R
+def ce_try_finally(builder:ParserBuilder; body:block<():auto(RR)>; cleanup:block<():void>) : RR {
+    var inscope result:RR
     result <- invoke(body)
     invoke(cleanup)
     return <- result
 }
-def ce_using(builder:ParserBuilder; resource:auto(T); body:block<(item:T):auto(R)>; cleanup:block<(var item:T):void>) : R {
+def ce_using(builder:ParserBuilder; resource:auto(TT); body:block<(item:TT):auto(RR)>; cleanup:block<(var item:TT):void>) : RR {
     var owner=resource
-    var inscope result:R
+    var inscope result:RR
     result <- invoke(body,owner)
     invoke(cleanup,owner)
     return <- result
 }
 
-// Named subgrammar: a function pointer owns no stack captures.
-def parser_call(callback:function<(cursor:ParserBuilder):auto(R)>) {
-    return (parserFunction=true,callback=callback)
-}
-def parser_read(builder:ParserBuilder; op:tuple<parserFunction:bool;callback:function<(cursor:ParserBuilder):auto(R)>>) : R {
-    return <- invoke(op.callback,builder)
-}
+//! Operation that runs a named subgrammar: ``callback`` receives a copy of the cursor and returns
+//! an outcome, usually from its own ``computation(cursor) { ... }``. It takes a function pointer
+//! (``@@grammar``), which captures nothing from the stack.
+def parser_call(callback:function<(cursor:ParserBuilder):auto(RR)>) =>
+    (parserFunction=true,callback=callback)
+def parser_read(builder:ParserBuilder; op:tuple<parserFunction:bool;callback:function<(cursor:ParserBuilder):auto(RR)>>) : RR =>
+    <- invoke(op.callback,builder)
 
+//! The operation ``parser_commit()`` returns.
 struct ParserCommit {_ce_marker:uint8}
-def parser_commit() {return ParserCommit()}
-def parser_commit(source:auto) {return (parserCut=parserCutTag(),source=source)}
-def parser_attempt(source:auto) {return (parserAttempt=parserAttemptTag(),source=source)}
-def parser_optional(source:auto) {return (parserOptional=parserOptionalTag(),source=source)}
-def parser_many(source:auto) {return (parserRepeat=parserRepeatTag(),source=source,minimum=0)}
-def parser_many1(source:auto) {return (parserRepeat=parserRepeatTag(),source=source,minimum=1)}
-def parser_sep_by(item,separator:auto) {return (parserSeparated=parserSeparatedTag(),item=item,separator=separator)}
+//! Cut: an operation that reads nothing and commits the current computation. A failure after it is
+//! ``committed``, so an enclosing ``parser_choice`` does not try its other branch, and
+//! ``parser_optional``, ``parser_many`` and ``parser_sep_by`` fail instead of taking it as "absent".
+def parser_commit() => ParserCommit()
+//! Runs ``source`` and marks its outcome committed, whether it parsed or failed: if ``source``
+//! fails, an enclosing ``parser_choice`` does not try its other branch.
+def parser_commit(source:auto) => (parserCut=parserCutTag(),source=source)
+//! Runs ``source`` as a unit that either matches or backs out: a failure is marked ``rewound`` to
+//! the starting position and loses a commit made inside ``source``, so ``parser_choice``,
+//! ``parser_optional`` and the repetitions take it as no match there. Fatal failures pass unchanged.
+def parser_attempt(source:auto) => (parserAttempt=parserAttemptTag(),source=source)
+//! Makes ``source`` optional. Yields ``some(value)`` when it matches, and ``none`` without moving
+//! when it fails at its starting position with no input read or was rewound there by
+//! ``parser_attempt``. A failure after reading input, a committed or a fatal one stays a failure.
+def parser_optional(source:auto) => (parserOptional=parserOptionalTag(),source=source)
+//! Repeats ``source`` zero or more times and yields the values as an ``array``; bind it with
+//! ``var items & = ... |> bind``. It ends at the first repetition that fails without reading input;
+//! one that fails part-way fails the whole operation unless it is wrapped in ``parser_attempt``.
+//! A ``source`` that matches without advancing is a fatal failure.
+def parser_many(source:auto) => (parserRepeat=parserRepeatTag(),source=source,minimum=0)
+//! Like ``parser_many``, but requires at least one match; without one it returns the failure of
+//! the first repetition.
+def parser_many1(source:auto) => (parserRepeat=parserRepeatTag(),source=source,minimum=1)
+//! Reads zero or more ``item`` separated by ``separator`` and yields the items as an ``array``;
+//! separator values are dropped. An item must follow every separator, so a trailing separator is a
+//! failure. An ``item`` that matches without advancing is a fatal failure.
+def parser_sep_by(item,separator:auto) =>
+    (parserSeparated=parserSeparatedTag(),item=item,separator=separator)
 
-def parser_read(builder:ParserBuilder; op:ParserCommit) {return parser_ok(CeUnit(),builder.position,true)}
-def parser_read(builder:ParserBuilder; op:tuple<parserCut:parserCutTag;source:auto(P)>) {
+def parser_read(builder:ParserBuilder; _op:ParserCommit) => parser_ok(CeUnit(),builder.position,true)
+def parser_read(builder:ParserBuilder; op:tuple<parserCut:parserCutTag;source:auto(PP)>) {
     var inscope result <- parser_read(builder,op.source)
     if(result is failure) {(result as failure).committed=true}
     else {(result as parsed).committed=true}
     return <- result
 }
-def parser_read(builder:ParserBuilder; op:tuple<parserAttempt:parserAttemptTag;source:auto(P)>) {
+def parser_read(builder:ParserBuilder; op:tuple<parserAttempt:parserAttemptTag;source:auto(PP)>) {
     var cursor=builder
     cursor.committed=false
     var inscope result <- parser_read(cursor,op.source)
@@ -224,10 +308,9 @@ def parser_read(builder:ParserBuilder; op:tuple<parserAttempt:parserAttemptTag;s
     if(result is parsed) {(result as parsed).committed = (result as parsed).committed || builder.committed}
     return <- result
 }
-def private parser_absent(diagnostic:ParseDiagnostic; start:int) {
-    return !diagnostic.fatal && !diagnostic.committed && ((!diagnostic.consumed && diagnostic.position==start) || (diagnostic.rewound && diagnostic.rewind_position==start))
-}
-def parser_read(builder:ParserBuilder; op:tuple<parserOptional:parserOptionalTag;source:auto(P)>) {
+def private parser_absent(diagnostic:ParseDiagnostic; start:int) =>
+    !diagnostic.fatal && !diagnostic.committed && ((!diagnostic.consumed && diagnostic.position==start) || (diagnostic.rewound && diagnostic.rewind_position==start))
+def parser_read(builder:ParserBuilder; op:tuple<parserOptional:parserOptionalTag;source:auto(PP)>) {
     var cursor=builder
     cursor.committed=false
     var inscope result <- parser_read(cursor,op.source)
@@ -245,12 +328,12 @@ def parser_read(builder:ParserBuilder; op:tuple<parserOptional:parserOptionalTag
     return <- parser_ok_move(value,(result as parsed).position,builder.committed || (result as parsed).committed)
 }
 def private parser_progress_diagnostic(builder:ParserBuilder; operationName:string) {
-    var result=parser_error(builder,builder.position,"{operationName}: parser succeeded without advancing input",type<CeUnit>)
+    let result=parser_error(builder,builder.position,"{operationName}: parser succeeded without advancing input",type<CeUnit>)
     var diagnostic=result as failure
     diagnostic.fatal=true
     return diagnostic
 }
-def parser_read(builder:ParserBuilder; op:tuple<parserRepeat:parserRepeatTag;source:auto(P);minimum:int>) {
+def parser_read(builder:ParserBuilder; op:tuple<parserRepeat:parserRepeatTag;source:auto(PP);minimum:int>) {
     var cursor=builder
     cursor.committed=false
     var inscope values:array<typedecl((parser_read(cursor,op.source) as parsed).value) -const -&>
@@ -278,7 +361,7 @@ def parser_read(builder:ParserBuilder; op:tuple<parserRepeat:parserRepeatTag;sou
     if(failed) {return <- parser_failure(diagnostic,type<typedecl(values)>)}
     return <- parser_ok_move(values,cursor.position,committed)
 }
-def parser_read(builder:ParserBuilder; op:tuple<parserSeparated:parserSeparatedTag;item:auto(P);separator:auto(S)>) {
+def parser_read(builder:ParserBuilder; op:tuple<parserSeparated:parserSeparatedTag;item:auto(PP);separator:auto(SS)>) {
     var cursor=builder
     cursor.committed=false
     var inscope values:array<typedecl((parser_read(cursor,op.item) as parsed).value) -const -&>
@@ -320,26 +403,33 @@ def parser_read(builder:ParserBuilder; op:tuple<parserSeparated:parserSeparatedT
     return <- parser_ok_move(values,cursor.position,committed)
 }
 
-def ce_source(builder:ParserBuilder; op:ParserLiteral) {return <- parser_read(builder,op)}
+def ce_source(builder:ParserBuilder; op:ParserLiteral) => <- parser_read(builder,op)
 
-def ce_source(builder:ParserBuilder; op:ParserInteger) {return <- parser_read(builder,op)}
+def ce_source(builder:ParserBuilder; op:ParserInteger) => <- parser_read(builder,op)
 
-def ce_source(builder:ParserBuilder; op:ParserEnd) {return <- parser_read(builder,op)}
+def ce_source(builder:ParserBuilder; op:ParserEnd) => <- parser_read(builder,op)
 
-def ce_source(builder:ParserBuilder; op:ParserSpaces) {return <- parser_read(builder,op)}
+def ce_source(builder:ParserBuilder; op:ParserSpaces) => <- parser_read(builder,op)
 
-def ce_source(builder:ParserBuilder; op:ParserCommit) {return <- parser_read(builder,op)}
+def ce_source(builder:ParserBuilder; op:ParserCommit) => <- parser_read(builder,op)
 
-def ce_source(builder:ParserBuilder; op:tuple<parserAlternatives:parserAlternativesTag;left:auto(L);right:auto(R)>) {return <- parser_read(builder,op)}
+def ce_source(builder:ParserBuilder; op:tuple<parserAlternatives:parserAlternativesTag;left:auto(LL);right:auto(RR)>) =>
+    <- parser_read(builder,op)
 
-def ce_source(builder:ParserBuilder; op:tuple<parserFunction:bool;callback:function<(cursor:ParserBuilder):auto(R)>>) {return <- parser_read(builder,op)}
+def ce_source(builder:ParserBuilder; op:tuple<parserFunction:bool;callback:function<(cursor:ParserBuilder):auto(RR)>>) =>
+    <- parser_read(builder,op)
 
-def ce_source(builder:ParserBuilder; op:tuple<parserCut:parserCutTag;source:auto(P)>) {return <- parser_read(builder,op)}
+def ce_source(builder:ParserBuilder; op:tuple<parserCut:parserCutTag;source:auto(PP)>) =>
+    <- parser_read(builder,op)
 
-def ce_source(builder:ParserBuilder; op:tuple<parserAttempt:parserAttemptTag;source:auto(P)>) {return <- parser_read(builder,op)}
+def ce_source(builder:ParserBuilder; op:tuple<parserAttempt:parserAttemptTag;source:auto(PP)>) =>
+    <- parser_read(builder,op)
 
-def ce_source(builder:ParserBuilder; op:tuple<parserOptional:parserOptionalTag;source:auto(P)>) {return <- parser_read(builder,op)}
+def ce_source(builder:ParserBuilder; op:tuple<parserOptional:parserOptionalTag;source:auto(PP)>) =>
+    <- parser_read(builder,op)
 
-def ce_source(builder:ParserBuilder; op:tuple<parserRepeat:parserRepeatTag;source:auto(P);minimum:int>) {return <- parser_read(builder,op)}
+def ce_source(builder:ParserBuilder; op:tuple<parserRepeat:parserRepeatTag;source:auto(PP);minimum:int>) =>
+    <- parser_read(builder,op)
 
-def ce_source(builder:ParserBuilder; op:tuple<parserSeparated:parserSeparatedTag;item:auto(P);separator:auto(S)>) {return <- parser_read(builder,op)}
+def ce_source(builder:ParserBuilder; op:tuple<parserSeparated:parserSeparatedTag;item:auto(PP);separator:auto(SS)>) =>
+    <- parser_read(builder,op)

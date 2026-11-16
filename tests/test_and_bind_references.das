@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 
 def borrowed(var values:array<int>) : array<int>& { unsafe { return values } }
@@ -9,12 +10,12 @@ def main() {
     {
         var inscope holder=Holder()
         holder.values |> push(3)
-        var inscope values <- computation(ListBuilder()) {
+        var inscope values <- computation(ListBuilder(type<int>)) {
             let p = holder.values |> and_bind(borrowed(holder.values)) |> and_bind([4]) |> bind
             return p.first.first+p.first.second+p.second
         }
         assert(length(holder.values)==1 && values[0]==10)
-        var inscope nested <- computation(ListBuilder()) {
+        var inscope nested <- computation(ListBuilder(type<int>)) {
             let p = [1,2] |> and_bind([10] |> and_bind([100])) |> bind
             return p.first+p.second.first+p.second.second
         }
@@ -23,4 +24,9 @@ def main() {
     let after=heap_bytes_allocated()
     assert(after==baseline)
     print("and_bind reference checks OK\n")
+}
+
+[test]
+def test_and_bind_references() {
+    main()
 }

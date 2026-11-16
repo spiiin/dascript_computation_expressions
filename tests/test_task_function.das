@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation.das
 require ../packages/computation_task/task_runtime.das
 
@@ -51,7 +52,7 @@ def countdown(start : int) : array<int> {
 
 [task_result]
 def checked(value : int) : int {
-    let accepted = task_after_polls(1, value < 0 ? result_error("negative", type<int>) : result_ok(value)) |> bind
+    let accepted = task_after_polls(1, value < 0 ? err("negative", type<int>) : ok(value, type<string>)) |> bind
     return accepted
 }
 
@@ -69,7 +70,7 @@ def private hidden() : int {
 
 // The value type may come from an argument of a generic function.
 [task]
-def twice(value : auto(T)) : T {
+def twice(value : auto(TT)) : TT {
     return value + value
 }
 
@@ -137,7 +138,7 @@ def relay(source : int; stream : int) : int {
     return waited
 }
 
-def finish(var task : Task<auto(T)>) {
+def finish(var task : Task<auto(TT)>) {
     while (task_poll(task) == TaskStatus.Waiting) {}
     static_if (typeinfo can_copy(task.value)) {
         return task_value(task)
@@ -217,4 +218,9 @@ def main() {
     var inscope relayed <- relay(1, 2)
     verify(finish(relayed) == 6)
     print("Task function checks OK\n")
+}
+
+[test]
+def test_task_function() {
+    main()
 }

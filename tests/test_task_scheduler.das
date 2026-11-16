@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_scheduler.das
 var trace=""
@@ -71,7 +72,7 @@ def main() {
     verify(task_tick(scheduler,12)==0 && trace=="xzxz")
     var inscope outcomes <- task_scheduler(type<Result<int;string>>)
     var domainTask <- computation(TaskResultBuilder(type<int>)) {
-        let n=task_after_polls(0,result_error("denied",type<int>)) |> bind
+        let n=task_after_polls(0,err("denied",type<int>)) |> bind
         panic("must not run")
         return n
     }
@@ -80,4 +81,9 @@ def main() {
     let result=task_value(outcomes,domainError)
     verify(result is err && result as err=="denied")
     print("Task scheduler checks OK\n")
+}
+
+[test]
+def test_task_scheduler() {
+    main()
 }

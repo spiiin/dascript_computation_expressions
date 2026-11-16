@@ -4,8 +4,8 @@ require ../support/report_builder.das
 
 def buy(gold:int) {
     return computation(ReportBuilder(title="Buy sword")) {
-        let p=result_ok(gold) |> and_bind(result_ok(30)) |> bind
-        if (p.first<p.second) { return result_error("Not enough gold",type<int>) |> return_from }
+        let p=ok(gold, type<string>) |> and_bind(ok(30, type<string>)) |> bind
+        if (p.first<p.second) { return err("Not enough gold",type<int>) |> return_from }
         else { return p.first-p.second }
     }
 }

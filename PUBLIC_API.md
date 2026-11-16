@@ -42,7 +42,7 @@ task_result_when_all, task_race и [and_bind для Task](CE_SEMANTICS.md); см
 | TaskResultBuilder(type<T>, type<E>) | То же с собственным типом ошибки: Task<Result<T;E>> |
 | AsyncSequenceBuilder(type<T>) | Асинхронный stream; next возвращает Task<Option<T>> |
 
-ListBuilder()/SequenceBuilder() выбирают int. Обычные Value CE выполняются
+Builders коллекций и последовательностей всегда получают тип элемента. Обычные Value CE выполняются
 немедленно; Sequence/Coroutine — при обходе/возобновлении. Обычные
 Result/Option используют копируемые данные. Для move-only нужны owning builders
 или соответствующий List/Sequence. По умолчанию нет сетевого async или потоков.
@@ -61,12 +61,12 @@ task_error, task_cancel, task_scope, task_from_poll, task_after_polls.
 
 | Операция | Назначение |
 |---|---|
-| `ok(value,type<string>)`, `err(message,type<T>)` | Стандартные конструкторы Result; совместимые обёртки `result_ok` / `result_error` сохранены |
+| `ok(value,type<string>)`, `err(message,type<T>)` | Стандартные конструкторы Result из daslib/result |
 | `some(value)`, `none(type<T>)` | Стандартные конструкторы Option из daslib/option |
 | `move_ok(value[,type<E>])`, `move_some(value)` | Перемещение: одноаргументный move_ok — обёртка для Result<T,string>, остальные — стандартные функции |
-| `ce_move_some(value)` | Стандартный Option с обходом AOT-перемещения tuple; см. STANDARD_TYPES.md |
+| `ce_move_some(value)` | Стандартный Option с обходом AOT-перемещения tuple |
 | `move_error(message, type<T>)`, `move_none(type<T>)` | Неуспешные owning-результаты |
-| `validation_ok(value)`, `validation_error(message,type<T>)`, `left |> validation_zip(right)` | Проверки и объединение независимых ошибок |
+| `validation_ok(value)`, `validation_error(message,type<T>)`, `left |> validation_zip(right)` | Проверки и объединение независимых ошибок; их тип называется `Validation<T>` |
 | `deferred(builder,data) $(snapshot) {...}`, `deferred(builder) {...}` | Владеющий снимок для повторных запусков |
 | `run_deferred(task)` | Новый запуск; task передаётся изменяемым владельцем |
 | `sequence_each(source, action)` | Обход и закрытие источника |
@@ -266,7 +266,7 @@ def first_reading(var readings : AsyncSequence<int>) : Task<Option<int>> { ... }
 Имя — тот же структурный тип, что и значение конструктора, поэтому старый код
 с `typedecl(...)` остаётся совместимым. `TaskScheduler<T>` и
 `TaskJobStream<T;Input>` объявляют переменную, поле или параметр с конкретными
-типами; вывести `auto(T)` из аргумента через них нельзя.
+типами; вывести `auto(TT)` из аргумента через них нельзя.
 
 ## Полный Task API
 
@@ -295,7 +295,7 @@ Task Failed/Cancelled останавливает stream; Result.Error/Option.Non
 move-only payload, deferred и shared-await. Task используют task_value для
 копии/clone и task_take для передачи владения. Combinators: task_when_all и
 task_result_when_all (пара и массив), task_race и task_result_race.
-Реальная сеть — task_tcp_request_line из task_tcp.das, см. TASK_TCP.md.
+Реальная сеть — task_tcp_request_line из task_tcp.das; пример — `examples/task_tcp_demo.das`.
 
 ## Ожидание событий
 

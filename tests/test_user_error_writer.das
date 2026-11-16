@@ -1,4 +1,9 @@
 options gen2
+expect 30341:2
+expect 30838
+// diagnostic: can't locate variable 'missing_writer'
+// anchor: missing_writer
+// first
 require ../packages/computation/computation.das
 require ../examples/builders/computation_effects.das
 
@@ -11,5 +16,4 @@ def main() {
         let b = writer_value(a + 1, "two;") |> bind
         return a + b + missing_writer
     }
-    print("{result}\n")
 }

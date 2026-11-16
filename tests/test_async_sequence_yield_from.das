@@ -1,5 +1,6 @@
 options gen2
 options max_infer_passes=256
+require dastest/testing_boost public
 require ../packages/computation/deferred_computation.das
 require ../packages/computation_task/async_sequence_builder.das
 require ../packages/computation_task/task_scheduler.das
@@ -121,7 +122,7 @@ def cancelled_child() {
 }
 
 def copy_replay() {
-    var inscope saved <- deferred(AsyncSequenceBuilder(),4) $(value) {yield value}
+    var inscope saved <- deferred(AsyncSequenceBuilder(type<int>),4) $(value) {yield value}
     return <- run_deferred(saved)
 }
 
@@ -240,10 +241,10 @@ def checks() {
     }
     // Copyable elements, empty delegation, recursive delegation, continuation.
     {
-        var inscope stream <- computation(AsyncSequenceBuilder()) {
-            computation(AsyncSequenceBuilder()) {} |> yield_from
-            computation(AsyncSequenceBuilder()) {
-                computation(AsyncSequenceBuilder()) {yield 1;yield 2} |> yield_from
+        var inscope stream <- computation(AsyncSequenceBuilder(type<int>)) {
+            computation(AsyncSequenceBuilder(type<int>)) {} |> yield_from
+            computation(AsyncSequenceBuilder(type<int>)) {
+                computation(AsyncSequenceBuilder(type<int>)) {yield 1;yield 2} |> yield_from
             } |> yield_from
             yield 3
             copy_replay() |> yield_from
@@ -265,4 +266,9 @@ def main() {
     for(i in range(16)) {checks()}
     verify(heap_bytes_allocated()==baseline)
     print("Async sequence yield_from checks OK\n")
+}
+
+[test]
+def test_async_sequence_yield_from() {
+    main()
 }

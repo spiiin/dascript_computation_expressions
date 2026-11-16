@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../support/deferred_move_support.das
 
 def list_replays() {
@@ -115,4 +116,9 @@ def main() {
         transferred_items();overlapping_runs();no_snapshot()
     }
     print("deferred move-only collection checks OK\n")
+}
+
+[test]
+def test_deferred_move_collections() {
+    main()
 }

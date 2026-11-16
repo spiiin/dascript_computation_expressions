@@ -1,4 +1,5 @@
 options gen2
+require dastest/testing_boost public
 require ../packages/computation/computation_macro.das
 require ../packages/computation_task/task_scheduler.das
 require daslib/strings_boost
@@ -91,4 +92,9 @@ def main() {
     for(i in range(16)) {guards();identities();errors_and_close()}
     verify(heap_bytes_allocated()==baseline)
     print("Task scheduler safety checks OK\n")
+}
+
+[test]
+def test_task_scheduler_safety() {
+    main()
 }

@@ -1,10 +1,11 @@
 options gen2
+require dastest/testing_boost public
 require ../support/game_transaction.das
 struct Trace { attempted : int; after : int; condition : int; source : int; builder : int }
 def checked_step(var trace : Trace; index, fail_at : int) {
     trace.attempted++
-    if (index == fail_at) { return result_error("failure {index}", type<int>) }
-    return result_ok(index)
+    if (index == fail_at) { return err("failure {index}", type<int>) }
+    return ok(index, type<string>)
 }
 def counted_builder(var trace : Trace) { trace.builder++; return StateResultBuilder(10) }
 def source(var trace : Trace; count : int) : range { trace.source++; return range(count) }
@@ -85,7 +86,7 @@ def test_nested_loops(fail_at : int) {
 def child(initial : int; fail : bool) {
     return computation(StateResultBuilder(initial)) {
         state_put(initial + 5) |> bind
-        if (fail) { return result_error("child failed", type<string>) |> return_from }
+        if (fail) { return err("child failed", type<string>) |> return_from }
         else { return "child committed" }
     }
 }
@@ -114,7 +115,7 @@ def test_composition() {
         child(50, false) |> bind
         let current = state_get() |> bind
         assert(current == 55)
-        return result_error("later failure", type<int>) |> return_from
+        return err("later failure", type<int>) |> return_from
     }
     assert(failed_after_commit.result is err && failed_after_commit.state == 10)
     let ignored_child = computation(StateResultBuilder(10)) {
@@ -165,14 +166,14 @@ def test_edges() {
         state_put(20) |> bind
         while (true) {
             state_put(30) |> bind
-            result_error("stop", type<int>) |> bind
+            err("stop", type<int>) |> bind
         }
     }
     assert(terminal_while.result is err && terminal_while.state == 10)
     // A Result returned without return_from is ordinary data, not failure.
     let payload = computation(StateResultBuilder(10)) {
         state_put(20) |> bind
-        return result_error("payload", type<int>)
+        return err("payload", type<int>)
     }
     assert(payload.result is ok && ((payload.result as ok) is err) && payload.state == 20)
     let initial = AdventureState(health=50, gold=30, potions=2, turns=0)
@@ -195,4 +196,9 @@ def main() {
     test_composition()
     test_edges()
     print("state/result checks OK: whole-transaction rollback, nested boundaries, exact effects, loops, snapshots\n")
+}
+
+[test]
+def test_state_result() {
+    main()
 }

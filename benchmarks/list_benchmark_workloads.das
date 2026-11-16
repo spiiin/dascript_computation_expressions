@@ -24,7 +24,7 @@ def bench_list_sum(values:array<int>) : int64 {
 def bench_list_variable_ce(seed:int) : int64 {
     var inscope left <- bench_numbers(seed%9)
     var inscope right <- bench_numbers(seed%13)
-    var inscope values <- computation(ListBuilder()) {
+    var inscope values <- computation(ListBuilder(type<int>)) {
         let a=left |> bind
         let b=right |> bind
         return a*b+seed

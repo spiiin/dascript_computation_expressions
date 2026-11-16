@@ -1,4 +1,6 @@
 options gen2
+expect 30197
+// diagnostic: can only be move-initialized
 require ../packages/computation/computation_macro.das
 require ../packages/computation/parser_builder.das
 [export]

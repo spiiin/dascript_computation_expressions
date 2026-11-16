@@ -1,5 +1,6 @@
 options gen2
 options max_infer_passes=1024
+require dastest/testing_boost public
 require ../packages/computation/deferred_computation.das
 require ../packages/computation_task/async_sequence_builder.das
 require ../packages/computation_task/task_scheduler.das
@@ -113,7 +114,7 @@ def drive(var stream:auto) {
     return sum
 }
 def numbers(first:int;count:int=2) {
-    return <- computation(AsyncSequenceBuilder()) {for(i in range(count)) {yield first+i}}
+    return <- computation(AsyncSequenceBuilder(type<int>)) {for(i in range(count)) {yield first+i}}
 }
 def saved_outer(wait:int=1) {
     var inscope initial:Snapshot
@@ -272,7 +273,7 @@ def checks() {
     }
     // Nested zip, copyable payloads and shadowed iterator names/source expressions.
     {
-        var inscope stream <- computation(AsyncSequenceBuilder()) {
+        var inscope stream <- computation(AsyncSequenceBuilder(type<int>)) {
             for(a,b in numbers(1),numbers(10)) {
                 for(a,b in numbers(a,1),numbers(b,1)) {yield a+b;break}
             }
@@ -351,4 +352,9 @@ def main() {
     for(i in range(16)) {checks()}
     verify(heap_bytes_allocated()==baseline)
     print("Async sequence zip checks OK\n")
+}
+
+[test]
+def test_async_sequence_zip() {
+    main()
 }
