@@ -43,7 +43,7 @@ def eager() {
     let current=heap_bytes_allocated();assert(current==baseline)
 }
 def make_stream() {
-    return <- computation(SequenceBuilder()) {
+    return <- computation(SequenceBuilder(type<int>)) {
         var a & = acquire_buffer(1) |> use_resource
         var b & = acquire_buffer(2) |> use_resource
         try_finally($ {

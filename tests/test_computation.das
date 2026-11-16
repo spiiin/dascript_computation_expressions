@@ -17,8 +17,8 @@ def record(var counts : Counts; step : int) {
 }
 def result_step(var counts : Counts; step, fail_at : int) : Result<int;string> {
     record(counts, step)
-    if (step == fail_at) { return result_error("failure at {step}", type<int>) }
-    return result_ok(step)
+    if (step == fail_at) { return err("failure at {step}", type<int>) }
+    return ok(step, type<string>)
 }
 def option_step(var counts : Counts; step, fail_at : int) : Option<int> {
     record(counts, step)
@@ -90,14 +90,14 @@ def main() {
             let n = some(7) |> bind
             return n + 1
         }
-        let number = result_ok(inner as some) |> bind
+        let number = ok(inner as some, type<string>) |> bind
         return number * 2
     }
     assert(nested is ok && (nested as ok) == 16)
     let plain = computation(OptionBuilder()) { return 42 }
     assert(plain is some && (plain as some) == 42)
     let forwarded = computation(ResultBuilder()) {
-        return result_error("forwarded", type<string>) |> return_from
+        return err("forwarded", type<string>) |> return_from
     }
     assert(forwarded is err && (forwarded as err) == "forwarded")
     let forwarded_none = computation(OptionBuilder()) {

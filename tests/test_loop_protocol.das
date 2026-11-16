@@ -87,7 +87,7 @@ def arrays(builder:auto) {
 def iterators(builder:auto) {
     releases=0
     reset()
-    var inscope stream <- computation(SequenceBuilder()) {
+    var inscope stream <- computation(SequenceBuilder(type<int>)) {
         try_finally($ { for (i in range(5)) {yield i} }, $ {releases++})
     }
     let r=computation(builder) {

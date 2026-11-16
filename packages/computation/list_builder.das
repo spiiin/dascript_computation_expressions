@@ -14,7 +14,6 @@ def ListBuilder(unused : type<auto(TT)>) {
     }
 }
 
-def ListBuilder() => ListBuilder(type<int>)
 def ce_zero(builder : tuple<kind : ListContext; element : auto(TT)>) : array<TT> {
     var inscope values : array<TT>
     return <- values

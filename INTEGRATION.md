@@ -49,7 +49,7 @@ require computation/computation
 [export]
 def main() {
     let result=computation(ResultBuilder()) {
-        let n=result_ok(20) |> bind
+        let n=ok(20, type<string>) |> bind
         return n+22
     }
     assert(result as ok==42)

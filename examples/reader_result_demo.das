@@ -11,7 +11,7 @@ def attack(rules:CombatRules; level,baseDamage:int) {
     return computation(ReaderResultBuilder(rules)) {
         let config=reader_ask() |> bind
         if (level<config.minimumLevel) {
-            result_error("Level too low",type<CeUnit>) |> bind
+            err("Level too low",type<CeUnit>) |> bind
         }
         return baseDamage*config.damageMultiplier
     }

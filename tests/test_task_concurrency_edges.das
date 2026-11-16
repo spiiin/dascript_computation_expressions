@@ -10,7 +10,7 @@ def array_job(n:int;fail:bool=false) {
     return <- computation(TaskResultBuilder(type<array<int>>)) {
         var data <- [n,n+1]
         task_after_polls(1,CeUnit()) |> bind
-        if(fail) {task_after_polls(0,result_error("no",type<CeUnit>)) |> bind}
+        if(fail) {task_after_polls(0,err("no",type<CeUnit>)) |> bind}
         return <- data
     }
 }
@@ -56,7 +56,7 @@ def checks() {
         task_semaphore_release(sem)
     }
     {
-        var inscope retry <- task_retry(@(attempt:int) {return <- task_after_polls(0,result_error("again",type<int>))},2,1l)
+        var inscope retry <- task_retry(@(attempt:int) {return <- task_after_polls(0,err("again",type<int>))},2,1l)
         task_poll(retry) // A nonzero delay requires the scheduler clock.
         verify(retry.status==TaskStatus.Failed)
     }

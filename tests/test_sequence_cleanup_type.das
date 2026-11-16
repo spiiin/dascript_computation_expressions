@@ -6,7 +6,7 @@ expect 30838
 require ../packages/computation/computation.das
 [export]
 def main() {
- var inscope seq <- computation(SequenceBuilder()) {
+ var inscope seq <- computation(SequenceBuilder(type<int>)) {
   try_finally($ {yield 1}, $ {return 42})
  }
 }

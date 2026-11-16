@@ -80,12 +80,12 @@ def task_channel_try_send(channel:tuple<tag:TaskChannelTag;owner:iterator<auto(S
 }
 def private ce_channel_send_poll(var op:auto(OO)?) {unsafe {
     var state=op.state
-    if(state.closed) {return task_ready(result_error(empty(state.error) ? "channel is closed" : state.error,type<CeUnit>))}
+    if(state.closed) {return task_ready(err(empty(state.error) ? "channel is closed" : state.error,type<CeUnit>))}
     if(op.id==uint64(0)) {op.id=ce_channel_register(state,true)}
     if(state.senders[0]==op.id && length(state.queue)<state.capacity) {
         state.queue |> emplace(op.value)
         ce_channel_remove(state.senders,op.id);op.id=uint64(0)
-        return task_ready(result_ok(CeUnit()))
+        return task_ready(ok(CeUnit(), type<string>))
     }
     return task_pending(type<Result<CeUnit;string>>)
 }}

@@ -5,7 +5,7 @@ require ../packages/computation/validation_builder.das
 [export]
 def main() {
     let result=computation(ResultBuilder()) {
-        let level=result_ok(12) |> bind
+        let level=ok(12, type<string>) |> bind
         return "Level {level}"
     }
     let optional=computation(OptionBuilder()) { let value=some(4) |> bind; return value*2 }
@@ -13,7 +13,7 @@ def main() {
         let fields=validation_ok("Mage") |> and_bind(validation_ok(12)) |> bind
         return "{fields.first}:{fields.second}"
     }
-    var inscope damage <- computation(ListBuilder()) {
+    var inscope damage <- computation(ListBuilder(type<int>)) {
         let stats=fixed_array(10,20,30) |> bind
         return stats*2
     }

@@ -8,7 +8,7 @@ require ../examples/builders/computation_effects.das
 [export]
 def main() {
     let invalid = computation(WriterBuilder()) {
-        result_ok(1) |> bind
+        ok(1, type<string>) |> bind
     }
     print("{invalid}\n")
 }

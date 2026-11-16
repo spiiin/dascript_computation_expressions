@@ -15,13 +15,13 @@ def check() {
     let p1=run_deferred(parser)
     let p2=run_deferred(parser)
     assert((p1 as parsed).value==42 && (p2 as parsed).value==42)
-    var inscope query <- deferred(QueryBuilder(),3) $(count) {
+    var inscope query <- deferred(QueryBuilder(type<int>),3) $(count) {
         for(i in range(count)) {yield i+1}
     }
     var inscope q1 <- run_deferred(query)
     var inscope q2 <- run_deferred(query)
     assert(length(q1)==3 && length(q2)==3 && q1[0]==1 && q2[2]==3)
-    var inscope search <- deferred(SearchBuilder(),3) $(count) {
+    var inscope search <- deferred(SearchBuilder(type<int>),3) $(count) {
         for(i in range(count)) {yield i+1}
     }
     var inscope s1 <- run_deferred(search)

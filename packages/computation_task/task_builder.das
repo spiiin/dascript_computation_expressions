@@ -166,7 +166,7 @@ def ce_await_pending(builder:tuple<kind:TaskResultContext;element:auto(TT)?>) =>
     task_pending(type<Result<TT;string>>)
 def ce_await_return(builder:tuple<kind:TaskContext;element:auto(TT)?>; value:TT) => task_ready(value)
 def ce_await_return(builder:tuple<kind:TaskResultContext;element:auto(TT)?>; value:TT) =>
-    task_ready(result_ok(value))
+    task_ready(ok(value, type<string>))
 
 def ce_await_return_move(builder:tuple<kind:TaskContext;element:auto(TT)?>; var value:TT) =>
     <- task_ready_move(value)
@@ -176,7 +176,7 @@ def ce_await_return_move(builder:tuple<kind:TaskResultContext;element:auto(TT)?>
 }
 def ce_await_zero(_builder:tuple<kind:TaskContext;element:CeUnit?>) => task_ready(CeUnit())
 def ce_await_zero(_builder:tuple<kind:TaskResultContext;element:CeUnit?>) =>
-    task_ready(result_ok(CeUnit()))
+    task_ready(ok(CeUnit(), type<string>))
 
 def ce_await_borrow_value(builder:tuple<kind:TaskContext;element:auto>; var event:tuple<tag:TaskEventTag;ready:bool;value:auto(TT)>) : TT& {
     unsafe {return event.value}

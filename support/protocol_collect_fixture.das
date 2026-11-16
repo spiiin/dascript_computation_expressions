@@ -7,7 +7,6 @@ struct ExternalCollectionContext {}
 def ExternalCollectionBuilder(unused : type<auto(TT)>) : tuple<kind : ExternalCollectionContext; element : TT -const> {
     return (kind=ExternalCollectionContext(), element=default<TT -const>)
 }
-def ExternalCollectionBuilder() { return ExternalCollectionBuilder(type<int>) }
 def ce_zero(builder : tuple<kind : ExternalCollectionContext; element : auto(TT)>) : array<TT> {
     var inscope values : array<TT>
     return <- values

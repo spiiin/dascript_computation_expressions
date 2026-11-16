@@ -13,8 +13,8 @@ struct Trace {
 }
 def step(builder : ResultBuilder; var trace : Trace; value, fail_at : int) {
     trace.attempted++
-    if (value == fail_at) { return result_error("failed {value}", type<int>) }
-    return result_ok(value)
+    if (value == fail_at) { return err("failed {value}", type<int>) }
+    return ok(value, type<string>)
 }
 def step(builder : OptionBuilder; var trace : Trace; value, fail_at : int) {
     trace.attempted++

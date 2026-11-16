@@ -55,7 +55,7 @@ def checks() {
     {
         var inscope token <- cancellation_token()
         var source <- computation(TaskResultBuilder(type<int>)) {
-            var child <- task_after_polls(1,result_ok(1))
+            var child <- task_after_polls(1,ok(1, type<string>))
             task_cancel(child)
             let n=child |> bind
             effects++

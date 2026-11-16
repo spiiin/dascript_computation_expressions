@@ -13,11 +13,11 @@ def acquire(id : int) {
 def ce_dispose(var handle : TestResource) {
     events += "close{handle.id};"
 }
-def fail_source(builder : ResultBuilder) { return result_error("stop", type<int>) }
+def fail_source(builder : ResultBuilder) { return err("stop", type<int>) }
 def fail_source(builder : OptionBuilder) { return none(type<int>) }
-def fail_source(builder : WriterResultBuilder) { return result_error("stop", type<int>) }
+def fail_source(builder : WriterResultBuilder) { return err("stop", type<int>) }
 def fail_source(builder : tuple<kind : StateResultContext; initial : auto(SS); state : SS>) {
-    return result_error("stop", type<int>)
+    return err("stop", type<int>)
 }
 def test_success(builder : auto) {
     events = ""
@@ -112,7 +112,7 @@ def test_effects() {
         try_finally($ {
             let resource = acquire(1) |> use_resource
             state_put(20) |> bind
-            return result_error("rollback", type<int>) |> return_from
+            return err("rollback", type<int>) |> return_from
         }, $ { events += "finally;" })
     }
     assert(sr.result is err && (sr.result as err) == "rollback" && sr.state == 10)

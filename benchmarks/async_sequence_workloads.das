@@ -11,7 +11,7 @@ def async_bench_mix(seed,work:int) : int {
 }
 
 def async_bench_feed_ce(count,seed,work,pending:int) {
-    return <- computation(AsyncSequenceBuilder()) {
+    return <- computation(AsyncSequenceBuilder(type<int>)) {
         for(i in range(count)) {
             let value=task_after_polls(pending,i+seed) |> bind
             yield async_bench_mix(value,work)
@@ -31,11 +31,11 @@ def async_bench_feed_manual(count,seed,work,pending:int) {
         }
         return false
     }
-    return <- ce_sequence_run(AsyncSequenceBuilder(),events)
+    return <- ce_sequence_run(AsyncSequenceBuilder(type<int>),events)
 }
 
 def private async_bench_for_ce(count,seed,work,pending:int) {
-    return <- computation(AsyncSequenceBuilder()) {
+    return <- computation(AsyncSequenceBuilder(type<int>)) {
         for(value in async_bench_feed_ce(count,seed,0,pending)) {
             yield async_bench_mix(value,work)
         }
@@ -54,11 +54,11 @@ def private async_bench_for_manual(count,seed,work,pending:int) {
         }
         return false
     } finally {ce_sequence_finalize($ {ce_dispose(source)})}
-    return <- ce_sequence_run(AsyncSequenceBuilder(),events)
+    return <- ce_sequence_run(AsyncSequenceBuilder(type<int>),events)
 }
 
 def private async_bench_zip_ce(count,seed,work,pending:int) {
-    return <- computation(AsyncSequenceBuilder()) {
+    return <- computation(AsyncSequenceBuilder(type<int>)) {
         for(a,b in async_bench_feed_ce(count,seed,0,pending),async_bench_feed_ce(count,seed+17,0,pending*2)) {
             yield async_bench_mix(a ^ b,work)
         }
@@ -87,11 +87,11 @@ def private async_bench_zip_manual(count,seed,work,pending:int) {
         }
         return false
     } finally {ce_sequence_finalize($ {ce_dispose(left);ce_dispose(right)})}
-    return <- ce_sequence_run(AsyncSequenceBuilder(),events)
+    return <- ce_sequence_run(AsyncSequenceBuilder(type<int>),events)
 }
 
 def private async_bench_group_ce(count,seed,work,pending:int) {
-    return <- computation(AsyncSequenceBuilder()) {
+    return <- computation(AsyncSequenceBuilder(type<int>)) {
         for(i in range(count)) {
             let pair=task_after_polls(pending,i+seed) |> and_bind(task_after_polls(pending*2,i+seed+17)) |> bind
             yield async_bench_mix(pair.first ^ pair.second,work)
@@ -109,7 +109,7 @@ def private async_bench_group_manual(count,seed,work,pending:int) {
         }
         return false
     }
-    return <- ce_sequence_run(AsyncSequenceBuilder(),events)
+    return <- ce_sequence_run(AsyncSequenceBuilder(type<int>),events)
 }
 
 def private async_bench_move_ce(count,seed,work,pending:int) {

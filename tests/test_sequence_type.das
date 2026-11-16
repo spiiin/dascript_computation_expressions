@@ -4,6 +4,6 @@ expect 30915
 require ../packages/computation/computation.das
 [export]
 def main() {
- var inscope seq <- computation(SequenceBuilder()) { yield "wrong" }
+ var inscope seq <- computation(SequenceBuilder(type<int>)) { yield "wrong" }
  for (value in seq) { print("{value}") }
 }

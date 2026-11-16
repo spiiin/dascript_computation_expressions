@@ -79,13 +79,13 @@ def copy_case(fast,emptySource:bool) {
         if(!emptySource) {left |> push(1);left |> push(2)}
         var inscope output:array<int>
         if(fast) {
-            output <- computation(ListBuilder()) {
+            output <- computation(ListBuilder(type<int>)) {
                 let a=left |> bind
                 let b=second(a) |> bind
                 return mapped(a,b)
             }
         } else {
-            output <- computation(ListBuilder()) {
+            output <- computation(ListBuilder(type<int>)) {
                 let a=left |> bind
                 let barrier=0
                 let b=second(a) |> bind
@@ -104,7 +104,7 @@ def main() {
     assert(!(typeinfo ce_has_collect_sink(ce_collect_sink(ListBuilder(type<Owned>)))))
     assert(!(typeinfo ce_has_collect_sink(ce_collect_sink(ListBuilder(type<Wrapped>)))))
     {
-        var inscope triple <- computation(ListBuilder()) {
+        var inscope triple <- computation(ListBuilder(type<int>)) {
             let a=fixed_array(1,2) |> bind
             fixed_array(0,0) |> bind
             let b=fixed_array(3,4) |> bind

@@ -6,5 +6,5 @@ expect 31403
 require ../packages/computation/computation.das
 [export]
 def main() {
-    var inscope invalid <- computation(ListBuilder()) { result_ok(1) |> bind }
+    var inscope invalid <- computation(ListBuilder(type<int>)) { ok(1, type<string>) |> bind }
 }

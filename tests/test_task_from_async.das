@@ -32,7 +32,7 @@ def standard_void() : void {trace+="v1;";await_next_frame();trace+="v2;"}
 [async]
 def standard_error(fail:bool) : Result<int;string> {
     await_next_frame()
-    yield fail ? result_error("denied",type<int>) : result_ok(7)
+    yield fail ? err("denied",type<int>) : ok(7, type<string>)
     trace+="error-tail;"
 }
 [async]
@@ -46,15 +46,15 @@ def standard_throw(afterResult:bool) : int {
 def result_throw() : Result<int;string> {
     await_next_frame()
     panic("result async threw")
-    yield result_ok(0)
+    yield ok(0, type<string>)
 }
 [async]
 def empty_void() : void {}
 [async]
 def changing_result() : Result<int;string> {
-    yield result_error("intermediate",type<int>)
+    yield err("intermediate",type<int>)
     await_next_frame()
-    yield result_ok(11)
+    yield ok(11, type<string>)
 }
 [async]
 def nested() : int {

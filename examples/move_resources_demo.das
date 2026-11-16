@@ -9,7 +9,7 @@ def main() {
         return length(buffer.data)
     }
     assert(uploaded as ok==4 && resources_opened==resources_closed)
-    var inscope task <- deferred(SequenceBuilder(),[2,3]) $(snapshot) {
+    var inscope task <- deferred(SequenceBuilder(type<int>),[2,3]) $(snapshot) {
         var buffer & = acquire_buffer(snapshot[0]) |> use_resource
         for(value in buffer.data) {yield value}
     }

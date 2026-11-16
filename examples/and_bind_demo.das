@@ -12,7 +12,7 @@ def main() {
     assert(fields is invalid && (fields as invalid).count == 2)
     print("Validation:\n{(fields as invalid).messages}\n")
     let result = computation(ResultBuilder()) {
-        let pair = result_ok("Mage") |> and_bind(result_ok(12)) |> bind
+        let pair = ok("Mage", type<string>) |> and_bind(ok(12, type<string>)) |> bind
         return "{pair.first}, level {pair.second}"
     }
     assert(result is ok)

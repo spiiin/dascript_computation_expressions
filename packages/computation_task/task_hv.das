@@ -159,7 +159,7 @@ def private ce_hv_finish(var op:CeHvOperation?) {
 
 def private ce_hv_unit_error(var op:CeHvOperation?;message:string) {
     op.done=true
-    return task_ready(result_error(message,type<CeUnit>))
+    return task_ready(err(message,type<CeUnit>))
 }
 
 def private ce_hv_poll_unit(var op:CeHvOperation?) {
@@ -180,7 +180,7 @@ def private ce_hv_poll_unit(var op:CeHvOperation?) {
         }
         state.process_event_que()
         if(!empty(state.error)) {let message=state.error;ce_hv_shutdown(state);return ce_hv_unit_error(op,message)}
-        if(state.was_opened) {op.done=true;return task_ready(result_ok(CeUnit()))}
+        if(state.was_opened) {op.done=true;return task_ready(ok(CeUnit(), type<string>))}
         if(state.peer_closed) {ce_hv_shutdown(state);return ce_hv_unit_error(op,"WebSocket: closed before handshake completed")}
         return task_pending(type<Result<CeUnit;string>>)
     }
@@ -190,7 +190,7 @@ def private ce_hv_poll_unit(var op:CeHvOperation?) {
     let code=state.send_result(op.argument)
     if(code<0) {ce_hv_shutdown(state);return ce_hv_unit_error(op,"WebSocket: send failed ({code})")}
     op.done=true
-    return task_ready(result_ok(CeUnit()))
+    return task_ready(ok(CeUnit(), type<string>))
 }
 
 def ws_connect(socket:HvWebSocket;url:string) {
@@ -205,7 +205,7 @@ def ws_send_text(socket:HvWebSocket;text:string) {
 
 def private ce_hv_text_error(var op:CeHvOperation?;message:string) {
     op.done=true
-    return task_ready(result_error(message,type<string>))
+    return task_ready(err(message,type<string>))
 }
 
 def private ce_hv_poll_text(var op:CeHvOperation?) {
@@ -220,7 +220,7 @@ def private ce_hv_poll_text(var op:CeHvOperation?) {
         state.queued_bytes-=length(message)
         state.messages |> erase(0)
         op.done=true
-        return task_ready(result_ok(message))
+        return task_ready(ok(message, type<string>))
     }
     if(state.peer_closed) {return ce_hv_text_error(op,"WebSocket: closed before a text message arrived")}
     return task_pending(type<Result<string;string>>)

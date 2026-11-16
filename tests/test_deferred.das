@@ -16,7 +16,7 @@ def make_task() {
     return <- deferred(ResultBuilder(),initial) $(snapshot) {
         let resource=acquire() |> use_resource
         steps++
-        let x=result_ok(snapshot[0]+snapshot[1]+snapshot[2]) |> bind
+        let x=ok(snapshot[0]+snapshot[1]+snapshot[2], type<string>) |> bind
         snapshot[0]=999
         return x
     }
@@ -41,7 +41,7 @@ def main() {
     assert(steps==24 && acquired==24 && closed==24 && factories==24)
     {
         var inscope initial <- [2,3]
-        var inscope task <- deferred(ListBuilder(),initial) $(snapshot) {
+        var inscope task <- deferred(ListBuilder(type<int>),initial) $(snapshot) {
             let x=snapshot |> bind
             let y=[10,20] |> bind
             return x+y
@@ -74,7 +74,7 @@ def main() {
     }
     {
         var inscope task <- deferred(ResultBuilder(),7) $(number) {
-            let n=result_error("not available",type<int>) |> bind
+            let n=err("not available",type<int>) |> bind
             steps++
             return number+n
         }
@@ -84,7 +84,7 @@ def main() {
     }
     {
         var inscope task <- deferred(ReportBuilder(title="Reward"),5) $(number) {
-            let p=result_ok(number) |> and_bind(result_ok(2)) |> bind
+            let p=ok(number, type<string>) |> and_bind(ok(2, type<string>)) |> bind
             return p.first+p.second
         }
         let a=run_deferred(task)

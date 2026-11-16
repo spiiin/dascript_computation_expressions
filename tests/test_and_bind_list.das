@@ -17,7 +17,7 @@ def main() {
     {
         var inscope left <- [1,2]
         var inscope right <- [10,20]
-        var inscope values <- computation(ListBuilder()) {
+        var inscope values <- computation(ListBuilder(type<int>)) {
             let p = left |> and_bind(right) |> bind
             return p.first + p.second
         }
@@ -28,23 +28,23 @@ def main() {
             return "{p.first}{p.second}"
         }
         assert(length(fixedValues)==4 && fixedValues[0]=="1a" && fixedValues[3]=="2b")
-        var inscope mixed <- computation(ListBuilder()) {
+        var inscope mixed <- computation(ListBuilder(type<int>)) {
             let p = left |> and_bind(fixed_array(3,4)) |> bind
             return p.first+p.second
         }
-        var inscope mixed2 <- computation(ListBuilder()) {
+        var inscope mixed2 <- computation(ListBuilder(type<int>)) {
             let p = fixed_array(3,4) |> and_bind(right) |> bind
             return p.first+p.second
         }
         assert(length(mixed)==4 && length(mixed2)==4)
         var inscope emptySource : array<int>
-        var inscope emptyValues <- computation(ListBuilder()) {
+        var inscope emptyValues <- computation(ListBuilder(type<int>)) {
             emptySource |> and_bind(source(1)) |> bind
             continued++
             return 1
         }
         assert(length(emptyValues)==0 && sources==1 && continued==0)
-        var inscope emptyRight <- computation(ListBuilder()) {
+        var inscope emptyRight <- computation(ListBuilder(type<int>)) {
             left |> and_bind(emptySource) |> bind
             continued++
             return 1
@@ -52,7 +52,7 @@ def main() {
         assert(length(emptyRight)==0 && continued==0)
     }
     {
-        var inscope values <- computation(ListBuilder()) {
+        var inscope values <- computation(ListBuilder(type<int>)) {
             fixed_array(1,2) |> and_bind(fixed_array(3,4)) |> bind
             return 7
         }
@@ -62,7 +62,7 @@ def main() {
     assert(afterBorrowed == baseline)
     for (iteration in range(20)) {
         {
-            var inscope values <- computation(ListBuilder()) {
+            var inscope values <- computation(ListBuilder(type<int>)) {
                 let p = source(1) |> and_bind(source(10)) |> and_bind(source(100)) |> bind
                 return p.first.first+p.first.second+p.second
             }

@@ -28,8 +28,8 @@ def main() {
     let srPutSlow=computation(StateResultBuilder(10)) { let x=state_put(20) |> bind; let unused=0; return mapped(1) }
     assert((typeinfo typename(srPutFast))==(typeinfo typename(srPutSlow)))
     assert("{srPutFast}"=="{srPutSlow}")
-    let srResultFast=computation(StateResultBuilder(10)) { let x=result_ok(2) |> bind; return mapped(x) }
-    let srResultSlow=computation(StateResultBuilder(10)) { let x=result_ok(2) |> bind; let unused=0; return mapped(x) }
+    let srResultFast=computation(StateResultBuilder(10)) { let x=ok(2, type<string>) |> bind; return mapped(x) }
+    let srResultSlow=computation(StateResultBuilder(10)) { let x=ok(2, type<string>) |> bind; let unused=0; return mapped(x) }
     assert((typeinfo typename(srResultFast))==(typeinfo typename(srResultSlow)))
     assert("{srResultFast}"=="{srResultSlow}")
     let srValueFast=computation(StateResultBuilder(10)) { let x=state_result_ok(2,30) |> bind; return mapped(x) }
@@ -40,8 +40,8 @@ def main() {
     let wrValueSlow=computation(WriterResultBuilder()) { let x=writer_result_ok(2,"log;") |> bind; let unused=0; return mapped(x) }
     assert((typeinfo typename(wrValueFast))==(typeinfo typename(wrValueSlow)))
     assert("{wrValueFast}"=="{wrValueSlow}")
-    let wrResultFast=computation(WriterResultBuilder()) { let x=result_ok(2) |> bind; return mapped(x) }
-    let wrResultSlow=computation(WriterResultBuilder()) { let x=result_ok(2) |> bind; let unused=0; return mapped(x) }
+    let wrResultFast=computation(WriterResultBuilder()) { let x=ok(2, type<string>) |> bind; return mapped(x) }
+    let wrResultSlow=computation(WriterResultBuilder()) { let x=ok(2, type<string>) |> bind; let unused=0; return mapped(x) }
     assert((typeinfo typename(wrResultFast))==(typeinfo typename(wrResultSlow)))
     assert("{wrResultFast}"=="{wrResultSlow}")
     let wrTellFast=computation(WriterResultBuilder()) { let x=tell("log;") |> bind; return mapped(1) }
@@ -53,15 +53,15 @@ def main() {
     static_assert((typeinfo ce_has_bind_return(ce_bind_return(StateBuilder(10), state_result(2,30), $(x:typedecl(ce_unwrap(StateBuilder(10), state_result(2,30)))) { return 1 }))), "expected specialized BindReturn")
     static_assert((typeinfo ce_has_bind_return(ce_bind_return(StateResultBuilder(10), state_get(), $(x:typedecl(ce_unwrap(StateResultBuilder(10), state_get()))) { return 1 }))), "expected specialized BindReturn")
     static_assert((typeinfo ce_has_bind_return(ce_bind_return(StateResultBuilder(10), state_put(20), $(x:typedecl(ce_unwrap(StateResultBuilder(10), state_put(20)))) { return 1 }))), "expected specialized BindReturn")
-    static_assert((typeinfo ce_has_bind_return(ce_bind_return(StateResultBuilder(10), result_ok(2), $(x:typedecl(ce_unwrap(StateResultBuilder(10), result_ok(2)))) { return 1 }))), "expected specialized BindReturn")
+    static_assert((typeinfo ce_has_bind_return(ce_bind_return(StateResultBuilder(10), ok(2, type<string>), $(x:typedecl(ce_unwrap(StateResultBuilder(10), ok(2, type<string>)))) { return 1 }))), "expected specialized BindReturn")
     static_assert((typeinfo ce_has_bind_return(ce_bind_return(StateResultBuilder(10), state_result_ok(2,30), $(x:typedecl(ce_unwrap(StateResultBuilder(10), state_result_ok(2,30)))) { return 1 }))), "expected specialized BindReturn")
     static_assert((typeinfo ce_has_bind_return(ce_bind_return(WriterResultBuilder(), writer_result_ok(2,"log;"), $(x:typedecl(ce_unwrap(WriterResultBuilder(), writer_result_ok(2,"log;")))) { return 1 }))), "expected specialized BindReturn")
-    static_assert((typeinfo ce_has_bind_return(ce_bind_return(WriterResultBuilder(), result_ok(2), $(x:typedecl(ce_unwrap(WriterResultBuilder(), result_ok(2)))) { return 1 }))), "expected specialized BindReturn")
+    static_assert((typeinfo ce_has_bind_return(ce_bind_return(WriterResultBuilder(), ok(2, type<string>), $(x:typedecl(ce_unwrap(WriterResultBuilder(), ok(2, type<string>)))) { return 1 }))), "expected specialized BindReturn")
     static_assert((typeinfo ce_has_bind_return(ce_bind_return(WriterResultBuilder(), tell("log;"), $(x:typedecl(ce_unwrap(WriterResultBuilder(), tell("log;")))) { return 1 }))), "expected specialized BindReturn")
     assert(maps==20)
     let rollback=computation(StateResultBuilder(10)) {
         state_put(99) |> bind
-        let n=result_error("stop",type<int>) |> bind
+        let n=err("stop",type<int>) |> bind
         return mapped(n)
     }
     assert(rollback.result is err && rollback.state==10 && maps==20)
@@ -79,7 +79,7 @@ def main() {
     assert(loggedError.result is err && loggedError.log=="before;failure;" && maps==20)
     let bareError=computation(WriterResultBuilder()) {
         tell("before;") |> bind
-        let n=result_error("stop",type<int>) |> bind
+        let n=err("stop",type<int>) |> bind
         return mapped(n)
     }
     assert(bareError.result is err && bareError.log=="before;" && maps==20)
@@ -89,7 +89,7 @@ def main() {
     var transaction=StateResultBuilder(10)
     let transactionalSnapshot=ce_bind_return(transaction,state_get(),$(n:int) { transaction.state=20; return n+1 })
     assert(transactionalSnapshot.result is ok && (transactionalSnapshot.result as ok)==11 && transactionalSnapshot.state==20)
-    let reset=ce_bind_return(transaction,result_error("reset",type<int>),$(n:int) { return mapped(n) })
+    let reset=ce_bind_return(transaction,err("reset",type<int>),$(n:int) { return mapped(n) })
     assert(reset.result is err && transaction.state==10 && reset.state==10 && maps==20)
     print("effect bind_return checks OK\n")
 }

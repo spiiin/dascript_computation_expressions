@@ -90,7 +90,7 @@ def failed_match() : int {
     match (Route.First) {
         if (Route.First) {
             var resource & = MatchResource(id = 40) |> use_resource
-            let value = task_after_polls(1, result_error("match failure", type<int>)) |> bind
+            let value = task_after_polls(1, err("match failure", type<int>)) |> bind
             trace |> push <| 999
             return value
         }

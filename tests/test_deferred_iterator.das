@@ -4,7 +4,7 @@ require ../packages/computation/computation.das
 require ../packages/computation/deferred_computation.das
 [export]
 def main() {
-    var inscope task <- deferred(SequenceBuilder()) { yield 1; yield 2 }
+    var inscope task <- deferred(SequenceBuilder(type<int>)) { yield 1; yield 2 }
     for (i in range(2)) {
         var inscope seq <- run_deferred(task)
         var sum=0

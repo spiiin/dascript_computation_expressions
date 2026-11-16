@@ -49,7 +49,7 @@ def main() {
     }
     verify(task_poll(nested)==TaskStatus.Succeeded && task_value(nested)==21)
     var inscope success <- computation(TaskResultBuilder(type<int>)) {
-        let p=task_after_polls(1,result_ok(3)) |> and_bind(task_after_polls(0,result_ok("abc"))) |> bind
+        let p=task_after_polls(1,ok(3, type<string>)) |> and_bind(task_after_polls(0,ok("abc", type<string>))) |> bind
         continued++
         return p.first+length(p.second)
     }
@@ -59,7 +59,7 @@ def main() {
     verify(ok is ok && ok as ok==6)
     trace=""
     var inscope failed <- computation(TaskResultBuilder(type<int>)) {
-        let p=child("a",0,result_error("denied",type<int>)) |> and_bind(child("b",0,result_ok(2))) |> bind
+        let p=child("a",0,err("denied",type<int>)) |> and_bind(child("b",0,ok(2, type<string>))) |> bind
         continued++
         return p.first+p.second
     }
@@ -68,7 +68,7 @@ def main() {
     verify(error is err && error as err=="denied")
     verify(trace=="a:create;b:create;a:start;a:done;")
     var inscope data <- computation(TaskBuilder(type<int>)) {
-        let p=task_after_polls(0,result_error("data",type<int>)) |> and_bind(task_after_polls(0,2)) |> bind
+        let p=task_after_polls(0,err("data",type<int>)) |> and_bind(task_after_polls(0,2)) |> bind
         return p.first is err ? p.second : 0
     }
     verify(task_poll(data)==TaskStatus.Succeeded && task_value(data)==2)
@@ -78,7 +78,7 @@ def main() {
     }
     verify(task_poll(custom)==TaskStatus.Succeeded && task_value(custom)==73)
     var inscope groupedResult <- computation(TaskResultBuilder(type<int>)) {
-        let p=task_after_polls(0,result_ok(1)) |> and_bind(task_after_polls(0,result_ok(2))) |> and_bind(task_after_polls(0,result_ok(3))) |> bind
+        let p=task_after_polls(0,ok(1, type<string>)) |> and_bind(task_after_polls(0,ok(2, type<string>))) |> and_bind(task_after_polls(0,ok(3, type<string>))) |> bind
         return p.first.first+p.first.second+p.second
     }
     verify(task_poll(groupedResult)==TaskStatus.Succeeded)

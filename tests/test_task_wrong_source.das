@@ -9,7 +9,7 @@ require ../packages/computation_task/task_runtime.das
 // at the source, instead of listing every overload that did not match.
 [task_result]
 def doubled(value : int) : int {
-    let checked = result_ok(value) |> bind
+    let checked = ok(value, type<string>) |> bind
     return checked
 }
 

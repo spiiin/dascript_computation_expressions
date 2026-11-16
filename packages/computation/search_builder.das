@@ -7,7 +7,6 @@ def SearchBuilder(unused:type<auto(TT)>) {
     static_assert(typeinfo can_copy(type<TT>),"SearchBuilder requires copyable solutions")
     return (kind=SearchContext(),element=default<TT -const>)
 }
-def SearchBuilder() => SearchBuilder(type<int>)
 def ce_protocol(builder:tuple<kind:SearchContext;element:auto(TT)>) => ce_sequence_protocol(type<TT>)
 def ce_sequence_run(builder:tuple<kind:SearchContext;element:auto(TT)>; var source:iterator<TT>) =>
     <- ce_sequence_protect(source)

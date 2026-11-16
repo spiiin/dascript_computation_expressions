@@ -10,7 +10,7 @@ enum LoadError {
 def main() {
     // A source with another error type is not converted: the bind is rejected.
     let bad = computation(ResultBuilder(type<LoadError>)) {
-        let value = result_ok(1) |> bind
+        let value = ok(1, type<string>) |> bind
         return value
     }
     print("{bad}\n")

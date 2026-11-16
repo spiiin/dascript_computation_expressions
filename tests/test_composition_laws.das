@@ -8,9 +8,9 @@ var closed=0
 struct Ticket {id:int}
 def acquire(id:int) {opened++; trace+="open{id};"; return Ticket(id=id)}
 def ce_dispose(var ticket:Ticket) {closed++; trace+="close{ticket.id};"}
-def source(seed:int) {trace+="m;"; if(seed<0){return result_error("negative",type<int>)};return result_ok(seed)}
-def f(seed:int) {trace+="f;"; if(seed==2){return result_error("two",type<int>)};return result_ok(seed+1)}
-def g(seed:int) {trace+="g;"; return result_ok(seed*3)}
+def source(seed:int) {trace+="m;"; if(seed<0){return err("negative",type<int>)};return ok(seed, type<string>)}
+def f(seed:int) {trace+="f;"; if(seed==2){return err("two",type<int>)};return ok(seed+1, type<string>)}
+def g(seed:int) {trace+="g;"; return ok(seed*3, type<string>)}
 def map_pair(x,y:int) {trace+="{x}:{y};";return x+y}
 def equivalent(a,b:Result<int;string>) {
     assert((a is ok)==(b is ok))
@@ -48,7 +48,7 @@ def main() {
     for(seed in fixed_array(-1,0,1,2,3,17)) {
         // Left identity: return a >>= f == f(a), including its effects.
         trace=""
-        let left=computation(ResultBuilder()) {let n=result_ok(seed) |> bind;return f(n) |> return_from}
+        let left=computation(ResultBuilder()) {let n=ok(seed, type<string>) |> bind;return f(n) |> return_from}
         let leftTrace=trace
         trace=""
         let direct=f(seed)
@@ -71,27 +71,27 @@ def main() {
     // List: associativity and both identities preserve order and ownership.
     {
         var inscope original <- [1,2,3]
-        var inscope identity <- computation(ListBuilder()) {let x=original |> bind;return x}
+        var inscope identity <- computation(ListBuilder(type<int>)) {let x=original |> bind;return x}
         assert(length(identity)==length(original))
         for(a,b in identity,original){assert(a==b)}
         trace=""
-        var inscope fused <- computation(ListBuilder()) {
+        var inscope fused <- computation(ListBuilder(type<int>)) {
             let x=original |> bind
             let y=fixed_array(10,20) |> bind
             return map_pair(x,y)
         }
         let expectedTrace=trace
         trace=""
-        var inscope groupedList <- computation(ListBuilder()) {
+        var inscope groupedList <- computation(ListBuilder(type<int>)) {
             let x=original |> bind
-            return computation(ListBuilder()) {
+            return computation(ListBuilder(type<int>)) {
                 let y=fixed_array(10,20) |> bind
                 return map_pair(x,y)
             } |> return_from
         }
         assert(trace==expectedTrace && length(fused)==length(groupedList))
         for(a,b in fused,groupedList){assert(a==b)}
-        var inscope singleton <- computation(ListBuilder()) {let x=fixed_array(7) |> bind;return x+1}
+        var inscope singleton <- computation(ListBuilder(type<int>)) {let x=fixed_array(7) |> bind;return x+1}
         assert(length(singleton)==1 && singleton[0]==8)
     }
     let after=heap_bytes_allocated()

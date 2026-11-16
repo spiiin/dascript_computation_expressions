@@ -35,7 +35,7 @@ def game_job() {
 def checked_job() {
     return <- computation(TaskResultBuilder(type<int>)) {
         var r & = acquire() |> use_resource
-        let n=task_after_polls(20,result_ok(4)) |> bind
+        let n=task_after_polls(20,ok(4, type<string>)) |> bind
         continued++
         return n+length(r.items)
     }

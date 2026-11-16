@@ -4,5 +4,5 @@ expect 50503
 require ../packages/computation/computation.das
 [export]
 def main() {
-    let value = computation(ResultBuilder()) { let p = result_ok(1) |> and_bind() |> bind; return p }
+    let value = computation(ResultBuilder()) { let p = ok(1, type<string>) |> and_bind() |> bind; return p }
 }

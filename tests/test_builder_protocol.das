@@ -10,7 +10,7 @@ struct Resource {}
 def ce_dispose(var resource : Resource) { closes++ }
 [export]
 def main() {
-    var inscope totals <- computation(ExternalCollectionBuilder()) {
+    var inscope totals <- computation(ExternalCollectionBuilder(type<int>)) {
         yield 1
         for (i in range(4)) { yield i }
         if (true) { yield 10 }

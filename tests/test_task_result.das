@@ -11,9 +11,9 @@ def ce_dispose(handle:Handle) {closed++}
 def request(fail:bool) {
     return <- computation(TaskResultBuilder(type<int>)) {
         let resource=Handle(id=1) |> use_resource
-        let first=task_after_polls(1,result_ok(10)) |> bind
+        let first=task_after_polls(1,ok(10, type<string>)) |> bind
         reached++
-        let second=task_after_polls(1,fail ? result_error("denied",type<int>) : result_ok(5)) |> bind
+        let second=task_after_polls(1,fail ? err("denied",type<int>) : ok(5, type<string>)) |> bind
         reached++
         return first+second
     }
@@ -35,7 +35,7 @@ def main() {
     verify(failure is err && failure as err=="denied")
     verify(task_poll(bad)==TaskStatus.Succeeded && reached==1 && closed==2)
     var inscope thrown <- computation(TaskResultBuilder(type<int>)) {
-        let n=task_after_polls(1,result_ok(1)) |> bind
+        let n=task_after_polls(1,ok(1, type<string>)) |> bind
         panic("native failure")
         return n
     }
@@ -45,7 +45,7 @@ def main() {
     reached=0
     var inscope loop <- computation(TaskResultBuilder(type<int>)) {
         for(i in range(5)) {
-            task_after_polls(1,i==2 ? result_error("stop loop",type<CeUnit>) : result_ok(CeUnit())) |> bind
+            task_after_polls(1,i==2 ? err("stop loop",type<CeUnit>) : ok(CeUnit(), type<string>)) |> bind
             reached++
         }
         reached+=100

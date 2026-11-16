@@ -13,7 +13,7 @@ def tracked(n:int;waits:int=2;fail:bool=false;crash:bool=false) {
     var source <- generator<tuple<tag:TaskEventTag;ready:bool;value:Result<int;string>>> capture(copy(n),copy(waits),copy(fail),copy(crash),<-data) {
         for(i in range(waits)) {yield task_pending(type<Result<int;string>>)}
         if(crash) {panic("native failure")}
-        yield task_ready(fail ? result_error("denied {n}",type<int>) : result_ok(n));return false
+        yield task_ready(fail ? err("denied {n}",type<int>) : ok(n, type<string>));return false
     } finally {ce_sequence_finalize($ {active--;closed++;delete data})}
     return <- task_create(source)
 }

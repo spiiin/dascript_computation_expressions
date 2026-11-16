@@ -4,7 +4,7 @@ expect 30344
 require ../packages/computation/computation.das
 [export]
 def main() {
-    var inscope invalid <- computation(ListBuilder()) {
+    var inscope invalid <- computation(ListBuilder(type<int>)) {
         let x : string = [1, 2] |> bind
         return 42
     }

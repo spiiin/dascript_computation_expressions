@@ -7,7 +7,7 @@ require ../packages/computation/computation.das
 def main() {
  var inscope input : array<int>
  input |> push(7)
- var inscope seq <- computation(SequenceBuilder()) {
+ var inscope seq <- computation(SequenceBuilder(type<int>)) {
   let v=input |> bind
   yield v
  }

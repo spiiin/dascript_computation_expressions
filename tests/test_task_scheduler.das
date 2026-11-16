@@ -72,7 +72,7 @@ def main() {
     verify(task_tick(scheduler,12)==0 && trace=="xzxz")
     var inscope outcomes <- task_scheduler(type<Result<int;string>>)
     var domainTask <- computation(TaskResultBuilder(type<int>)) {
-        let n=task_after_polls(0,result_error("denied",type<int>)) |> bind
+        let n=task_after_polls(0,err("denied",type<int>)) |> bind
         panic("must not run")
         return n
     }

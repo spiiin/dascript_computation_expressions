@@ -52,7 +52,7 @@ def countdown(start : int) : array<int> {
 
 [task_result]
 def checked(value : int) : int {
-    let accepted = task_after_polls(1, value < 0 ? result_error("negative", type<int>) : result_ok(value)) |> bind
+    let accepted = task_after_polls(1, value < 0 ? err("negative", type<int>) : ok(value, type<string>)) |> bind
     return accepted
 }
 

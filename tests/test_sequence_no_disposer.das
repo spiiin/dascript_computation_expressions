@@ -4,7 +4,7 @@ expect 30341
 require ../packages/computation/computation.das
 [export]
 def main() {
- var inscope seq <- computation(SequenceBuilder()) {
+ var inscope seq <- computation(SequenceBuilder(type<int>)) {
   let bad=1 |> use_resource
   yield bad
  }

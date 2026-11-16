@@ -2,7 +2,7 @@ options gen2
 require ../packages/computation/computation.das
 [export]
 def main() {
-    var inscope values <- computation(ListBuilder()) {
+    var inscope values <- computation(ListBuilder(type<int>)) {
         let a=fixed_array(1,2,3,4) |> bind
         let b=fixed_array(10,20,30,40) |> bind
         return a*b

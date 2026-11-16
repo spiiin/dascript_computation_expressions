@@ -32,10 +32,10 @@ def ce_for(builder:tuple<kind:ForOnly>; source:CountSource; body:auto) {
 // Custom Collect hooks return owned arrays; neither legacy append operation exists.
 struct CollectProbe {}
 def ce_protocol(builder:CollectProbe) { return CeCollectProtocol() }
-def ce_zero(builder:CollectProbe) { return <- ce_zero(ListBuilder()) }
-def ce_return(builder:CollectProbe; value:int) { return <- ce_return(ListBuilder(),value) }
+def ce_zero(builder:CollectProbe) { return <- ce_zero(ListBuilder(type<int>)) }
+def ce_return(builder:CollectProbe; value:int) { return <- ce_return(ListBuilder(type<int>),value) }
 def ce_delay(builder:CollectProbe; body:block<():array<int>>) { return <- invoke(body) }
-def ce_combine(builder:CollectProbe; first:array<int>; next:block<():array<int>>) { return <- ce_combine(ListBuilder(),first,next) }
+def ce_combine(builder:CollectProbe; first:array<int>; next:block<():array<int>>) { return <- ce_combine(ListBuilder(type<int>),first,next) }
 def ce_for(builder:CollectProbe; source:range; body:block<(value:int):array<int>>) {
     forCalls++
     var inscope result:array<int>

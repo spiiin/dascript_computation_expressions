@@ -29,10 +29,10 @@ def source() {sources++; return range(5)}
 
 struct ZipCollect {}
 def ce_protocol(builder:ZipCollect) {return CeCollectProtocol()}
-def ce_zero(builder:ZipCollect) {return <- ce_zero(ListBuilder())}
-def ce_return(builder:ZipCollect; value:int) {return <- ce_return(ListBuilder(),value)}
+def ce_zero(builder:ZipCollect) {return <- ce_zero(ListBuilder(type<int>))}
+def ce_return(builder:ZipCollect; value:int) {return <- ce_return(ListBuilder(type<int>),value)}
 def ce_delay(builder:ZipCollect; body:block<():array<int>>) {return <- invoke(body)}
-def ce_combine(builder:ZipCollect; first:array<int>; next:block<():array<int>>) {return <- ce_combine(ListBuilder(),first,next)}
+def ce_combine(builder:ZipCollect; first:array<int>; next:block<():array<int>>) {return <- ce_combine(ListBuilder(type<int>),first,next)}
 def ce_for_zip(builder:ZipCollect; arity:int;
                traverse:block<(visit:block<(body:block<():array<int>>):bool>):void>) {
     calls++; lastArity=arity
@@ -73,7 +73,7 @@ def main() {
     assert(baseline==current)
     // Built-in List has no zip hook and uses the protected cursor fallback.
     {
-        var inscope values <- computation(ListBuilder()) {
+        var inscope values <- computation(ListBuilder(type<int>)) {
             for (a,b in range(4),range(2)) {yield a+b}
         }
         assert(length(values)==2 && values[0]==0 && values[1]==2)

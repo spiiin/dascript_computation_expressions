@@ -10,7 +10,7 @@ var closeOrder=0
 struct Resource {id:int}
 def ce_dispose(var resource:Resource) {released++;closeOrder=closeOrder*10+resource.id}
 def choices(id:int) {
-    return <- computation(SearchBuilder()) {
+    return <- computation(SearchBuilder(type<int>)) {
         let resource=Resource(id=id) |> use_resource
         acquired++
         let n=search_choose([1,2,3]) |> bind
@@ -63,7 +63,7 @@ def check() {
     verify(released==2 && closeOrder==12)
 
     reset()
-    var inscope both <- computation(SearchBuilder()) {
+    var inscope both <- computation(SearchBuilder(type<int>)) {
         let n=choices(1) |> search_append(choices(2)) |> search_take(4) |> bind
         yield n+100
     }

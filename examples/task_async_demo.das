@@ -11,7 +11,7 @@ def standard_name() : string {
 [async]
 def standard_health(allowed:bool) : Result<int;string> {
     await_next_frame()
-    yield allowed ? result_ok(85) : result_error("access denied",type<int>)
+    yield allowed ? ok(85, type<string>) : err("access denied",type<int>)
 }
 [export]
 def main() {

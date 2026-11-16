@@ -40,8 +40,8 @@ let outcome = computation(ResultBuilder()) {
 Конструкторы:
 
 ```das
-result_ok(42)
-result_error("not found", type<int>)
+ok(42, type<string>)
+err("not found", type<int>)
 ```
 
 У ошибки указывается тип отсутствующего успешного значения, поскольку его
@@ -95,7 +95,7 @@ let absent = computation(OptionBuilder()) {
 
 ```das
 let forwarded = computation(ResultBuilder()) {
-    return result_error("forwarded", type<string>) |> return_from
+    return err("forwarded", type<string>) |> return_from
 }
 ```
 

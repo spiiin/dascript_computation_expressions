@@ -9,16 +9,16 @@ struct CopyItem {value:int
 }
 def unused_items() {return <- computation(AsyncSequenceBuilder(type<CopyItem>)) {}}
 
-def empty_stream() {return <- computation(AsyncSequenceBuilder()) {}}
+def empty_stream() {return <- computation(AsyncSequenceBuilder(type<int>)) {}}
 def stopped_stream() {
-    return <- computation(AsyncSequenceBuilder()) {
+    return <- computation(AsyncSequenceBuilder(type<int>)) {
         yield 7
         return
         panic("code after return must not run")
     }
 }
 def loop_stream() {
-    return <- computation(AsyncSequenceBuilder()) {
+    return <- computation(AsyncSequenceBuilder(type<int>)) {
         for(i in range(5)) {
             let n=task_after_polls(0,i) |> bind
             if(n==1) {continue}
@@ -34,7 +34,7 @@ def main() {
     let before=itemFinalized
     {var inscope unused <- unused_items()}
     verify(itemFinalized==before)
-    var inscope stream <- computation(AsyncSequenceBuilder()) {
+    var inscope stream <- computation(AsyncSequenceBuilder(type<int>)) {
         let value=task_after_polls(1,42) |> bind
         yield value
         yield 43

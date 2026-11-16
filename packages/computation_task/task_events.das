@@ -109,9 +109,9 @@ def private ce_event_poll(var op:auto(OO)?) {
             event_subscribed++
         }
         for(slot in state.slots) {
-            if(slot.id==op.id && slot.ready) {return task_ready(result_ok(slot.value))}
+            if(slot.id==op.id && slot.ready) {return task_ready(ok(slot.value, type<string>))}
         }
-        if(state.closed) {return task_ready(result_error("task event source is closed",type<typedecl(state.slots[0].value) -const -&>))}
+        if(state.closed) {return task_ready(err("task event source is closed",type<typedecl(state.slots[0].value) -const -&>))}
         return task_pending(type<Result<typedecl(state.slots[0].value) -const -&;string>>)
     }
 }

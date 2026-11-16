@@ -149,7 +149,7 @@ def cancelled_child() {
 }
 
 def numbers(first:int;count:int) {
-    return <- computation(AsyncSequenceBuilder()) {
+    return <- computation(AsyncSequenceBuilder(type<int>)) {
         for(i in range(count)) {yield first+i}
     }
 }

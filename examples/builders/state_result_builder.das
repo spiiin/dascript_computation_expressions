@@ -11,10 +11,10 @@ def state_result_value(value : Result<auto(TT);string>; state : auto(SS)) {
     return (result = value, state = state)
 }
 def state_result_ok(value : auto(TT); state : auto(SS)) {
-    return state_result_value(result_ok(value), state)
+    return state_result_value(ok(value, type<string>), state)
 }
 def state_result_error(message : string; unused : type<auto(TT)>; state : auto(SS)) {
-    return state_result_value(result_error(message, type<TT>), state)
+    return state_result_value(err(message, type<TT>), state)
 }
 def private sr_failure(var builder : tuple<kind : StateResultContext; initial : auto(SS); state : SS>;
                        message : string; unused : type<auto(RR)>) : RR {

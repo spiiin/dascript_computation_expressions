@@ -21,9 +21,9 @@ def jobs() {
     return <- result
 }
 def result_jobs() {
-    var resultJobs:array<typedecl(task_after_polls(0,result_ok(0)))>
-    resultJobs |> emplace(task_after_polls(0,result_error("domain",type<int>)))
-    resultJobs |> emplace(task_after_polls(1,result_ok(9)))
+    var resultJobs:array<typedecl(task_after_polls(0,ok(0, type<string>)))>
+    resultJobs |> emplace(task_after_polls(0,err("domain",type<int>)))
+    resultJobs |> emplace(task_after_polls(1,ok(9, type<string>)))
     return <- resultJobs
 }
 def unit_jobs() {

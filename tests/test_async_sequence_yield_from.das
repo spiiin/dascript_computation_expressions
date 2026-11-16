@@ -122,7 +122,7 @@ def cancelled_child() {
 }
 
 def copy_replay() {
-    var inscope saved <- deferred(AsyncSequenceBuilder(),4) $(value) {yield value}
+    var inscope saved <- deferred(AsyncSequenceBuilder(type<int>),4) $(value) {yield value}
     return <- run_deferred(saved)
 }
 
@@ -241,10 +241,10 @@ def checks() {
     }
     // Copyable elements, empty delegation, recursive delegation, continuation.
     {
-        var inscope stream <- computation(AsyncSequenceBuilder()) {
-            computation(AsyncSequenceBuilder()) {} |> yield_from
-            computation(AsyncSequenceBuilder()) {
-                computation(AsyncSequenceBuilder()) {yield 1;yield 2} |> yield_from
+        var inscope stream <- computation(AsyncSequenceBuilder(type<int>)) {
+            computation(AsyncSequenceBuilder(type<int>)) {} |> yield_from
+            computation(AsyncSequenceBuilder(type<int>)) {
+                computation(AsyncSequenceBuilder(type<int>)) {yield 1;yield 2} |> yield_from
             } |> yield_from
             yield 3
             copy_replay() |> yield_from

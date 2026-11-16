@@ -42,7 +42,7 @@ def load(first, second : int) : Result<string;LoadError> {
 // A task that fails with a string, as the library's own sources do.
 [task_result]
 def fetch(id : int) : int {
-    let value = task_after_polls(1, id < 0 ? result_error("no such id", type<int>) : result_ok(id)) |> bind
+    let value = task_after_polls(1, id < 0 ? err("no such id", type<int>) : ok(id, type<string>)) |> bind
     return value
 }
 

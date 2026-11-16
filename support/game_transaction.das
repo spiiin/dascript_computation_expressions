@@ -12,7 +12,7 @@ def check_alive(health : int) : Result<CeUnit;string> {
 def adventure_turn(initial : AdventureState; damage : int; var reached : int&) {
     return computation(StateResultBuilder(initial)) {
         var game = state_get() |> bind
-        if (game.gold < 10) { result_error("not enough gold", type<int>) |> bind }
+        if (game.gold < 10) { err("not enough gold", type<int>) |> bind }
         game.gold -= 10
         game.potions++
         state_put(game) |> bind

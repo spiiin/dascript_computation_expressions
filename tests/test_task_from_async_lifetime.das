@@ -29,7 +29,7 @@ def borrowed_value(buffer:Buffer?; fail:bool) : int {
 [async]
 def borrowed_error(buffer:Buffer?) : Result<int;string> {
     await_next_frame()
-    yield result_error("resource denied",type<int>)
+    yield err("resource denied",type<int>)
     after++
 }
 [async]

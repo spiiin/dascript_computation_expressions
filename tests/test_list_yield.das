@@ -3,7 +3,7 @@ require dastest/testing_boost public
 require ../packages/computation/computation.das
 [export]
 def main() {
- var inscope values <- computation(ListBuilder()) {
+ var inscope values <- computation(ListBuilder(type<int>)) {
   yield 1
   [2,3] |> yield_from
   for(i in range(2)) { yield i+4 }

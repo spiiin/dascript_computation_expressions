@@ -14,7 +14,6 @@ def SequenceBuilder(t : type<auto(TT)>) {
     }
 }
 
-def SequenceBuilder() => SequenceBuilder(type<int>)
 
 
 

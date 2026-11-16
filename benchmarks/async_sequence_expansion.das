@@ -4,7 +4,7 @@ require ../packages/computation/computation_macro.das
 require ../packages/computation_task/async_sequence_builder.das
 
 def source() {
-    return <- computation(AsyncSequenceBuilder()) {
+    return <- computation(AsyncSequenceBuilder(type<int>)) {
         for(i in range(4)) {
             let value=task_after_polls(1,i) |> bind
             yield value
@@ -12,7 +12,7 @@ def source() {
     }
 }
 def mapped() {
-    return <- computation(AsyncSequenceBuilder()) {
+    return <- computation(AsyncSequenceBuilder(type<int>)) {
         for(value in source()) {yield value+1}
     }
 }

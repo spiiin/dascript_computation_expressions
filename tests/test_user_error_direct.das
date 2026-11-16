@@ -9,7 +9,7 @@ expect 30838
 require ../packages/computation/computation.das
 
 def half(value : int) : Result<int;string> {
-    return value % 2 == 0 ? result_ok(value / 2) : result_error("odd", type<int>)
+    return value % 2 == 0 ? ok(value / 2, type<string>) : err("odd", type<int>)
 }
 
 // A mistake in the body is reported before anything about the code the macro

@@ -6,7 +6,7 @@ require daslib/rtti
 var effects=""
 def check() {
     effects=""
-    var inscope rows <- computation(QueryBuilder()) {
+    var inscope rows <- computation(QueryBuilder(type<int>)) {
         let n=fixed_array(1,2,3) |> bind
         effects+="{n}"
         query_where(n!=2) |> bind
@@ -29,7 +29,7 @@ def check() {
     var inscope selected <- filtered |> query_select <| $(x:int){return "n={x}"}
     assert(length(selected)==2 && selected[0]=="n=2" && selected[1]=="n=3")
     // The block-last syntax also composes with CE bind.
-    var inscope pipeRows <- computation(QueryBuilder()) {
+    var inscope pipeRows <- computation(QueryBuilder(type<int>)) {
         let n=fixed_array(1,2,3) |> query_where <| $(x:int) {return x>1} |> bind
         let scaled=fixed_array(n) |> query_select <| $(x:int) {return x*10} |> bind
         return scaled
@@ -40,12 +40,12 @@ def check() {
     var inscope oldSelect <- query_select(oldFilter,$(x:int){return "n={x}"})
     assert(length(oldSelect)==length(selected) && oldSelect[0]==selected[0] && oldSelect[1]==selected[1])
 
-    var inscope grouped <- computation(QueryBuilder()) {
+    var inscope grouped <- computation(QueryBuilder(type<int>)) {
         let pair=fixed_array(1,2) |> and_bind(fixed_array(10,20)) |> bind
         return pair.first+pair.second
     }
     assert(length(grouped)==4 && grouped[0]==11 && grouped[1]==21 && grouped[2]==12 && grouped[3]==22)
-    var inscope loop <- computation(QueryBuilder()) {
+    var inscope loop <- computation(QueryBuilder(type<int>)) {
         for(i in range(3)) {if(i!=1) {yield i}}
     }
     assert(length(loop)==2 && loop[0]==0 && loop[1]==2)

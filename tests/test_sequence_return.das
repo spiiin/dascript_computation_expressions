@@ -4,5 +4,5 @@ expect 50503
 require ../packages/computation/computation.das
 [export]
 def main() {
- var inscope seq <- computation(SequenceBuilder()) { return 1 }
+ var inscope seq <- computation(SequenceBuilder(type<int>)) { return 1 }
 }

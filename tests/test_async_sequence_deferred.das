@@ -31,7 +31,7 @@ def initial(wait:int=1;fail:bool=false) {
 }
 def saved_copy() {
     var inscope data <- initial()
-    return <- deferred(AsyncSequenceBuilder(),data) $(snapshot) {
+    return <- deferred(AsyncSequenceBuilder(type<int>),data) $(snapshot) {
         try_finally($ {
             for(i in range(length(snapshot.rows))) {
                 task_delay_ms(snapshot.wait) |> bind
@@ -233,7 +233,7 @@ def unopened_and_pending() {
     }
     {
         var number=7
-        var builder=AsyncSequenceBuilder()
+        var builder=AsyncSequenceBuilder(type<int>)
         unsafe {builder.element=addr(number)}
         var caught=false
         try {var inscope invalid <- deferred(builder) {yield 1}} recover {

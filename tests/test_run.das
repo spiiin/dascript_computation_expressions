@@ -11,8 +11,8 @@ def ce_dispose(var resource:Resource) { closes++; events+="close;" }
 struct Probe {}
 def make_probe() { creations++; return Probe() }
 def ce_protocol(builder:Probe) { return CeValueProtocol() }
-def ce_return(builder:Probe; value:auto) { return result_ok(value) }
-def ce_zero(builder:Probe) { return result_ok(CeUnit()) }
+def ce_return(builder:Probe; value:auto) { return ok(value, type<string>) }
+def ce_zero(builder:Probe) { return ok(CeUnit(), type<string>) }
 def ce_bind(builder:Probe; source:Result<auto(TT);string>; next:block<(value:TT):auto(RR)>) : RR {
     return ce_bind(ResultBuilder(),source,next)
 }
@@ -27,17 +27,17 @@ def ce_return(builder:ArrayOutput; value:int) { return value }
 def ce_run(builder:ArrayOutput; value:int) { var inscope a:array<int>; a |> push(value); return <- a }
 struct Summary {}
 def ce_protocol(builder:Summary) { return CeCollectProtocol() }
-def ce_return(builder:Summary; value:int) { return <- ce_return(ListBuilder(),value) }
-def ce_zero(builder:Summary) { return <- ce_zero(ListBuilder()) }
+def ce_return(builder:Summary; value:int) { return <- ce_return(ListBuilder(type<int>),value) }
+def ce_zero(builder:Summary) { return <- ce_zero(ListBuilder(type<int>)) }
 def ce_delay(builder:Summary; body:block<():array<int>>) { return <- invoke(body) }
-def ce_combine(builder:Summary; first:array<int>; next:block<():array<int>>) { return <- ce_combine(ListBuilder(),first,next) }
+def ce_combine(builder:Summary; first:array<int>; next:block<():array<int>>) { return <- ce_combine(ListBuilder(type<int>),first,next) }
 def ce_collect_append(builder:Summary; var values:array<int>; step:array<int>) { ce_list_append(values,step) }
 struct Moved {}
 def ce_protocol(builder:Moved) { return CeCollectProtocol() }
-def ce_return(builder:Moved; value:int) { return <- ce_return(ListBuilder(),value) }
-def ce_zero(builder:Moved) { return <- ce_zero(ListBuilder()) }
+def ce_return(builder:Moved; value:int) { return <- ce_return(ListBuilder(type<int>),value) }
+def ce_zero(builder:Moved) { return <- ce_zero(ListBuilder(type<int>)) }
 def ce_delay(builder:Moved; body:block<():array<int>>) { return <- invoke(body) }
-def ce_combine(builder:Moved; first:array<int>; next:block<():array<int>>) { return <- ce_combine(ListBuilder(),first,next) }
+def ce_combine(builder:Moved; first:array<int>; next:block<():array<int>>) { return <- ce_combine(ListBuilder(type<int>),first,next) }
 def ce_collect_append(builder:Moved; var values:array<int>; step:array<int>) { ce_list_append(values,step) }
 def ce_run(builder:Summary; values:array<int>) : int {
     runs++
@@ -67,16 +67,16 @@ def main() {
     let a=computation(make_probe()) {
         let resource=Resource() |> use_resource
         events+="body;"
-        let x=result_ok(2) |> bind
+        let x=ok(2, type<string>) |> bind
         return x+3
     }
     assert(a.success && a.outcome as ok==5 && events=="body;close;run;" && runs==1 && creations==1)
-    let b=computation(Probe()) { let x=result_error("bad",type<int>) |> bind; return x }
+    let b=computation(Probe()) { let x=err("bad",type<int>) |> bind; return x }
     assert(!b.success && runs==2)
     let nested=computation(Probe()) { let inner=computation(Probe()) { return 9 }; return inner.outcome as ok }
     assert(nested.outcome as ok==9 && runs==4)
     let report=computation(ReportBuilder(title="loop")) {
-        for (i in range(3)) { result_ok(CeUnit()) |> bind }
+        for (i in range(3)) { ok(CeUnit(), type<string>) |> bind }
         return (name="Mage",level=3)
     }
     assert(report is completed && (report as completed).value.level==3)

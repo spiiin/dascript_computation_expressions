@@ -5,7 +5,7 @@ require ../support/move_collection_support.das
 def lists() {
     let baseline=heap_bytes_allocated()
     {
-        var inscope counts <- computation(ListBuilder()) {
+        var inscope counts <- computation(ListBuilder(type<int>)) {
             var value & = loot_list() |> bind
             return length(value.items)
         }

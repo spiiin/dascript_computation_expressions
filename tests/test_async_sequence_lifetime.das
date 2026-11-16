@@ -16,7 +16,7 @@ struct StreamResource {data:array<int>}
 def acquire() {var resource:StreamResource;resource.data <- [10,20,30];opened++;return <- resource}
 def ce_dispose(var resource:StreamResource) {closed++;delete resource}
 def producer(wait:int=1; fail:bool=false) {
-    return <- computation(AsyncSequenceBuilder()) {
+    return <- computation(AsyncSequenceBuilder(type<int>)) {
         var resource & = acquire() |> use_resource
         try_finally($ {
             for(i in range(length(resource.data))) {

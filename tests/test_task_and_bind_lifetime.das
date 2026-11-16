@@ -77,7 +77,7 @@ def checks() {
     reset()
     {
         var inscope task <- computation(TaskResultBuilder(type<int>)) {
-            let p=owned(0,3,result_ok(1)) |> and_bind(owned(1,0,result_error("denied",type<int>))) |> bind
+            let p=owned(0,3,ok(1, type<string>)) |> and_bind(owned(1,0,err("denied",type<int>))) |> bind
             continued++;return p.first+p.second
         }
         verify(task_poll(task)==TaskStatus.Succeeded && continued==0 && order=="1;0;")
@@ -98,7 +98,7 @@ def checks() {
     {
         var inscope token <- cancellation_token()
         var source <- computation(TaskResultBuilder(type<int>)) {
-            let p=owned(0,3,result_ok(1)) |> and_bind(owned(1,3,result_ok(2))) |> bind
+            let p=owned(0,3,ok(1, type<string>)) |> and_bind(owned(1,3,ok(2, type<string>))) |> bind
             continued++;return p.first
         }
         var inscope task <- task_with_cancellation(source,token)

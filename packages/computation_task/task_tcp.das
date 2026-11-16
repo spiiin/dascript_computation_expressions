@@ -53,8 +53,8 @@ def task_tcp_request_line(host:string;port:int;request:string;max_bytes:int=6553
     } elif(empty(reader.error)) {reader.error="connection failed"}
     return <- task_from_poll(@() {
         reader.tick()
-        if(!empty(reader.error)) {return task_ready(result_error(reader.error,type<string>))}
-        if(reader.complete) {return task_ready(result_ok(string(reader.bytes)))}
+        if(!empty(reader.error)) {return task_ready(err(reader.error,type<string>))}
+        if(reader.complete) {return task_ready(ok(string(reader.bytes), type<string>))}
         return task_pending(type<Result<string;string>>)
     },@() {unsafe {delete reader}})
 }

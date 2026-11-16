@@ -8,7 +8,6 @@ def QueryBuilder(unused:type<auto(TT)>) {
     static_assert(typeinfo can_copy(type<TT>),"QueryBuilder requires copyable rows")
     return (kind=QueryContext(),element=default<TT -const>)
 }
-def QueryBuilder() {return QueryBuilder(type<int>)}
 def ce_protocol(builder:tuple<kind:QueryContext;element:auto(TT)>) {return CeCollectProtocol()}
 def ce_zero(builder:tuple<kind:QueryContext;element:auto(TT)>) {return <- ce_zero(ListBuilder(type<TT>))}
 def ce_return(builder:tuple<kind:QueryContext;element:auto(TT)>; value:TT) {return <- ce_return(ListBuilder(type<TT>),value)}

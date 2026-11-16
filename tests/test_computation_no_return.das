@@ -4,7 +4,7 @@ require ../packages/computation/computation.das
 [export]
 def main() {
     let value = computation(ResultBuilder()) {
-        result_ok(1) |> bind
+        ok(1, type<string>) |> bind
     }
     assert(value is ok)
     print("no return: successful Unit OK\n")

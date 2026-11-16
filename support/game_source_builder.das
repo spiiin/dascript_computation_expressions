@@ -34,8 +34,8 @@ def ce_bind2(builder:GameSourceBuilder; left:Result<auto(AA);string>; right:Resu
 struct HealthCheck {health:int}
 struct TargetRange {first:int; count:int}
 def ce_source(builder:GameSourceBuilder; request:HealthCheck) {
-    if (request.health<builder.minimumHealth) {return result_error("not enough health",type<int>)}
-    return result_ok(request.health)
+    if (request.health<builder.minimumHealth) {return err("not enough health",type<int>)}
+    return ok(request.health, type<string>)
 }
 def ce_source(builder:GameSourceBuilder; request:TargetRange) {
     return range(request.first,request.first+request.count)

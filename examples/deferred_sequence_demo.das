@@ -5,7 +5,7 @@ var steps=0
 
 def rewards() {
     var inscope amounts <- [10,20,30]
-    return <- deferred(SequenceBuilder(),amounts) $(snapshot) {
+    return <- deferred(SequenceBuilder(type<int>),amounts) $(snapshot) {
         for (index in range(length(snapshot))) {
             steps++
             snapshot[index]+=1

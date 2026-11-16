@@ -95,7 +95,7 @@ def checks() {
         var inscope group <- cancellation_token()
         var source <- computation(TaskResultBuilder(type<int>)) {
             var resource & = acquire() |> use_resource
-            let n=task_after_polls(10,result_ok(4)) |> bind
+            let n=task_after_polls(10,ok(4, type<string>)) |> bind
             effects++
             return n
         }

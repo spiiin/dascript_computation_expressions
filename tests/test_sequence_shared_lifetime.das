@@ -7,7 +7,7 @@ def main() {
  var peak0=0ul
  var peak1=0ul
  {
-  var inscope seq <- computation(SequenceBuilder()) {
+  var inscope seq <- computation(SequenceBuilder(type<int>)) {
    for(i in range(1000)) {
     var n=i
     try_finally($ {n++; yield n}, $ {n++})

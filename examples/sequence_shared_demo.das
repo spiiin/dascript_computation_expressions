@@ -4,7 +4,7 @@ var cleaned_health=0
 struct EnemyState {health:int;hits:int}
 [export]
 def main() {
- var inscope health <- computation(SequenceBuilder()) {
+ var inscope health <- computation(SequenceBuilder(type<int>)) {
   var enemy=EnemyState(health=100,hits=0)
   try_finally($ {
    enemy.health-=25

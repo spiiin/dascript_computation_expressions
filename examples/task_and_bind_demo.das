@@ -15,7 +15,7 @@ def main() {
     print("{task_value(turn)}\n")
 
     var inscope purchase <- computation(TaskResultBuilder(type<int>)) {
-        let checks=task_after_polls(0,result_error("Out of stock",type<int>)) |> and_bind(task_after_polls(3,result_ok(50))) |> bind
+        let checks=task_after_polls(0,err("Out of stock",type<int>)) |> and_bind(task_after_polls(3,ok(50, type<string>))) |> bind
         continued=true
         return checks.first+checks.second
     }

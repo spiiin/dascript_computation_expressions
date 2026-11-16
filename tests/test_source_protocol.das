@@ -11,7 +11,7 @@ struct Token {id:int;value:int;fail:bool=false}
 def token(id,value:int;fail:bool=false) {factories++;return Token(id=id,value=value,fail=fail)}
 def ce_source(builder:ResultBuilder; value:Token) {
     conversions++;order+="{value.id}"
-    return value.fail ? result_error("stop",type<int>) : result_ok(value.value)
+    return value.fail ? err("stop",type<int>) : ok(value.value, type<string>)
 }
 def ce_source(builder:OptionBuilder; value:Token) {
     conversions++;order+="{value.id}"
@@ -64,16 +64,16 @@ def collection() {
     reset()
     let baseline=heap_bytes_allocated()
     {
-        var inscope output <- computation(ListBuilder()) {
+        var inscope output <- computation(ListBuilder(type<int>)) {
             let n=Batch(first=10) |> bind
             yield n
         }
         assert(length(output)==2 && output[0]==10 && output[1]==11 && conversions==1)
     }
     {
-        var inscope forwarded <- computation(ListBuilder()) {Batch(first=20) |> yield_from}
+        var inscope forwarded <- computation(ListBuilder(type<int>)) {Batch(first=20) |> yield_from}
         assert(length(forwarded)==2 && forwarded[0]==20)
-        var inscope returned <- computation(ListBuilder()) {return Batch(first=30) |> return_from}
+        var inscope returned <- computation(ListBuilder(type<int>)) {return Batch(first=30) |> return_from}
         assert(length(returned)==2 && returned[0]==30)
     }
     let current=heap_bytes_allocated()
@@ -94,7 +94,7 @@ def loops() {
     assert(outcome is ok && total==24)
     reset()
     {
-        var inscope output <- computation(ListBuilder()) {
+        var inscope output <- computation(ListBuilder(type<int>)) {
             for(n in Batch(first=3)) {yield n*2}
         }
         assert(conversions==1 && length(output)==2 && output[0]==6 && output[1]==8)
@@ -115,14 +115,14 @@ def lazy() {
     reset()
     let baseline=heap_bytes_allocated()
     {
-        var inscope stream <- computation(SequenceBuilder()) {
+        var inscope stream <- computation(SequenceBuilder(type<int>)) {
             let n=Batch(first=10) |> bind
             for(m in Batch(first=20)) {yield n+m}
         }
         assert(conversions==0)
         for(n in stream) {assert(n==30);break}
         assert(conversions==2)
-        var inscope other <- computation(SequenceBuilder()) {Batch(first=5) |> yield_from}
+        var inscope other <- computation(SequenceBuilder(type<int>)) {Batch(first=5) |> yield_from}
         for(n in other) {assert(n==5);break}
         assert(conversions==3)
     }

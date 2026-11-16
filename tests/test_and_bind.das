@@ -10,8 +10,8 @@ var constructors = 0
 def result_source(id:int; fail:bool) {
     calls++
     order += "{id}"
-    if (fail) { return result_error("error{id}", type<int>) }
-    return result_ok(id)
+    if (fail) { return err("error{id}", type<int>) }
+    return ok(id, type<string>)
 }
 def option_source(id:int; fail:bool) {
     calls++
@@ -29,17 +29,17 @@ def main() {
     assert(rejected is err && (rejected as err) == "error1")
     assert(calls == 2 && order == "12" && continued == 0 && constructors == 1)
     let rightError = computation(ResultBuilder()) {
-        let p = result_ok(1) |> and_bind(result_error("right", type<string>)) |> bind
+        let p = ok(1, type<string>) |> and_bind(err("right", type<string>)) |> bind
         return p.second
     }
     assert(rightError is err && (rightError as err) == "right")
     let success = computation(ResultBuilder()) {
-        let p = result_ok(3) |> and_bind(result_ok("mage")) |> and_bind(result_ok(4)) |> bind
+        let p = ok(3, type<string>) |> and_bind(ok("mage", type<string>)) |> and_bind(ok(4, type<string>)) |> bind
         return "{p.first.second}:{p.first.first+p.second}"
     }
     assert(success is ok && (success as ok) == "mage:7")
     let skippedGroup = computation(ResultBuilder()) {
-        result_error("before group", type<int>) |> bind
+        err("before group", type<int>) |> bind
         result_source(3,false) |> and_bind(result_source(4,false)) |> bind
         return 0
     }
@@ -71,7 +71,7 @@ def main() {
     assert(valid is valid && (valid as valid) == "hero:12")
     var iterations = 0
     let loop = computation(ResultBuilder()) {
-        for (i in range(5)) { iterations++; result_ok(i) |> and_bind(result_error("loop",type<int>)) |> bind }
+        for (i in range(5)) { iterations++; ok(i, type<string>) |> and_bind(err("loop",type<int>)) |> bind }
         continued++
         return 1
     }

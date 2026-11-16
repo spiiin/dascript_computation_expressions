@@ -28,7 +28,7 @@ def main() {
 
     var inscope requests <- task_scheduler(type<Result<int;string>>)
     var requestTask <- computation(TaskResultBuilder(type<int>)) {
-        let n=task_after_polls(1,result_ok(8)) |> bind
+        let n=task_after_polls(1,ok(8, type<string>)) |> bind
         return n+1
     }
     let request=task_spawn(requests,requestTask)

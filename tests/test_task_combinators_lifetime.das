@@ -56,7 +56,7 @@ def checks() {
     }
     balanced();reset()
     {
-        var inscope task <- task_result_when_all(owned(0,0,result_ok(1),failNative=true),owned(1,3,result_ok(2)))
+        var inscope task <- task_result_when_all(owned(0,0,ok(1, type<string>),failNative=true),owned(1,3,ok(2, type<string>)))
         verify(task_poll(task)==TaskStatus.Failed && polls[1]==0 && order=="0;1;")
         verify(starts_with(task_error(task),"child 0 failed"))
     }
@@ -87,7 +87,7 @@ def checks() {
     balanced();reset()
     {
         var inscope task <- computation(TaskResultBuilder(type<int>)) {
-            let pair=task_result_when_all(owned(0,0,result_error("denied",type<int>)),owned(1,3,result_ok("text"))) |> bind
+            let pair=task_result_when_all(owned(0,0,err("denied",type<int>)),owned(1,3,ok("text", type<string>))) |> bind
             continued++
             return pair.first
         }
@@ -97,7 +97,7 @@ def checks() {
     }
     balanced();reset()
     {
-        var inscope task <- task_result_when_all(owned(0,3,result_ok(1)),owned(1,0,result_error("right",type<string>)))
+        var inscope task <- task_result_when_all(owned(0,3,ok(1, type<string>)),owned(1,0,err("right",type<string>)))
         verify(task_poll(task)==TaskStatus.Succeeded && order=="1;0;")
         let result=task_value(task)
         verify(result is err && result as err=="right")

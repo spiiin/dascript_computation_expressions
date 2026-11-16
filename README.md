@@ -13,7 +13,7 @@ require computation/computation
 [export]
 def main() {
     let result = computation(ResultBuilder()) {
-        let value = result_ok(21) |> bind
+        let value = ok(21, type<string>) |> bind
         return value * 2
     }
     assert(result is ok && (result as ok) == 42)
@@ -76,7 +76,7 @@ $env:DASLANG_EXE = & ./.github/scripts/install-daslang.ps1 -Destination ./.work/
 ./run_aot.ps1
 ```
 
-Тесты лежат в `tests/` и идут под dastest: `run_tests.ps1` запускает все 227 файлов,
+Тесты лежат в `tests/` и идут под dastest: `run_tests.ps1` запускает все 228 файлов,
 каждый в своём процессе. `run_computation.ps1 -Test` запускает их же, 65 примеров,
 экспорт и проверки раскрытия оптимизаций. Набор `mode_tests.json` содержит 73 теста и примера;
 строгий AOT-хост исполняет 66 из них. Генерация C++ отдельно не означает успех AOT runtime.

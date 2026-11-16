@@ -16,12 +16,8 @@ def ce_unwrap(builder : ResultBuilder; value : variant<err:string;ok:auto(TT)>) 
 [inline]
 def ce_unwrap(builder : OptionBuilder; value : variant<none:void;some:auto(TT)>) : TT => value as some
 
-def result_ok(value : auto(TT)) : Result<TT -const -&;string> => <- result::ok(value,type<string>)
-def result_error(message : string; unused : type<auto(TT)>) : Result<TT -const -&;string> =>
-    <- result::err(message,type<TT>)
-
 [inline]
-def ce_return(builder : ResultBuilder; value : auto(TT)) => result_ok(value)
+def ce_return(builder : ResultBuilder; value : auto(TT)) => ok(value, type<string>)
 [inline]
 def ce_return(builder : OptionBuilder; value : auto(TT)) => some(value)
 
@@ -92,7 +88,7 @@ def ce_merge_sources(builder : ResultBuilder; left : Result<auto;string>;
     unsafe {
         if(left is err) {return typeinfo ce_canonical(variant type<Result<typedecl(ce_source_pair(left as ok,right as ok));string>>(err=left as err))}
         if(right is err) {return typeinfo ce_canonical(variant type<Result<typedecl(ce_source_pair(left as ok,right as ok));string>>(err=right as err))}
-        return typeinfo ce_canonical(result_ok(ce_source_pair(left as ok,right as ok)))
+        return typeinfo ce_canonical(ok(ce_source_pair(left as ok,right as ok), type<string>))
     }
 }
 def ce_merge_sources(builder : OptionBuilder; left : Option<auto>;

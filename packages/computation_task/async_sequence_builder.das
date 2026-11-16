@@ -32,7 +32,6 @@ def AsyncSequenceBuilder(unused:type<auto(TT)>) {
     var marker:TT -const -&?
     return (kind=AsyncSequenceContext(),element=marker)
 }
-def AsyncSequenceBuilder() => AsyncSequenceBuilder(type<int>)
 
 def ce_protocol(builder:tuple<kind:AsyncSequenceContext;element:auto(TT)?>) =>
     ce_resumable_protocol(type<tuple<tag:TaskEventTag;ready:bool;value:Option<TT>>>)

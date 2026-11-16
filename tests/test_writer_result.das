@@ -106,14 +106,14 @@ def test_lifts() {
     let unit_value = computation(WriterResultBuilder()) { tell("unit;") |> bind }
     assert(unit_value.result is ok && unit_value.log == "unit;")
     let plain = computation(WriterResultBuilder()) {
-        let n = result_ok(7) |> bind
+        let n = ok(7, type<string>) |> bind
         return "n={n}"
     }
     assert(plain.result is ok && (plain.result as ok) == "n=7" && plain.log == "")
     var skipped = 0
     let plain_error = computation(WriterResultBuilder()) {
         tell("before;") |> bind
-        result_error("plain", type<int>) |> bind
+        err("plain", type<int>) |> bind
         skipped++
         tell("WRONG;") |> bind
         return "unreachable"
@@ -127,7 +127,7 @@ def test_lifts() {
     assert(forwarded.result is err && forwarded.log == "before;failure;")
     let forwarded_plain = computation(WriterResultBuilder()) {
         tell("before;") |> bind
-        return result_error("plain", type<int>) |> return_from
+        return err("plain", type<int>) |> return_from
     }
     assert(forwarded_plain.result is err && forwarded_plain.log == "before;")
     let forwarded_tell = computation(WriterResultBuilder()) { return tell("last;") |> return_from }

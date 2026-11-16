@@ -8,10 +8,10 @@ def writer_result(value : Result<auto(TT);string>; log : string = "") {
     return (result = value, log = log)
 }
 def writer_result_ok(value : auto(TT); log : string = "") {
-    return writer_result(result_ok(value), log)
+    return writer_result(ok(value, type<string>), log)
 }
 def writer_result_error(message : string; unused : type<auto(TT)>; log : string = "") {
-    return writer_result(result_error(message, type<TT>), log)
+    return writer_result(err(message, type<TT>), log)
 }
 // Re-type only the absent success payload, preserving both error and log.
 def private wr_failure(message, log : string; unused : type<auto(RR)>) : RR {

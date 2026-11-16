@@ -11,10 +11,10 @@ def state_writer_result_value(value : Result<auto(TT);string>; state : auto(Tran
     return (result = value, state = state, log = log)
 }
 def state_writer_result_ok(value : auto(TT); state : auto(TransactionState); log : string = "") {
-    return state_writer_result_value(result_ok(value), state, log)
+    return state_writer_result_value(ok(value, type<string>), state, log)
 }
 def state_writer_result_error(message : string; unused : type<auto(TT)>; state : auto(TransactionState); log : string = "") {
-    return state_writer_result_value(result_error(message, type<TT>), state, log)
+    return state_writer_result_value(err(message, type<TT>), state, log)
 }
 def private swr_failure(var builder : tuple<kind : StateWriterResultContext; initial : auto(TransactionState); state : TransactionState>;
                        message, log : string; unused : type<auto(RR)>) : RR {

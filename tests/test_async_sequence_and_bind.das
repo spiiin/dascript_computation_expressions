@@ -44,7 +44,7 @@ def reset() {
     continued=0;trace=""
 }
 def stream(waitA:int=1;waitB:int=2;fail:int=0) {
-    return <- computation(AsyncSequenceBuilder()) {
+    return <- computation(AsyncSequenceBuilder(type<int>)) {
         let pair=child(0,waitA,10,fail==1) |> and_bind(child(1,waitB,20,fail==2)) |> bind
         continued++
         yield pair.first+pair.second
@@ -127,11 +127,11 @@ def checks() {
     reset()
     // Chained and nested groups, heterogeneous payloads, Unit and Result-as-data.
     {
-        var inscope source <- computation(AsyncSequenceBuilder()) {
+        var inscope source <- computation(AsyncSequenceBuilder(type<int>)) {
             let a=task_after_polls(0,1) |> and_bind(task_after_polls(0,2)) |> and_bind(task_after_polls(0,3)) |> bind
             let b=task_after_polls(0,4) |> and_bind(task_after_polls(0,"ab") |> and_bind(task_after_polls(0,6))) |> bind
             task_after_polls(0,CeUnit()) |> and_bind(task_after_polls(0,CeUnit())) |> bind
-            let data=task_after_polls(0,result_error("data",type<int>)) |> and_bind(task_after_polls(0,9)) |> bind
+            let data=task_after_polls(0,err("data",type<int>)) |> and_bind(task_after_polls(0,9)) |> bind
             verify(data.first is err && data.first as err=="data")
             yield a.first.first+a.first.second+a.second+b.first+length(b.second.first)+b.second.second+data.second
         }
@@ -157,7 +157,7 @@ def checks() {
         reset()
     }
     {
-        var inscope source <- computation(AsyncSequenceBuilder()) {
+        var inscope source <- computation(AsyncSequenceBuilder(type<int>)) {
             let pair=child(0,100,1) |> and_bind(factory_failure()) |> bind
             continued++;yield pair.first
         }

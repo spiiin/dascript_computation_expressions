@@ -15,12 +15,12 @@ def main() {
  task_semaphore_release(sem);delete a
  task_poll(b);verify(b.status==TaskStatus.Succeeded)
  task_semaphore_release(sem);delete b
- var inscope retry <- task_retry(@(attempt:int) {attempts++;return <- task_after_polls(0,attempt<3 ? result_error("again",type<int>) : result_ok(42))},3)
+ var inscope retry <- task_retry(@(attempt:int) {attempts++;return <- task_after_polls(0,attempt<3 ? err("again",type<int>) : ok(42, type<string>))},3)
  for(i in range(10)) {task_poll(retry)}
  verify(retry.value as ok==42 && attempts==3)
- var children:array<typedecl(task_after_polls(0,result_ok(1)))>
- children |> emplace(task_after_polls(0,result_error("no",type<int>)))
- children |> emplace(task_after_polls(1,result_ok(7)))
+ var children:array<typedecl(task_after_polls(0,ok(1, type<string>)))>
+ children |> emplace(task_after_polls(0,err("no",type<int>)))
+ children |> emplace(task_after_polls(1,ok(7, type<string>)))
  var inscope first <- task_first_success(children)
  task_poll(first);task_poll(first);verify(first.value as ok==7)
  var inputs <- [3,2,1]
@@ -28,7 +28,7 @@ def main() {
  for(i in range(10)) {task_poll(all)}
  verify(all.status==TaskStatus.Succeeded && all.value[0]==30 && all.value[1]==20 && all.value[2]==10)
  var inputs2 <- [1,2]
- var inscope results <- task_result_when_all_limited(inputs2,1,@(i:int) {return <- task_after_polls(0,result_ok(i))})
+ var inscope results <- task_result_when_all_limited(inputs2,1,@(i:int) {return <- task_after_polls(0,ok(i, type<string>))})
  for(i in range(4)) {task_poll(results)}
  verify(results.status==TaskStatus.Succeeded && length(results.value as ok)==2)
  print("Task parallel checks OK\n")

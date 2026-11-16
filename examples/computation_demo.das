@@ -2,8 +2,8 @@ options gen2
 require ../packages/computation/computation.das
 
 def checked_number(value : int) : Result<int;string> {
-    if (value < 0) { return result_error("negative number", type<int>) }
-    return result_ok(value)
+    if (value < 0) { return err("negative number", type<int>) }
+    return ok(value, type<string>)
 }
 
 [export]

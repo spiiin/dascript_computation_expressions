@@ -2,7 +2,7 @@ options gen2
 require ../packages/computation/computation.das
 [export]
 def main() {
-    var inscope combinations <- computation(ListBuilder()) {
+    var inscope combinations <- computation(ListBuilder(type<int>)) {
         let x = [1, 2] |> bind
         let y = [10, 20] |> bind
         return x + y
@@ -16,7 +16,7 @@ def main() {
     }
     assert(length(equipment) == 5)
     print("Equipment: {equipment}\n")
-    var inscope squares <- computation(ListBuilder()) {
+    var inscope squares <- computation(ListBuilder(type<int>)) {
         for (i in range(6)) {
             if (i % 2 == 0) { return i * i }
         }

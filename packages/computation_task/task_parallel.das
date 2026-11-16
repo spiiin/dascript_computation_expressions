@@ -23,8 +23,8 @@ def task_semaphore_acquire(semaphore:tuple<tag:TaskSemaphoreTag;channel:auto>) {
             if(status==TaskStatus.Failed) {panic(task_error(waiting))}
             if(status==TaskStatus.Cancelled) {ce_task_cancelled();yield task_pending(type<Result<CeUnit;string>>);return false}
             if(status==TaskStatus.Succeeded) {
-                if(waiting.value is err || (waiting.value as ok) is none) {yield task_ready(result_error("semaphore is closed",type<CeUnit>));return false}
-                yield task_ready(result_ok(CeUnit()));return false
+                if(waiting.value is err || (waiting.value as ok) is none) {yield task_ready(err("semaphore is closed",type<CeUnit>));return false}
+                yield task_ready(ok(CeUnit(), type<string>));return false
             }
             yield task_pending(type<Result<CeUnit;string>>)
         }

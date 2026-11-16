@@ -52,7 +52,7 @@ def check_lengths(builder:auto; a,b,c,failAt:int) {
 }
 
 def stream(id,count:int) {
-    return <- computation(SequenceBuilder()) {
+    return <- computation(SequenceBuilder(type<int>)) {
         try_finally($ {
             for (i in range(count)) {pulled[id]++; yield i}
         }, $ {closed[id]++})

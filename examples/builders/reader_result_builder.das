@@ -27,7 +27,7 @@ def ce_bind(builder:tuple<kind:ReaderResultContext;environment:auto(ReaderEnviro
     return ce_bind(ResultBuilder(),source,next)
 }
 def ce_return(builder:tuple<kind:ReaderResultContext;environment:auto(ReaderEnvironment)>; value:auto(TT)) {
-    return result_ok(value)
+    return ok(value, type<string>)
 }
 def ce_return_from(builder:tuple<kind:ReaderResultContext;environment:auto(ReaderEnvironment)>; value:Result<auto(TT);string>) {
     return value
@@ -46,7 +46,7 @@ def ce_loop_append(builder:tuple<kind:ReaderResultContext;environment:auto(Reade
 }
 def ce_bind_return(builder:tuple<kind:ReaderResultContext;environment:auto(ReaderEnvironment)>; source:ReaderAsk;
                    mapper:block<(value:ReaderEnvironment):auto(UU)>) {
-    return result_ok(invoke(mapper,builder.environment))
+    return ok(invoke(mapper,builder.environment), type<string>)
 }
 def ce_bind_return(builder:tuple<kind:ReaderResultContext;environment:auto(ReaderEnvironment)>; source:Result<auto(TT);string>;
                    mapper:block<(value:TT):auto(UU)>) : typedecl(ce_return(builder,default<UU>)) {
@@ -54,7 +54,7 @@ def ce_bind_return(builder:tuple<kind:ReaderResultContext;environment:auto(Reade
 }
 
 def private rr_source(builder:tuple<kind:ReaderResultContext;environment:auto(ReaderEnvironment)>; source:ReaderAsk) {
-    return result_ok(builder.environment)
+    return ok(builder.environment, type<string>)
 }
 def private rr_source(builder:tuple<kind:ReaderResultContext;environment:auto(ReaderEnvironment)>; source:Result<auto(TT);string>) {
     return source

@@ -8,7 +8,7 @@ var released=0
 struct Resource {id:int}
 def ce_dispose(var resource:Resource) {released++}
 def candidates() {
-    return <- computation(SearchBuilder()) {
+    return <- computation(SearchBuilder(type<int>)) {
         let resource=Resource(id=1) |> use_resource
         let x=search_choose([1,2,3]) |> bind
         visited++
@@ -17,7 +17,7 @@ def candidates() {
 }
 def check() {
     visited=0;released=0
-    var inscope all <- computation(SearchBuilder()) {
+    var inscope all <- computation(SearchBuilder(type<int>)) {
         let x=search_choose([1,2,3]) |> bind
         let y=fixed_array(10,20) |> bind
         search_guard(x!=2) |> bind
@@ -30,7 +30,7 @@ def check() {
     assert(visited==0 && released==0)
     sequence_each(first) $(n:int) {assert(n==1)}
     assert(visited==1 && released==1)
-    var inscope cut <- computation(SearchBuilder()) {
+    var inscope cut <- computation(SearchBuilder(type<int>)) {
         let x=fixed_array(10,20) |> bind
         let y=search_cut(candidates()) |> bind
         yield x+y
@@ -42,7 +42,7 @@ def check() {
     for(n in early) {assert(n==1);break}
     sequence_close(early)
     assert(released==4)
-    var inscope emptySearch <- computation(SearchBuilder()) {search_guard(false) |> bind;yield 99}
+    var inscope emptySearch <- computation(SearchBuilder(type<int>)) {search_guard(false) |> bind;yield 99}
     var inscope noSolution <- search_cut(emptySearch)
     var found=0
     sequence_each(noSolution) $(n:int) {found++}

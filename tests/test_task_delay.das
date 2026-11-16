@@ -55,7 +55,7 @@ def budgets_and_result() {
     var inscope results <- task_scheduler(type<Result<int;string>>)
     var source <- computation(TaskResultBuilder(type<int>)) {
         task_delay_ms(5) |> bind
-        let n=task_after_polls(0,result_ok(6)) |> bind
+        let n=task_after_polls(0,ok(6, type<string>)) |> bind
         return n+1
     }
     let id=task_spawn(results,source)

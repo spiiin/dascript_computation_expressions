@@ -11,9 +11,9 @@ var resource_closes = 0
 def open_document(text : string) {
     var error : string
     let node = read_json(text, error)
-    if (node == null) { return result_error(error, type<JsonResource>) }
+    if (node == null) { return err(error, type<JsonResource>) }
     resource_opens++
-    return result_ok(JsonResource(node=node))
+    return ok(JsonResource(node=node), type<string>)
 }
 def ce_dispose(var resource : JsonResource) {
     unsafe { delete_json(reinterpret<JsonValue?>(resource.node)) }
@@ -25,9 +25,9 @@ def read_health(text : string; reject : bool) {
         tell("read document\n") |> bind
         let loaded = open_document(text) |> bind
         let document = loaded |> use_resource
-        if (reject) { result_error("rejected after opening", type<int>) |> bind }
+        if (reject) { err("rejected after opening", type<int>) |> bind }
         let health = document.node?["health"]
-        if (!(health is _longint)) { return result_error("expected integer health", type<int>) |> return_from }
+        if (!(health is _longint)) { return err("expected integer health", type<int>) |> return_from }
         else { return int(health as _longint) }
     }
 }

@@ -1,11 +1,25 @@
 options gen2
 module validation_builder public
 require ./builder_protocol.das public
+require daslib/templates
+require daslib/templates_boost
+require daslib/typemacro_boost
 
 struct ValidationBuilder {_ce_marker:uint8}
 struct ValidationErrors {
     messages : string
     count : int
+}
+
+// What a validation produces: the value, or every error collected so far.
+// Validation<int> is the variant that validation_ok and validation_error
+// return, so a variable, a field or a function result can be declared with it.
+// A type macro serves the modules that require this one, not this module:
+// the functions below spell the variant out.
+[template_variant(TT)]
+struct template Validation {
+    valid : TT
+    invalid : ValidationErrors
 }
 
 def validation_ok(value : auto(TT)) : variant<valid:TT -const -&;invalid:ValidationErrors> =>

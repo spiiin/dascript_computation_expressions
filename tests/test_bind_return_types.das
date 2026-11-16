@@ -6,8 +6,8 @@ require ../packages/computation/validation_builder.das
 require ../examples/builders/reader_builder.das
 [export]
 def main() {
-    let fast=computation(ResultBuilder()) { let x=result_ok(1) |> bind; return (value=x+1) }
-    let slow=computation(ResultBuilder()) { let x=result_ok(1) |> bind; let unused=0; return (value=x+1) }
+    let fast=computation(ResultBuilder()) { let x=ok(1, type<string>) |> bind; return (value=x+1) }
+    let slow=computation(ResultBuilder()) { let x=ok(1, type<string>) |> bind; let unused=0; return (value=x+1) }
     assert((typeinfo typename(fast)) == (typeinfo typename(slow)))
     let optionFast=computation(OptionBuilder()) { let x=some(1) |> bind; return (value="{x}") }
     let optionSlow=computation(OptionBuilder()) { let x=some(1) |> bind; let unused=0; return (value="{x}") }
@@ -22,8 +22,8 @@ def main() {
     let readerFast=computation(ReaderBuilder(1)) { let x=reader_ask() |> bind; return (value=x+1) }
     let readerSlow=computation(ReaderBuilder(1)) { let x=reader_ask() |> bind; let unused=0; return (value=x+1) }
     assert((typeinfo typename(readerFast)) == (typeinfo typename(readerSlow)))
-    var inscope listFast <- computation(ListBuilder()) { let x=fixed_array(1,2) |> bind; return x+1 }
-    var inscope listSlow <- computation(ListBuilder()) { let x=fixed_array(1,2) |> bind; let unused=0; return x+1 }
+    var inscope listFast <- computation(ListBuilder(type<int>)) { let x=fixed_array(1,2) |> bind; return x+1 }
+    var inscope listSlow <- computation(ListBuilder(type<int>)) { let x=fixed_array(1,2) |> bind; let unused=0; return x+1 }
     assert((typeinfo typename(listFast)) == (typeinfo typename(listSlow)))
     assert(length(listFast)==length(listSlow) && listFast[0]==listSlow[0] && listFast[1]==listSlow[1])
     print("bind_return type checks OK\n")

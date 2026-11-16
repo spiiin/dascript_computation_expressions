@@ -25,12 +25,12 @@ def main() {
         var inscope right:array<int>
         for(i in range(64)) { left |> push(i); right |> push(i) }
         {
-            var inscope fast <- computation(ListBuilder()) { let p=left |> and_bind(right) |> bind; let unused=0; return observe(p,true) }
+            var inscope fast <- computation(ListBuilder(type<int>)) { let p=left |> and_bind(right) |> bind; let unused=0; return observe(p,true) }
             assert(length(fast)==4096 && fast[0]==0 && fast[4095]==126)
         }
         {
-            var inscope merged <- ce_merge_sources(ListBuilder(),left,right)
-            var inscope slow <- computation(ListBuilder()) { let p=merged |> bind; let unused=0; return observe(p,false) }
+            var inscope merged <- ce_merge_sources(ListBuilder(type<int>),left,right)
+            var inscope slow <- computation(ListBuilder(type<int>)) { let p=merged |> bind; let unused=0; return observe(p,false) }
             assert(length(slow)==4096 && slow[0]==0 && slow[4095]==126)
         }
         assert(fastBytes<slowBytes && length(left)==64 && length(right)==64)
@@ -38,32 +38,32 @@ def main() {
     {
         var inscope left <- [1,2]
         var inscope right <- [10,20]
-        var inscope values <- computation(ListBuilder()) { let p=left |> and_bind(right) |> bind; let unused=0; return mutate(left,right,p) }
+        var inscope values <- computation(ListBuilder(type<int>)) { let p=left |> and_bind(right) |> bind; let unused=0; return mutate(left,right,p) }
         assert(length(left)==0 && length(right)==0)
         assert(length(values)==4 && values[0]==11 && values[1]==21 && values[2]==12 && values[3]==22)
     }
     {
         var inscope left <- [1,2]
         let right=fixed_array(10,20)
-        var inscope mixed <- computation(ListBuilder()) {
+        var inscope mixed <- computation(ListBuilder(type<int>)) {
             let p=left |> and_bind(right) |> bind
             return fixed_array(p.first+p.second,p.first-p.second) |> return_from
         }
         assert(length(mixed)==8 && mixed[0]==11 && mixed[1]==-9 && mixed[7]==-18)
-        var inscope other <- computation(ListBuilder()) {
+        var inscope other <- computation(ListBuilder(type<int>)) {
             let p=right |> and_bind(left) |> bind
             let unused=0
             return p.first+p.second
         }
         assert(length(other)==4 && other[0]==11 && other[3]==22)
-        var inscope fixed <- computation(ListBuilder()) {
+        var inscope fixed <- computation(ListBuilder(type<int>)) {
             let p=right |> and_bind(right) |> bind
             let unused=0
             return p.first+p.second
         }
         assert(length(fixed)==4 && fixed[0]==20 && fixed[3]==40)
         var inscope emptySource:array<int>
-        var inscope empty <- computation(ListBuilder()) {
+        var inscope empty <- computation(ListBuilder(type<int>)) {
             let p=emptySource |> and_bind(left) |> bind
             let unused=fail_map(p)
             return 0

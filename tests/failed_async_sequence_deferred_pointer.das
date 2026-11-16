@@ -7,6 +7,6 @@ require ../packages/computation_task/async_sequence_builder.das
 def main() {
     var number=1
     unsafe {
-        var inscope saved <- deferred(AsyncSequenceBuilder(),addr(number)) $(snapshot) {yield 1}
+        var inscope saved <- deferred(AsyncSequenceBuilder(type<int>),addr(number)) $(snapshot) {yield 1}
     }
 }

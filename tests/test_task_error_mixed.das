@@ -11,7 +11,7 @@ enum LoadError {
 
 [task_result]
 def fetch(id : int) : int {
-    let value = task_after_polls(1, result_ok(id)) |> bind
+    let value = task_after_polls(1, ok(id, type<string>)) |> bind
     return value
 }
 
